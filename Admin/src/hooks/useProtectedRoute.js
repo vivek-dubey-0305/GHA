@@ -7,7 +7,8 @@ import { selectIsAuthenticated } from '../redux/slices/auth.slice';
 /**
  * Hook to protect routes and manage token refresh
  */
-export const useProtectedRoute = () => {
+export const 
+useProtectedRoute = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const isAuthenticated = useSelector(selectIsAuthenticated);

@@ -98,3 +98,8 @@ Admin/dist/
 # Specific backend stuff
 backend/node_modules/
 backend/dist/
+
+# Specific Instructor stuff
+Instructor/node_modules/
+Instructor/build/
+Instructor/dist/

@@ -30,6 +30,11 @@ const Verify = () => {
     }
   }, [email, navigate]);
 
+  // Initialize cooldown when page mounts (OTP was just sent from login)
+  useEffect(() => {
+    setResendCooldown(60);
+  }, []);
+
   // Redirect on successful OTP verification
   useEffect(() => {
     if (isAuthenticated) {

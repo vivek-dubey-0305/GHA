@@ -109,6 +109,8 @@ import { sanitizeInput } from "./middlewares/sanitization.middleware.js";
 import logger from "./configs/logger.config.js";
 import { appConfig, securityConfig, validateConfig } from "./configs/app.config.js";
 import adminAuthRouter from "./routes/admin.auth.routes.js";
+import userAuthRouter from "./routes/user.auth.routes.js";
+import instructorAuthRouter from "./routes/instructor.auth.routes.js";
 
 const app = express();
 
@@ -145,6 +147,8 @@ const limiter = rateLimit({
     legacyHeaders: false,
     skip: (req) =>
         req.path.startsWith("/api/v1/admin/refresh-token") ||
+        req.path.startsWith("/api/v1/user/refresh-token") ||
+        req.path.startsWith("/api/v1/instructor/refresh-token") ||
         req.path === "/"
 });
 app.use(limiter);
@@ -176,6 +180,8 @@ app.get("/csrf-token", csrfProtection, (req, res) => {
 
 // API routes
 app.use("/api/v1/admin", adminAuthRouter);
+app.use("/api/v1/user", userAuthRouter);
+app.use("/api/v1/instructor", instructorAuthRouter);
 
 // ================= ERROR HANDLER (LAST) =================
 app.use(errorMiddleware);

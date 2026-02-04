@@ -195,7 +195,8 @@ export const verifyOtp = asyncHandler(async (req, res) => {
             id: admin._id,
             name: admin.name,
             email: admin.email,
-            isSuperAdmin: admin.isSuperAdmin
+            isSuperAdmin: admin.isSuperAdmin,
+            isActive: admin.isActive
         },
         expiresIn: accessTokenExpiry,
         cookies: {
@@ -405,7 +406,8 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
                 id: updatedAdmin._id,
                 name: updatedAdmin.name,
                 email: updatedAdmin.email,
-                isSuperAdmin: updatedAdmin.isSuperAdmin
+                isSuperAdmin: updatedAdmin.isSuperAdmin,
+                isActive: updatedAdmin.isActive
             },
             expiresIn: process.env.JWT_ACCESS_TOKEN_EXPIRES_IN || "15m",
             cookies: {
