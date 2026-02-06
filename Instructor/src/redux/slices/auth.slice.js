@@ -239,6 +239,68 @@ export const verifyResetToken = createAsyncThunk(
   }
 );
 
+// Get Instructor Sessions
+export const getInstructorSessions = createAsyncThunk(
+  'auth/getInstructorSessions',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.get(`/sessions`);
+      return response.data.data; // The sessions data
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || 'Failed to get sessions';
+      return rejectWithValue(message);
+    }
+  }
+);
+
+// Logout from specific session
+export const logoutSession = createAsyncThunk(
+  'auth/logoutSession',
+  async ({ sessionId }, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.post(`/logout-session`, {
+        sessionId
+      });
+      return response.data;
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || 'Failed to logout session';
+      return rejectWithValue(message);
+    }
+  }
+);
+
+// Logout from all sessions except current
+export const logoutAllSessions = createAsyncThunk(
+  'auth/logoutAllSessions',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.post(`/logout-all-sessions`, {});
+      return response.data;
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || 'Failed to logout all sessions';
+      return rejectWithValue(message);
+    }
+  }
+);
+
+// Change Password
+export const changePassword = createAsyncThunk(
+  'auth/changePassword',
+  async ({ currentPassword, newPassword, confirmPassword }, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.post(`/change-password`, {
+        currentPassword,
+        newPassword,
+        confirmPassword
+      });
+      return response.data;
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || 'Failed to change password';
+      return rejectWithValue(message);
+    }
+  }
+);
+
 // Initial state
 const initialState = {
   // Authentication state
@@ -294,7 +356,25 @@ const initialState = {
   // Verify reset token states
   verifyResetTokenLoading: false,
   verifyResetTokenError: null,
-  resetTokenValid: false
+  resetTokenValid: false,
+
+  // Sessions states
+  sessions: [],
+  sessionsLoading: false,
+  sessionsError: null,
+
+  // Logout session states
+  logoutSessionLoading: false,
+  logoutSessionError: null,
+
+  // Logout all sessions states
+  logoutAllSessionsLoading: false,
+  logoutAllSessionsError: null,
+
+  // Change password states
+  changePasswordLoading: false,
+  changePasswordError: null,
+  changePasswordSuccess: false
 };
 
 // Auth slice
@@ -335,6 +415,18 @@ const authSlice = createSlice({
     },
     clearVerifyResetTokenError: (state) => {
       state.verifyResetTokenError = null;
+    },
+    clearSessionsError: (state) => {
+      state.sessionsError = null;
+    },
+    clearLogoutSessionError: (state) => {
+      state.logoutSessionError = null;
+    },
+    clearLogoutAllSessionsError: (state) => {
+      state.logoutAllSessionsError = null;
+    },
+    clearChangePasswordError: (state) => {
+      state.changePasswordError = null;
     },
 
     // Reset OTP states
@@ -572,6 +664,73 @@ const authSlice = createSlice({
         state.verifyResetTokenLoading = false;
         state.resetTokenValid = false;
         state.verifyResetTokenError = action.payload;
+      })
+
+      // Get Instructor Sessions
+      .addCase(getInstructorSessions.pending, (state) => {
+        state.sessionsLoading = true;
+        state.sessionsError = null;
+      })
+      .addCase(getInstructorSessions.fulfilled, (state, action) => {
+        state.sessionsLoading = false;
+        state.sessions = action.payload.sessions;
+        state.sessionsError = null;
+      })
+      .addCase(getInstructorSessions.rejected, (state, action) => {
+        state.sessionsLoading = false;
+        state.sessionsError = action.payload;
+      })
+
+      // Logout Session
+      .addCase(logoutSession.pending, (state) => {
+        state.logoutSessionLoading = true;
+        state.logoutSessionError = null;
+      })
+      .addCase(logoutSession.fulfilled, (state) => {
+        state.logoutSessionLoading = false;
+        state.logoutSessionError = null;
+        // Optionally refresh sessions after logout
+      })
+      .addCase(logoutSession.rejected, (state, action) => {
+        state.logoutSessionLoading = false;
+        state.logoutSessionError = action.payload;
+      })
+
+      // Logout All Sessions
+      .addCase(logoutAllSessions.pending, (state) => {
+        state.logoutAllSessionsLoading = true;
+        state.logoutAllSessionsError = null;
+      })
+      .addCase(logoutAllSessions.fulfilled, (state) => {
+        state.logoutAllSessionsLoading = false;
+        state.logoutAllSessionsError = null;
+        // Sessions are cleared, but current session remains
+      })
+      .addCase(logoutAllSessions.rejected, (state, action) => {
+        state.logoutAllSessionsLoading = false;
+        state.logoutAllSessionsError = action.payload;
+      })
+
+      // Change Password
+      .addCase(changePassword.pending, (state) => {
+        state.changePasswordLoading = true;
+        state.changePasswordError = null;
+        state.changePasswordSuccess = false;
+      })
+      .addCase(changePassword.fulfilled, (state) => {
+        state.changePasswordLoading = false;
+        state.changePasswordSuccess = true;
+        state.changePasswordError = null;
+        // User needs to login again after password change
+        state.isAuthenticated = false;
+        state.instructor = null;
+        state.otpSent = false;
+        state.otpVerified = false;
+      })
+      .addCase(changePassword.rejected, (state, action) => {
+        state.changePasswordLoading = false;
+        state.changePasswordError = action.payload;
+        state.changePasswordSuccess = false;
       });
   }
 });
@@ -589,6 +748,10 @@ export const {
   clearForgotPasswordError,
   clearResetPasswordError,
   clearVerifyResetTokenError,
+  clearSessionsError,
+  clearLogoutSessionError,
+  clearLogoutAllSessionsError,
+  clearChangePasswordError,
   resetOtpStates,
   manualLogout
 } = authSlice.actions;
@@ -623,3 +786,13 @@ export const selectResetPasswordSuccess = (state) => state.auth.resetPasswordSuc
 export const selectVerifyResetTokenLoading = (state) => state.auth.verifyResetTokenLoading;
 export const selectVerifyResetTokenError = (state) => state.auth.verifyResetTokenError;
 export const selectResetTokenValid = (state) => state.auth.resetTokenValid;
+export const selectSessions = (state) => state.auth.sessions;
+export const selectSessionsLoading = (state) => state.auth.sessionsLoading;
+export const selectSessionsError = (state) => state.auth.sessionsError;
+export const selectLogoutSessionLoading = (state) => state.auth.logoutSessionLoading;
+export const selectLogoutSessionError = (state) => state.auth.logoutSessionError;
+export const selectLogoutAllSessionsLoading = (state) => state.auth.logoutAllSessionsLoading;
+export const selectLogoutAllSessionsError = (state) => state.auth.logoutAllSessionsError;
+export const selectChangePasswordLoading = (state) => state.auth.changePasswordLoading;
+export const selectChangePasswordError = (state) => state.auth.changePasswordError;
+export const selectChangePasswordSuccess = (state) => state.auth.changePasswordSuccess;

@@ -342,7 +342,7 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
         const newAccessToken = jwt.sign(
             { id: admin._id, email: admin.email},
             process.env.JWT_ACCESS_TOKEN_SECRET,
-            { expiresIn: "15m" }
+            { expiresIn: process.env.JWT_ACCESS_TOKEN_EXPIRES_IN || "15m" }
         );
 
         console.log("New Acccess TOken : ", newAccessToken)
@@ -572,4 +572,144 @@ export const verifyResetToken = asyncHandler(async (req, res) => {
         expiresIn: `${minutesRemaining} minutes`,
         message: "You can now reset your password"
     });
+});
+
+// @route   GET /api/v1/admin/sessions
+// @desc    Get all active admin sessions
+// @access  Private
+export const getAdminSessions = asyncHandler(async (req, res) => {
+    const admin = await Admin.findById(req.admin.id).select("sessions");
+
+    if (!admin) {
+        return errorResponse(res, 404, "Admin not found");
+    }
+
+    return successResponse(res, 200, "Active sessions retrieved", {
+        sessions: admin.sessions.map(s => ({
+            id: s._id,
+            device: s.device || "Unknown Device",
+            ip: s.ip || "Unknown IP",
+            lastActive: s.lastActive || new Date(),
+            createdAt: s.createdAt
+        }))
+    });
+});
+
+// @route   POST /api/v1/admin/logout-session
+// @desc    Logout from a specific session
+// @access  Private
+export const logoutSession = asyncHandler(async (req, res) => {
+    const { sessionId } = req.body;
+
+    if (!sessionId) {
+        return errorResponse(res, 400, "Session ID is required");
+    }
+
+    const admin = await Admin.findById(req.admin.id);
+
+    if (!admin) {
+        return errorResponse(res, 404, "Admin not found");
+    }
+
+    const sessionRemoved = admin.sessions.findByIdAndDelete(sessionId);
+
+    if (!sessionRemoved) {
+        return errorResponse(res, 404, "Session not found");
+    }
+
+    await admin.save({ validateBeforeSave: false });
+
+    return successResponse(res, 200, "Session revoked successfully");
+});
+
+// @route   POST /api/v1/admin/logout-all-sessions
+// @desc    Logout from all sessions except current one
+// @access  Private
+export const logoutAllSessions = asyncHandler(async (req, res) => {
+    const currentRefreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+
+    const admin = await Admin.findById(req.admin.id);
+
+    if (!admin) {
+        return errorResponse(res, 404, "Admin not found");
+    }
+
+    const currentSessionHash = admin.hashToken(currentRefreshToken);
+    const sessionsBeforeRemoval = admin.sessions.length;
+
+    // Keep only the current session
+    admin.sessions = admin.sessions.filter(
+        s => s.refreshTokenHash === currentSessionHash
+    );
+
+    await admin.save({ validateBeforeSave: false });
+
+    return successResponse(res, 200, "All other sessions logged out", {
+        sessionsRevoked: sessionsBeforeRemoval - admin.sessions.length,
+        sessionsActive: admin.sessions.length
+    });
+});
+
+// @route   POST /api/v1/admin/change-password
+// @desc    Change password while logged in
+// @access  Private
+export const changePassword = asyncHandler(async (req, res) => {
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+        return errorResponse(res, 400, "All password fields are required");
+    }
+
+    if (newPassword !== confirmPassword) {
+        return errorResponse(res, 400, "New passwords do not match");
+    }
+
+    if (currentPassword === newPassword) {
+        return errorResponse(res, 400, "New password must be different from current password");
+    }
+
+    const admin = await Admin.findById(req.admin.id).select("+password");
+
+    if (!admin) {
+        return errorResponse(res, 404, "Admin not found");
+    }
+
+    const isPasswordValid = await admin.comparePassword(currentPassword);
+
+    if (!isPasswordValid) {
+        return errorResponse(res, 401, "Current password is incorrect");
+    }
+
+    admin.password = newPassword;
+    admin.passwordChangedAt = Date.now();
+    admin.clearAllSessions();
+
+    await admin.save();
+
+    return successResponse(res, 200, "Password changed successfully. Please login again.");
+});
+
+// @route   POST /api/v1/admin/verify-password
+// @desc    Verify password for sensitive actions
+// @access  Private
+export const verifyPassword = asyncHandler(async (req, res) => {
+    const { password } = req.body;
+
+    if (!password) {
+        return errorResponse(res, 400, "Password is required");
+    }
+
+    const admin = await Admin.findById(req.admin.id).select("+password");
+
+    if (!admin) {
+        return errorResponse(res, 404, "Admin not found");
+    }
+
+    const isPasswordValid = await admin.comparePassword(password);
+
+    if (!isPasswordValid) {
+        return errorResponse(res, 401, "Invalid password");
+    }
+
+    return successResponse(res, 200, "Password verified successfully");
 });
