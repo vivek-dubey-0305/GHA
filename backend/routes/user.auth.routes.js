@@ -12,7 +12,11 @@ import {
     refreshAccessToken,
     forgotPassword,
     resetPassword,
-    verifyResetToken
+    verifyResetToken,
+    getUserSessions,
+    logoutSession,
+    logoutAllSessions,
+    changePassword
 } from "../controllers/user.auth.controller.js";
 
 const router = express.Router();
@@ -36,6 +40,10 @@ router.post("/verify-reset-token", verifyResetToken);
 // Protected routes (requires authentication middleware)
 router.post("/logout", verifyUserToken, logoutUser);
 router.get("/profile", verifyUserToken, getUserProfile);
+router.get("/sessions", verifyUserToken, getUserSessions);
+router.post("/logout-session", verifyUserToken, logoutSession);
+router.post("/logout-all-sessions", verifyUserToken, logoutAllSessions);
+router.post("/change-password", verifyUserToken, changePassword);
 router.post(
     "/upload-profile-picture",
     verifyUserToken,

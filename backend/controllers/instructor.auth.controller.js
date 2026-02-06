@@ -760,3 +760,129 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
         return errorResponse(res, 401, "Invalid or expired refresh token");
     }
 });
+
+// @route   GET /api/v1/instructor/sessions
+// @desc    Get all active instructor sessions
+// @access  Private
+export const getInstructorSessions = asyncHandler(async (req, res) => {
+    const instructor = await Instructor.findById(req.instructor.id).select("sessions");
+
+    if (!instructor) {
+        return errorResponse(res, 404, "Instructor not found");
+    }
+
+    return successResponse(res, 200, "Active sessions retrieved", {
+        sessions: instructor.sessions.map(s => ({
+            id: s._id,
+            device: s.device || "Unknown Device",
+            ip: s.ip || "Unknown IP",
+            lastActive: s.lastActive || new Date(),
+            createdAt: s.createdAt
+        }))
+    });
+});
+
+// @route   POST /api/v1/instructor/logout-session
+// @desc    Logout from a specific session
+// @access  Private
+export const logoutSession = asyncHandler(async (req, res) => {
+    const { sessionId } = req.body;
+
+    if (!sessionId) {
+        return errorResponse(res, 400, "Session ID is required");
+    }
+
+    const instructor = await Instructor.findById(req.instructor.id);
+
+    if (!instructor) {
+        return errorResponse(res, 404, "Instructor not found");
+    }
+
+    const sessionRemoved = instructor.sessions.findByIdAndDelete(sessionId);
+
+    if (!sessionRemoved) {
+        return errorResponse(res, 404, "Session not found");
+    }
+
+    await instructor.save({ validateBeforeSave: false });
+
+    logger.info(`Session revoked for instructor: ${req.instructor.id}`);
+
+    return successResponse(res, 200, "Session revoked successfully");
+});
+
+// @route   POST /api/v1/instructor/logout-all-sessions
+// @desc    Logout from all sessions except current one
+// @access  Private
+export const logoutAllSessions = asyncHandler(async (req, res) => {
+    const currentRefreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+
+    const instructor = await Instructor.findById(req.instructor.id);
+
+    if (!instructor) {
+        return errorResponse(res, 404, "Instructor not found");
+    }
+
+    const currentSessionHash = instructor.hashToken(currentRefreshToken);
+    const sessionsBeforeRemoval = instructor.sessions.length;
+
+    instructor.sessions = instructor.sessions.filter(
+        s => s.refreshTokenHash === currentSessionHash
+    );
+
+    await instructor.save({ validateBeforeSave: false });
+
+    logger.info(`All other sessions logged out for instructor: ${req.instructor.id}`);
+
+    return successResponse(res, 200, "All other sessions logged out", {
+        sessionsRevoked: sessionsBeforeRemoval - instructor.sessions.length,
+        sessionsActive: instructor.sessions.length
+    });
+});
+
+// @route   POST /api/v1/instructor/change-password
+// @desc    Change password while logged in
+// @access  Private
+export const changePassword = asyncHandler(async (req, res) => {
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+
+    logger.info(`Password change attempt for instructor: ${req.instructor.id}`);
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+        logger.warn(`Password change failed - Missing required fields for instructor: ${req.instructor.id}`);
+        return errorResponse(res, 400, "All password fields are required");
+    }
+
+    if (newPassword !== confirmPassword) {
+        logger.warn(`Password change failed - New passwords do not match for instructor: ${req.instructor.id}`);
+        return errorResponse(res, 400, "New passwords do not match");
+    }
+
+    if (currentPassword === newPassword) {
+        logger.warn(`Password change failed - New password same as current for instructor: ${req.instructor.id}`);
+        return errorResponse(res, 400, "New password must be different from current password");
+    }
+
+    const instructor = await Instructor.findById(req.instructor.id).select("+password");
+
+    if (!instructor) {
+        return errorResponse(res, 404, "Instructor not found");
+    }
+
+    const isPasswordValid = await instructor.comparePassword(currentPassword);
+
+    if (!isPasswordValid) {
+        logger.warn(`Password change failed - Incorrect current password for instructor: ${req.instructor.id}`);
+        return errorResponse(res, 401, "Current password is incorrect");
+    }
+
+    instructor.password = newPassword;
+    instructor.passwordChangedAt = Date.now();
+    instructor.clearAllSessions();
+
+    await instructor.save();
+
+    logger.info(`Password changed successfully for instructor: ${req.instructor.id}`);
+
+    return successResponse(res, 200, "Password changed successfully. Please login again.");
+});

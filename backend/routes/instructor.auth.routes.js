@@ -12,7 +12,11 @@ import {
     refreshAccessToken,
     forgotPassword,
     resetPassword,
-    verifyResetToken
+    verifyResetToken,
+    getInstructorSessions,
+    logoutSession,
+    logoutAllSessions,
+    changePassword
 } from "../controllers/instructor.auth.controller.js";
 
 const router = express.Router();
@@ -36,6 +40,10 @@ router.post("/verify-reset-token", verifyResetToken);
 // Protected routes (requires authentication middleware)
 router.post("/logout", verifyInstructorToken, logoutInstructor);
 router.get("/profile", verifyInstructorToken, getInstructorProfile);
+router.get("/sessions", verifyInstructorToken, getInstructorSessions);
+router.post("/logout-session", verifyInstructorToken, logoutSession);
+router.post("/logout-all-sessions", verifyInstructorToken, logoutAllSessions);
+router.post("/change-password", verifyInstructorToken, changePassword);
 router.post(
     "/upload-profile-picture",
     verifyInstructorToken,

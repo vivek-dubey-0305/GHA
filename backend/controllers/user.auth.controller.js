@@ -738,3 +738,125 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
         return errorResponse(res, 401, "Invalid or expired refresh token");
     }
 });
+
+// @route   GET /api/v1/user/sessions
+// @desc    Get all active user sessions
+// @access  Private
+export const getUserSessions = asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user.id).select("sessions");
+
+    if (!user) {
+        return errorResponse(res, 404, "User not found");
+    }
+
+    return successResponse(res, 200, "Active sessions retrieved", {
+        sessions: user.sessions.map(s => ({
+            id: s._id,
+            device: s.device || "Unknown Device",
+            ip: s.ip || "Unknown IP",
+            lastActive: s.lastActive || new Date(),
+            createdAt: s.createdAt
+        }))
+    });
+});
+
+// @route   POST /api/v1/user/logout-session
+// @desc    Logout from a specific session
+// @access  Private
+export const logoutSession = asyncHandler(async (req, res) => {
+    const { sessionId } = req.body;
+
+    if (!sessionId) {
+        return errorResponse(res, 400, "Session ID is required");
+    }
+
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+        return errorResponse(res, 404, "User not found");
+    }
+
+    const sessionRemoved = user.sessions.findByIdAndDelete(sessionId);
+
+    if (!sessionRemoved) {
+        return errorResponse(res, 404, "Session not found");
+    }
+
+    await user.save({ validateBeforeSave: false });
+
+    return successResponse(res, 200, "Session revoked successfully");
+});
+
+// @route   POST /api/v1/user/logout-all-sessions
+// @desc    Logout from all sessions except current one
+// @access  Private
+export const logoutAllSessions = asyncHandler(async (req, res) => {
+    const currentRefreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+        return errorResponse(res, 404, "User not found");
+    }
+
+    const currentSessionHash = user.hashToken(currentRefreshToken);
+    const sessionsBeforeRemoval = user.sessions.length;
+
+    user.sessions = user.sessions.filter(
+        s => s.refreshTokenHash === currentSessionHash
+    );
+
+    await user.save({ validateBeforeSave: false });
+
+    return successResponse(res, 200, "All other sessions logged out", {
+        sessionsRevoked: sessionsBeforeRemoval - user.sessions.length,
+        sessionsActive: user.sessions.length
+    });
+});
+
+// @route   POST /api/v1/user/change-password
+// @desc    Change password while logged in
+// @access  Private
+export const changePassword = asyncHandler(async (req, res) => {
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+
+    logger.info(`Password change attempt for user: ${req.user.id}`);
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+        logger.warn(`Password change failed - Missing required fields for user: ${req.user.id}`);
+        return errorResponse(res, 400, "All password fields are required");
+    }
+
+    if (newPassword !== confirmPassword) {
+        logger.warn(`Password change failed - New passwords do not match for user: ${req.user.id}`);
+        return errorResponse(res, 400, "New passwords do not match");
+    }
+
+    if (currentPassword === newPassword) {
+        logger.warn(`Password change failed - New password same as current for user: ${req.user.id}`);
+        return errorResponse(res, 400, "New password must be different from current password");
+    }
+
+    const user = await User.findById(req.user.id).select("+password");
+
+    if (!user) {
+        return errorResponse(res, 404, "User not found");
+    }
+
+    const isPasswordValid = await user.comparePassword(currentPassword);
+
+    if (!isPasswordValid) {
+        logger.warn(`Password change failed - Incorrect current password for user: ${req.user.id}`);
+        return errorResponse(res, 401, "Current password is incorrect");
+    }
+
+    user.password = newPassword;
+    user.passwordChangedAt = Date.now();
+    user.clearAllSessions();
+
+    await user.save();
+
+    logger.info(`Password changed successfully for user: ${req.user.id}`);
+
+    return successResponse(res, 200, "Password changed successfully. Please login again.");
+});
