@@ -46,6 +46,19 @@ const enrollmentSchema = new mongoose.Schema({
         required: true,
         min: 0
     },
+    // Module-wise progress tracking
+    progressModules: [{
+        moduleId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Module"
+        },
+        completedAt: Date,
+        status: {
+            type: String,
+            enum: ["not_started", "in_progress", "completed"],
+            default: "not_started"
+        }
+    }],
 
     // Time Tracking
     timeSpent: {
@@ -107,6 +120,8 @@ enrollmentSchema.index({ payment: 1 });
 enrollmentSchema.index({ enrolledAt: -1 });
 enrollmentSchema.index({ lastAccessedAt: -1 });
 enrollmentSchema.index({ completedAt: -1 });
+enrollmentSchema.index({ "progressModules.moduleId": 1 });
+enrollmentSchema.index({ "progressModules.status": 1 });
 
 // Compound indexes
 enrollmentSchema.index({ user: 1, status: 1, enrolledAt: -1 });
@@ -188,6 +203,25 @@ enrollmentSchema.methods.updateProgress = function(progressData) {
 
     if (progressData.timeSpent !== undefined) {
         this.timeSpent += progressData.timeSpent;
+    }
+
+    // Update module progress
+    if (progressData.moduleId && progressData.moduleStatus) {
+        const moduleProgress = this.progressModules.find(
+            mp => mp.moduleId.toString() === progressData.moduleId.toString()
+        );
+        if (moduleProgress) {
+            moduleProgress.status = progressData.moduleStatus;
+            if (progressData.moduleStatus === "completed" && !moduleProgress.completedAt) {
+                moduleProgress.completedAt = new Date();
+            }
+        } else {
+            this.progressModules.push({
+                moduleId: progressData.moduleId,
+                status: progressData.moduleStatus,
+                completedAt: progressData.moduleStatus === "completed" ? new Date() : undefined
+            });
+        }
     }
 
     this.lastAccessedAt = new Date();

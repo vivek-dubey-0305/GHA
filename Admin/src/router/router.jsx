@@ -8,7 +8,13 @@ const Login = lazy(() => import('../pages/AuthPages/Login'));
 const Verify = lazy(() => import('../pages/AuthPages/Verify'));
 const Forgot = lazy(() => import('../pages/AuthPages/Forgot'));
 const Reset = lazy(() => import('../pages/AuthPages/Reset'));
+
+// Lazy load admin pages
 const Dashboard = lazy(() => import('../pages/Dashboard/Dashboard'));
+const Users = lazy(() => import('../pages/UserPages/Users'));
+const Instructors = lazy(() => import('../pages/InstructorPages/Instructors'));
+const Courses = lazy(() => import('../pages/CoursePages/Courses'));
+const Revenue = lazy(() => import('../pages/RevenuePages/Revenue'));
 
 // Loading fallback component
 const LoadingFallback = () => (
@@ -113,6 +119,46 @@ const router = createBrowserRouter([
           <ProtectedRoute>
             <Suspense fallback={<LoadingFallback />}>
               <Dashboard />
+            </Suspense>
+          </ProtectedRoute>
+        )
+      },
+      {
+        path: 'users',
+        element: (
+          <ProtectedRoute>
+            <Suspense fallback={<LoadingFallback />}>
+              <Users />
+            </Suspense>
+          </ProtectedRoute>
+        )
+      },
+      {
+        path: 'instructors',
+        element: (
+          <ProtectedRoute>
+            <Suspense fallback={<LoadingFallback />}>
+              <Instructors />
+            </Suspense>
+          </ProtectedRoute>
+        )
+      },
+      {
+        path: 'courses',
+        element: (
+          <ProtectedRoute>
+            <Suspense fallback={<LoadingFallback />}>
+              <Courses />
+            </Suspense>
+          </ProtectedRoute>
+        )
+      },
+      {
+        path: 'revenue',
+        element: (
+          <ProtectedRoute>
+            <Suspense fallback={<LoadingFallback />}>
+              <Revenue />
             </Suspense>
           </ProtectedRoute>
         )

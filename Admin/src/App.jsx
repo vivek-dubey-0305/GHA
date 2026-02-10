@@ -2,6 +2,7 @@ import { RouterProvider } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { initializeAuth, selectInitializingAuth, selectIsAuthenticated } from './redux/slices/auth.slice';
+import { ToastProvider } from './components/ui';
 import router from './router/router';
 
 const LoadingScreen = () => (
@@ -30,7 +31,11 @@ const App = () => {
     return <LoadingScreen />;
   }
 
-  return <RouterProvider router={router} />;
+  return (
+    <ToastProvider>
+      <RouterProvider router={router} />
+    </ToastProvider>
+  );
 };
 
 export default App;
