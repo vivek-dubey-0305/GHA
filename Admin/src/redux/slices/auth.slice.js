@@ -8,7 +8,7 @@ export const login = createAsyncThunk(
   'auth/login',
   async ({ email, password }, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/login`, {
+      const response = await authClient.post(`/login`, {
         email,
         password
       });
@@ -26,7 +26,7 @@ export const verifyOtp = createAsyncThunk(
   'auth/verifyOtp',
   async ({ email, otp }, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/verify-otp`, {
+      const response = await authClient.post(`/verify-otp`, {
         email,
         otp
       });
@@ -44,7 +44,7 @@ export const resendOtp = createAsyncThunk(
   'auth/resendOtp',
   async ({ email }, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/resend-otp`, {
+      const response = await authClient.post(`/resend-otp`, {
         email
       });
 
@@ -61,7 +61,7 @@ export const getProfile = createAsyncThunk(
   'auth/getProfile',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiClient.get(`/profile`);
+      const response = await authClient.get(`/profile`);
 
       return response.data.data; // The admin data
     } catch (error) {
@@ -76,7 +76,7 @@ export const logout = createAsyncThunk(
   'auth/logout',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/logout`, {});
+      const response = await authClient.post(`/logout`, {});
 
       return response.data;
     } catch (error) {
@@ -123,7 +123,7 @@ export const initializeAuth = createAsyncThunk(
       // Try to refresh token silently to check if user is authenticated
       // Use apiClient which has withCredentials: true configured globally
       console.log("====================")
-      const response = await apiClient.post(`/refresh-token`, {});
+      const response = await authClient.post(`/refresh-token`, {});
       console.log("response for refresh-api", response)
       return response.data;
     } catch (error) {
@@ -132,6 +132,8 @@ export const initializeAuth = createAsyncThunk(
       // Just return null to indicate no auth
       return null;
     }
+
+    
   }
 );
 
@@ -140,7 +142,7 @@ export const forgotPassword = createAsyncThunk(
   'auth/forgotPassword',
   async ({ email }, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/forgot-password`, {
+      const response = await authClient.post(`/forgot-password`, {
         email
       });
 
@@ -157,7 +159,7 @@ export const resetPasswordThunk = createAsyncThunk(
   'auth/resetPassword',
   async ({ token, password, confirmPassword }, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/reset-password`, {
+      const response = await authClient.post(`/reset-password`, {
         token,
         password,
         confirmPassword
@@ -176,7 +178,7 @@ export const verifyResetToken = createAsyncThunk(
   'auth/verifyResetToken',
   async ({ token }, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/verify-reset-token`, {
+      const response = await authClient.post(`/verify-reset-token`, {
         token
       });
 
@@ -193,7 +195,7 @@ export const getAdminSessions = createAsyncThunk(
   'auth/getAdminSessions',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiClient.get(`/sessions`);
+      const response = await authClient.get(`/sessions`);
       return response.data.data; // The sessions data
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Failed to get sessions';
@@ -207,7 +209,7 @@ export const logoutSession = createAsyncThunk(
   'auth/logoutSession',
   async ({ sessionId }, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/logout-session`, {
+      const response = await authClient.post(`/logout-session`, {
         sessionId
       });
       return response.data;
@@ -223,7 +225,7 @@ export const logoutAllSessions = createAsyncThunk(
   'auth/logoutAllSessions',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/logout-all-sessions`, {});
+      const response = await authClient.post(`/logout-all-sessions`, {});
       return response.data;
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Failed to logout all sessions';
@@ -237,7 +239,7 @@ export const changePassword = createAsyncThunk(
   'auth/changePassword',
   async ({ currentPassword, newPassword, confirmPassword }, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/change-password`, {
+      const response = await authClient.post(`/change-password`, {
         currentPassword,
         newPassword,
         confirmPassword
@@ -255,7 +257,7 @@ export const verifyPassword = createAsyncThunk(
   'auth/verifyPassword',
   async ({ password }, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/verify-password`, {
+      const response = await authClient.post(`/verify-password`, {
         password
       });
       return response.data;

@@ -53,8 +53,14 @@ const userSchema = new mongoose.Schema({
         select: false
     },
     profilePicture: {
-        type: String,
-        default: null
+        public_id: {
+            type: String,
+            // required: true
+        },
+        secure_url: {
+            type: String,
+            // required: true
+        }
     },
     dateOfBirth: {
         type: Date,
@@ -82,66 +88,17 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
-    isKYCVerified: {
-        type: Boolean,
-        default: false // Know Your Customer verification for payment
-    },
+    // isKYCVerified: {
+    //     type: Boolean,
+    //     default: false // Know Your Customer verification for payment
+    // },
     isActive: {
         type: Boolean,
         default: true
     },
 
-    // Enrollment Information
-    enrolledCourses: [{
-        courseId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "Course",
-            required: true
-        },
-        instructorId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "Instructor",
-            required: true
-        },
-        enrollmentDate: {
-            type: Date,
-            default: Date.now
-        },
-        completionPercentage: {
-            type: Number,
-            default: 0,
-            min: 0,
-            max: 100
-        },
-        isCompleted: {
-            type: Boolean,
-            default: false
-        },
-        completedAt: Date,
-        certificateIssued: {
-            type: Boolean,
-            default: false
-        },
-        certificateId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "Certificate"
-        },
-        progressModules: [{
-            moduleId: mongoose.Schema.Types.ObjectId,
-            completedAt: Date,
-            status: {
-                type: String,
-                enum: ["not_started", "in_progress", "completed"],
-                default: "not_started"
-            }
-        }],
-        lastAccessedAt: Date,
-        status: {
-            type: String,
-            enum: ["active", "suspended", "completed"],
-            default: "active"
-        }
-    }],
+    // Enrollment Information (Virtual - handled by Enrollment model)
+    // enrolledCourses moved to separate Enrollment collection
 
     // Payment Information
     payment: {
@@ -355,8 +312,6 @@ userSchema.index({ createdAt: -1 });
 userSchema.index({ isActive: 1 });
 userSchema.index({ isEmailVerified: 1 });
 userSchema.index({ deletedAt: 1 });
-userSchema.index({ "enrolledCourses.courseId": 1 });
-userSchema.index({ "enrolledCourses.instructorId": 1 });
 userSchema.index({ "transactions.transactionId": 1 });
 userSchema.index({ verificationCodeExpires: 1 }, { expireAfterSeconds: 0 });
 
@@ -365,9 +320,10 @@ userSchema.virtual("isLocked").get(function() {
     return !!(this.lockUntil && this.lockUntil > Date.now());
 });
 
-// Virtual for full name
-userSchema.virtual("fullName").get(function() {
-    return `${this.firstName} ${this.lastName}`.trim();
+// Virtual for enrolled courses (queries Enrollment model)
+userSchema.virtual("enrolledCourses").get(function() {
+    const Enrollment = mongoose.model("Enrollment");
+    return Enrollment.find({ user: this._id }).populate("course");
 });
 
 // Pre-save middleware for password hashing
@@ -511,46 +467,54 @@ userSchema.methods.resetLoginAttempts = function() {
     this.save({ validateBeforeSave: false });
 };
 
-// Instance method to enroll in course
-userSchema.methods.enrollCourse = function(courseId, instructorId) {
+// Instance method to enroll in course (creates Enrollment record)
+userSchema.methods.enrollCourse = async function(courseId, paymentId) {
+    const Enrollment = mongoose.model("Enrollment");
+    
     // Check if already enrolled
-    const alreadyEnrolled = this.enrolledCourses.some(
-        course => course.courseId.toString() === courseId.toString()
-    );
-
-    if (alreadyEnrolled) {
+    const existing = await Enrollment.findOne({ user: this._id, course: courseId });
+    if (existing) {
         throw new Error("Already enrolled in this course");
     }
 
-    this.enrolledCourses.push({
-        courseId,
-        instructorId,
-        enrollmentDate: new Date(),
-        completionPercentage: 0,
-        isCompleted: false
+    // Get course details for totalLessons
+    const Course = mongoose.model("Course");
+    const course = await Course.findById(courseId);
+    if (!course) {
+        throw new Error("Course not found");
+    }
+
+    const enrollment = new Enrollment({
+        user: this._id,
+        course: courseId,
+        payment: paymentId,
+        totalLessons: course.totalLessons || 0
     });
 
     this.learningProgress.totalCoursesEnrolled += 1;
+    await this.save();
+
+    return enrollment.save();
 };
 
-// Instance method to update course progress
-userSchema.methods.updateCourseProgress = function(courseId, progressData) {
-    const course = this.enrolledCourses.find(
-        c => c.courseId.toString() === courseId.toString()
-    );
-
-    if (!course) {
-        throw new Error("Course not found in enrollments");
+// Instance method to update course progress (updates Enrollment record)
+userSchema.methods.updateCourseProgress = async function(courseId, progressData) {
+    const Enrollment = mongoose.model("Enrollment");
+    
+    const enrollment = await Enrollment.findOne({ user: this._id, course: courseId });
+    if (!enrollment) {
+        throw new Error("Enrollment not found");
     }
 
-    course.completionPercentage = progressData.completionPercentage || course.completionPercentage;
-    course.lastAccessedAt = new Date();
+    const result = await enrollment.updateProgress(progressData);
 
-    if (progressData.completionPercentage === 100 && !course.isCompleted) {
-        course.isCompleted = true;
-        course.completedAt = new Date();
+    // Update learning progress if completed
+    if (progressData.completionPercentage === 100 && !enrollment.completedAt) {
         this.learningProgress.totalCoursesCompleted += 1;
+        await this.save();
     }
+
+    return result;
 };
 
 // Instance method to add course review

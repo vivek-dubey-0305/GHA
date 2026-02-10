@@ -111,6 +111,13 @@ import { appConfig, securityConfig, validateConfig } from "./configs/app.config.
 import adminAuthRouter from "./routes/admin.auth.routes.js";
 import userAuthRouter from "./routes/user.auth.routes.js";
 import instructorAuthRouter from "./routes/instructor.auth.routes.js";
+import adminRouter from "./routes/admin.routes.js";
+
+// Import models to register them with Mongoose
+import { User } from "./models/user.model.js";
+import { Course } from "./models/course.model.js";
+import { Instructor } from "./models/instructor.model.js";
+import { Admin } from "./models/admin.model.js";
 
 const app = express();
 
@@ -179,9 +186,10 @@ app.get("/csrf-token", csrfProtection, (req, res) => {
 });
 
 // API routes
-app.use("/api/v1/admin", adminAuthRouter);
-app.use("/api/v1/user", userAuthRouter);
-app.use("/api/v1/instructor", instructorAuthRouter);
+app.use("/api/v1/admin/auth", adminAuthRouter);
+app.use("/api/v1/admin", adminRouter);
+app.use("/api/v1/user/auth", userAuthRouter);
+app.use("/api/v1/instructor/auth", instructorAuthRouter); 
 
 // ================= ERROR HANDLER (LAST) =================
 app.use(errorMiddleware);

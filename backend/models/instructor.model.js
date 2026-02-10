@@ -54,8 +54,14 @@ const instructorSchema = new mongoose.Schema({
         select: false
     },
     profilePicture: {
-        type: String,
-        default: null
+        public_id: {
+            type: String,
+            // required: true
+        },
+        secure_url: {
+            type: String,
+            // required: true
+        }
     },
     bio: {
         type: String,
@@ -150,32 +156,13 @@ const instructorSchema = new mongoose.Schema({
     suspensionReason: String,
     suspendedAt: Date,
 
-    // Course Management
+    // Course Management (References only)
     courses: [{
-        courseId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "Course",
-            required: true
-        },
-        courseName: String,
-        courseCode: String,
-        description: String,
-        category: String,
-        createdAt: {
-            type: Date,
-            default: Date.now
-        },
-        isPublished: {
-            type: Boolean,
-            default: false
-        },
-        enrollmentCount: {
-            type: Number,
-            default: 0
-        }
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Course"
     }],
 
-    // Live Class Information (Zoom Integration)
+    // Zoom Integration for Live Classes
     zoomIntegration: {
         zoomUserId: String,
         zoomAccessToken: String, // Encrypted in production
@@ -187,98 +174,16 @@ const instructorSchema = new mongoose.Schema({
         connectedAt: Date
     },
 
-    // Live Classes Schedule
+    // Live Classes (References)
     liveClasses: [{
-        classId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "LiveClass",
-            required: true
-        },
-        courseId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "Course"
-        },
-        title: String,
-        description: String,
-        scheduledAt: Date,
-        duration: Number, // in minutes
-        zoomMeetingId: String,
-        zoomJoinUrl: String,
-        maxParticipants: {
-            type: Number,
-            default: 500
-        },
-        actualParticipants: {
-            type: Number,
-            default: 0
-        },
-        status: {
-            type: String,
-            enum: ["scheduled", "in_progress", "completed", "cancelled"],
-            default: "scheduled"
-        },
-        recordingUrl: String,
-        recordingStatus: {
-            type: String,
-            enum: ["not_recorded", "recording", "processing", "completed", "failed"],
-            default: "not_recorded"
-        },
-        recordingAvailable: {
-            type: Boolean,
-            default: false
-        },
-        startedAt: Date,
-        endedAt: Date,
-        notes: String,
-        materials: [{
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "Material"
-        }]
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "LiveClass"
     }],
 
-    // Video Packages (Pre-recorded Content)
+    // Video Packages (References)
     videoPackages: [{
-        packageId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "VideoPackage",
-            required: true
-        },
-        packageName: String,
-        courseId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "Course"
-        },
-        description: String,
-        videos: [{
-            videoId: mongoose.Schema.Types.ObjectId,
-            title: String,
-            duration: Number, // in seconds
-            uploadedAt: Date,
-            url: String,
-            thumbnail: String,
-            status: {
-                type: String,
-                enum: ["uploading", "processing", "available", "deleted"],
-                default: "uploading"
-            }
-        }],
-        totalVideos: {
-            type: Number,
-            default: 0
-        },
-        totalDuration: {
-            type: Number,
-            default: 0 // in seconds
-        },
-        isPublished: {
-            type: Boolean,
-            default: false
-        },
-        createdAt: {
-            type: Date,
-            default: Date.now
-        },
-        lastUpdated: Date
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "VideoPackage"
     }],
 
     // Rating and Reviews
@@ -464,10 +369,9 @@ instructorSchema.index({ createdAt: -1 });
 instructorSchema.index({ isActive: 1 });
 instructorSchema.index({ isEmailVerified: 1 });
 instructorSchema.index({ deletedAt: 1 });
-instructorSchema.index({ "courses.courseId": 1 });
-instructorSchema.index({ "liveClasses.courseId": 1 });
-instructorSchema.index({ "liveClasses.scheduledAt": 1 });
-instructorSchema.index({ "liveClasses.status": 1 });
+instructorSchema.index({ "courses": 1 });
+instructorSchema.index({ "liveClasses": 1 });
+instructorSchema.index({ "videoPackages": 1 });
 instructorSchema.index({ "paymentHistory.paymentId": 1 });
 instructorSchema.index({ verificationCodeExpires: 1 }, { expireAfterSeconds: 0 });
 
@@ -637,81 +541,6 @@ instructorSchema.methods.resetLoginAttempts = function() {
     this.save({ validateBeforeSave: false });
 };
 
-// Instance method to schedule live class
-instructorSchema.methods.scheduleLiveClass = function(classData) {
-    if (new Date(classData.scheduledAt) < new Date()) {
-        throw new Error("Cannot schedule class in the past");
-    }
-
-    this.liveClasses.push({
-        classId: classData.classId,
-        courseId: classData.courseId,
-        title: classData.title,
-        description: classData.description,
-        scheduledAt: new Date(classData.scheduledAt),
-        duration: classData.duration,
-        status: "scheduled"
-    });
-};
-
-// Instance method to complete live class
-instructorSchema.methods.completeLiveClass = function(classId, recordingData = {}) {
-    const liveClass = this.liveClasses.find(
-        lc => lc.classId.toString() === classId.toString()
-    );
-
-    if (!liveClass) {
-        throw new Error("Live class not found");
-    }
-
-    liveClass.status = "completed";
-    liveClass.endedAt = new Date();
-
-    if (recordingData.recordingUrl) {
-        liveClass.recordingUrl = recordingData.recordingUrl;
-        liveClass.recordingStatus = "completed";
-        liveClass.recordingAvailable = true;
-    }
-
-    this.totalLiveClasses += 1;
-};
-
-// Instance method to upload video package
-instructorSchema.methods.addVideoPackage = function(packageData) {
-    this.videoPackages.push({
-        packageId: packageData.packageId,
-        packageName: packageData.packageName,
-        courseId: packageData.courseId,
-        description: packageData.description,
-        totalVideos: 0,
-        isPublished: false
-    });
-};
-
-// Instance method to add video to package
-instructorSchema.methods.addVideoToPackage = function(packageId, videoData) {
-    const videoPackage = this.videoPackages.find(
-        vp => vp.packageId.toString() === packageId.toString()
-    );
-
-    if (!videoPackage) {
-        throw new Error("Video package not found");
-    }
-
-    videoPackage.videos.push({
-        videoId: videoData.videoId,
-        title: videoData.title,
-        duration: videoData.duration,
-        uploadedAt: new Date(),
-        url: videoData.url,
-        thumbnail: videoData.thumbnail,
-        status: "uploading"
-    });
-
-    videoPackage.totalVideos += 1;
-    videoPackage.totalDuration += videoData.duration;
-};
-
 // Instance method to update instructor rating
 instructorSchema.methods.updateRating = function(newRating) {
     if (newRating < 1 || newRating > 5) {
@@ -728,6 +557,33 @@ instructorSchema.methods.updateRating = function(newRating) {
     else if (newRating === 3) this.rating.ratingBreakdown.threestar += 1;
     else if (newRating === 2) this.rating.ratingBreakdown.twostar += 1;
     else if (newRating === 1) this.rating.ratingBreakdown.onestar += 1;
+};
+
+// Static methods for related data
+instructorSchema.statics.getInstructorCourses = function(instructorId) {
+    return this.findById(instructorId)
+        .populate({
+            path: 'courses',
+            select: 'title description category level price isPublished enrollmentCount'
+        });
+};
+
+instructorSchema.statics.getInstructorLiveClasses = function(instructorId) {
+    return this.findById(instructorId)
+        .populate({
+            path: 'liveClasses',
+            select: 'title description scheduledAt duration status actualParticipants',
+            populate: { path: 'course', select: 'title' }
+        });
+};
+
+instructorSchema.statics.getInstructorVideoPackages = function(instructorId) {
+    return this.findById(instructorId)
+        .populate({
+            path: 'videoPackages',
+            select: 'packageName description totalVideos totalDuration isPublished',
+            populate: { path: 'course', select: 'title' }
+        });
 };
 
 // Transform output to exclude sensitive fields
