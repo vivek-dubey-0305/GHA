@@ -4,12 +4,11 @@ import crypto from "crypto";
 import { asyncHandler } from "../middlewares/async.middleware.js";
 import { errorResponse, successResponse } from "../utils/response.utils.js";
 import { convertToMilliseconds } from "../utils/time.utils.js";
-import { uploadProfilePicture, deleteProfilePicture, updateProfilePicture } from "../services/cloudinary.service.js";
 import logger from "../configs/logger.config.js";
 
 /**
  * Instructor Authentication Controller
- * Handles registration, login, OTP verification, password reset, and profile management
+ * Handles registration, login, OTP verification & password reset
  */
 
 // @route   POST /api/v1/instructor/register
@@ -448,59 +447,6 @@ export const getInstructorProfile = asyncHandler(async (req, res) => {
     return successResponse(res, 200, "Instructor profile retrieved", instructor);
 });
 
-// @route   POST /api/v1/instructor/upload-profile-picture
-// @desc    Upload or update profile picture to Cloudinary
-// @access  Private
-export const uploadProfilePictureInstructor = asyncHandler(async (req, res) => {
-    const instructorId = req.instructor?.id;
-
-    logger.info(`Instructor profile picture upload attempt: ${instructorId}`);
-
-    if (!instructorId) {
-        logger.warn(`Profile picture upload failed - Instructor not authenticated`);
-        return errorResponse(res, 401, "Unauthorized");
-    }
-
-    if (!req.file) {
-        logger.warn(`Profile picture upload failed - No file provided for: ${instructorId}`);
-        return errorResponse(res, 400, "No file provided");
-    }
-
-    try {
-        const instructor = await Instructor.findById(instructorId);
-
-        if (!instructor) {
-            logger.warn(`Profile picture upload failed - Instructor not found: ${instructorId}`);
-            return errorResponse(res, 404, "Instructor not found");
-        }
-
-        const instructorName = `${instructor.firstName}_${instructor.lastName}`;
-        const oldPublicId = instructor.profilePicture ? instructor.profilePicture.split('/').pop().split('.')[0] : null;
-
-        logger.info(`Uploading profile picture for instructor: ${instructorName} (${instructorId})`);
-
-        const uploadResult = await updateProfilePicture(
-            req.file,
-            "instructor",
-            instructorName,
-            oldPublicId
-        );
-
-        instructor.profilePicture = uploadResult.url;
-        await instructor.save({ validateBeforeSave: false });
-
-        logger.info(`Profile picture updated successfully for instructor: ${instructorId}`);
-
-        return successResponse(res, 200, "Profile picture uploaded successfully", {
-            profilePicture: uploadResult.url,
-            cloudinaryId: uploadResult.cloudinaryId,
-            size: uploadResult.size
-        });
-    } catch (error) {
-        logger.error(`Profile picture upload error for instructor ${instructorId}: ${error.message}`);
-        return errorResponse(res, 500, "Failed to upload profile picture. Please try again.");
-    }
-});
 
 // @route   POST /api/v1/instructor/forgot-password
 // @desc    Request password reset link

@@ -1,0 +1,5690 @@
+{
+  "info": {
+    "name": "GreedHunterAcademy",
+    "description": "Complete API collection for GreedHunterAcademy backend. Includes authentication, admin CRUD, instructor management, user operations, and all resource endpoints.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseurl",
+      "value": "http://localhost:{{port}}/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "port",
+      "value": "5000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "auth",
+      "item": [
+        {
+          "name": "instructor",
+          "item": [
+            {
+              "name": "register",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"email\": \"john.doe@example.com\",\n  \"password\": \"Test@1234\",\n  \"confirmPassword\": \"Test@1234\",\n  \"specialization\": [\"web_development\", \"programming\"],\n  \"bio\": \"Experienced web developer with 5+ years of experience\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/instructor/auth/register",
+                  "host": ["{{baseurl}}"],
+                  "path": ["instructor", "auth", "register"]
+                }
+              }
+            },
+            {
+              "name": "login",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"khushbubhargav20@gmail.com\",\n  \"password\": \"Test@1234\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/instructor/auth/login",
+                  "host": ["{{baseurl}}"],
+                  "path": ["instructor", "auth", "login"]
+                }
+              }
+            },
+            {
+              "name": "verify-otp",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"khushbubhargav20@gmail.com\",\n  \"otp\": \"123456\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/instructor/auth/verify-otp",
+                  "host": ["{{baseurl}}"],
+                  "path": ["instructor", "auth", "verify-otp"]
+                }
+              }
+            },
+            {
+              "name": "resend-otp",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"khushbubhargav20@gmail.com\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/instructor/auth/resend-otp",
+                  "host": ["{{baseurl}}"],
+                  "path": ["instructor", "auth", "resend-otp"]
+                }
+              }
+            },
+            {
+              "name": "logout",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/instructor/auth/logout",
+                  "host": ["{{baseurl}}"],
+                  "path": ["instructor", "auth", "logout"]
+                }
+              }
+            },
+            {
+              "name": "profile",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/instructor/auth/profile",
+                  "host": ["{{baseurl}}"],
+                  "path": ["instructor", "auth", "profile"]
+                }
+              }
+            },
+            {
+              "name": "refresh-token",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"your_refresh_token_here\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/instructor/auth/refresh-token",
+                  "host": ["{{baseurl}}"],
+                  "path": ["instructor", "auth", "refresh-token"]
+                }
+              }
+            },
+            {
+              "name": "forgot-password",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"khushbubhargav20@gmail.com\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/instructor/auth/forgot-password",
+                  "host": ["{{baseurl}}"],
+                  "path": ["instructor", "auth", "forgot-password"]
+                }
+              }
+            },
+            {
+              "name": "reset-password",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"khushbubhargav20@gmail.com\",\n  \"otp\": \"123456\",\n  \"newPassword\": \"NewTest@1234\",\n  \"confirmPassword\": \"NewTest@1234\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/instructor/auth/reset-password",
+                  "host": ["{{baseurl}}"],
+                  "path": ["instructor", "auth", "reset-password"]
+                }
+              }
+            },
+            {
+              "name": "verify-reset-token",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"khushbubhargav20@gmail.com\",\n  \"otp\": \"123456\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/instructor/auth/verify-reset-token",
+                  "host": ["{{baseurl}}"],
+                  "path": ["instructor", "auth", "verify-reset-token"]
+                }
+              }
+            },
+            {
+              "name": "sessions",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/instructor/auth/sessions",
+                  "host": ["{{baseurl}}"],
+                  "path": ["instructor", "auth", "sessions"]
+                }
+              }
+            },
+            {
+              "name": "logout-session",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sessionId\": \"session_id_here\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/instructor/auth/logout-session",
+                  "host": ["{{baseurl}}"],
+                  "path": ["instructor", "auth", "logout-session"]
+                }
+              }
+            },
+            {
+              "name": "logout-all-sessions",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/instructor/auth/logout-all-sessions",
+                  "host": ["{{baseurl}}"],
+                  "path": ["instructor", "auth", "logout-all-sessions"]
+                }
+              }
+            },
+            {
+              "name": "change-password",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"currentPassword\": \"Test@1234\",\n  \"newPassword\": \"NewTest@1234\",\n  \"confirmPassword\": \"NewTest@1234\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/instructor/auth/change-password",
+                  "host": ["{{baseurl}}"],
+                  "path": ["instructor", "auth", "change-password"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "user",
+          "item": [
+            {
+              "name": "register",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"firstName\": \"Gray\",\n  \"lastName\": \"Green\",\n  \"email\": \"gray2green4you7@gmail.com\",\n  \"password\": \"Test@1234\",\n  \"confirmPassword\": \"Test@1234\",\n  \"phone\": \"+919123456789\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/user/auth/register",
+                  "host": ["{{baseurl}}"],
+                  "path": ["user", "auth", "register"]
+                }
+              }
+            },
+            {
+              "name": "login",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"gray2green4you7@gmail.com\",\n  \"password\": \"Test@1234\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/user/auth/login",
+                  "host": ["{{baseurl}}"],
+                  "path": ["user", "auth", "login"]
+                }
+              }
+            },
+            {
+              "name": "verify-otp",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"gray2green4you7@gmail.com\",\n  \"otp\": \"123456\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/user/auth/verify-otp",
+                  "host": ["{{baseurl}}"],
+                  "path": ["user", "auth", "verify-otp"]
+                }
+              }
+            },
+            {
+              "name": "resend-otp",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"gray2green4you7@gmail.com\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/user/auth/resend-otp",
+                  "host": ["{{baseurl}}"],
+                  "path": ["user", "auth", "resend-otp"]
+                }
+              }
+            },
+            {
+              "name": "logout",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/user/auth/logout",
+                  "host": ["{{baseurl}}"],
+                  "path": ["user", "auth", "logout"]
+                }
+              }
+            },
+            {
+              "name": "profile",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/user/auth/profile",
+                  "host": ["{{baseurl}}"],
+                  "path": ["user", "auth", "profile"]
+                }
+              }
+            },
+            {
+              "name": "refresh-token",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"your_refresh_token_here\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/user/auth/refresh-token",
+                  "host": ["{{baseurl}}"],
+                  "path": ["user", "auth", "refresh-token"]
+                }
+              }
+            },
+            {
+              "name": "forgot-password",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"gray2green4you7@gmail.com\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/user/auth/forgot-password",
+                  "host": ["{{baseurl}}"],
+                  "path": ["user", "auth", "forgot-password"]
+                }
+              }
+            },
+            {
+              "name": "reset-password",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"gray2green4you7@gmail.com\",\n  \"otp\": \"123456\",\n  \"newPassword\": \"NewTest@1234\",\n  \"confirmPassword\": \"NewTest@1234\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/user/auth/reset-password",
+                  "host": ["{{baseurl}}"],
+                  "path": ["user", "auth", "reset-password"]
+                }
+              }
+            },
+            {
+              "name": "verify-reset-token",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"gray2green4you7@gmail.com\",\n  \"otp\": \"123456\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/user/auth/verify-reset-token",
+                  "host": ["{{baseurl}}"],
+                  "path": ["user", "auth", "verify-reset-token"]
+                }
+              }
+            },
+            {
+              "name": "sessions",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/user/auth/sessions",
+                  "host": ["{{baseurl}}"],
+                  "path": ["user", "auth", "sessions"]
+                }
+              }
+            },
+            {
+              "name": "logout-session",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sessionId\": \"session_id_here\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/user/auth/logout-session",
+                  "host": ["{{baseurl}}"],
+                  "path": ["user", "auth", "logout-session"]
+                }
+              }
+            },
+            {
+              "name": "logout-all-sessions",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/user/auth/logout-all-sessions",
+                  "host": ["{{baseurl}}"],
+                  "path": ["user", "auth", "logout-all-sessions"]
+                }
+              }
+            },
+            {
+              "name": "change-password",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"currentPassword\": \"Test@1234\",\n  \"newPassword\": \"NewTest@1234\",\n  \"confirmPassword\": \"NewTest@1234\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/user/auth/change-password",
+                  "host": ["{{baseurl}}"],
+                  "path": ["user", "auth", "change-password"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "admin",
+          "item": [
+            {
+              "name": "login",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"Admin@1234\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/auth/login",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "auth", "login"]
+                }
+              }
+            },
+            {
+              "name": "verify-otp",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"admin@example.com\",\n  \"otp\": \"123456\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/auth/verify-otp",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "auth", "verify-otp"]
+                }
+              }
+            },
+            {
+              "name": "resend-otp",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"admin@example.com\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/auth/resend-otp",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "auth", "resend-otp"]
+                }
+              }
+            },
+            {
+              "name": "logout",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/auth/logout",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "auth", "logout"]
+                }
+              }
+            },
+            {
+              "name": "profile",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/auth/profile",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "auth", "profile"]
+                }
+              }
+            },
+            {
+              "name": "refresh-token",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"your_refresh_token_here\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/auth/refresh-token",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "auth", "refresh-token"]
+                }
+              }
+            },
+            {
+              "name": "forgot-password",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"admin@example.com\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/auth/forgot-password",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "auth", "forgot-password"]
+                }
+              }
+            },
+            {
+              "name": "reset-password",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"admin@example.com\",\n  \"otp\": \"123456\",\n  \"newPassword\": \"NewAdmin@1234\",\n  \"confirmPassword\": \"NewAdmin@1234\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/auth/reset-password",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "auth", "reset-password"]
+                }
+              }
+            },
+            {
+              "name": "verify-reset-token",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"admin@example.com\",\n  \"otp\": \"123456\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/auth/verify-reset-token",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "auth", "verify-reset-token"]
+                }
+              }
+            },
+            {
+              "name": "sessions",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/auth/sessions",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "auth", "sessions"]
+                }
+              }
+            },
+            {
+              "name": "logout-session",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"sessionId\": \"session_id_here\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/auth/logout-session",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "auth", "logout-session"]
+                }
+              }
+            },
+            {
+              "name": "logout-all-sessions",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/auth/logout-all-sessions",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "auth", "logout-all-sessions"]
+                }
+              }
+            },
+            {
+              "name": "change-password",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"currentPassword\": \"Admin@1234\",\n  \"newPassword\": \"NewAdmin@1234\",\n  \"confirmPassword\": \"NewAdmin@1234\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/auth/change-password",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "auth", "change-password"]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "admin",
+      "item": [
+        {
+          "name": "dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseurl}}/admin/dashboard",
+              "host": ["{{baseurl}}"],
+              "path": ["admin", "dashboard"]
+            }
+          }
+        },
+        {
+          "name": "users",
+          "item": [
+            {
+              "name": "get-all-users",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/users?page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "users"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-user-by-id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/users/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "users", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "user_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "create-user",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "firstName",
+                      "value": "John",
+                      "type": "text"
+                    },
+                    {
+                      "key": "lastName",
+                      "value": "Doe",
+                      "type": "text"
+                    },
+                    {
+                      "key": "email",
+                      "value": "john.doe@example.com",
+                      "type": "text"
+                    },
+                    {
+                      "key": "password",
+                      "value": "Test@1234",
+                      "type": "text"
+                    },
+                    {
+                      "key": "phone",
+                      "value": "+1234567890",
+                      "type": "text"
+                    },
+                    {
+                      "key": "dateOfBirth",
+                      "value": "1990-01-01",
+                      "type": "text"
+                    },
+                    {
+                      "key": "gender",
+                      "value": "Male",
+                      "type": "text"
+                    },
+                    {
+                      "key": "address[street]",
+                      "value": "123 Main St",
+                      "type": "text"
+                    },
+                    {
+                      "key": "address[city]",
+                      "value": "New York",
+                      "type": "text"
+                    },
+                    {
+                      "key": "address[state]",
+                      "value": "NY",
+                      "type": "text"
+                    },
+                    {
+                      "key": "address[postalCode]",
+                      "value": "10001",
+                      "type": "text"
+                    },
+                    {
+                      "key": "address[country]",
+                      "value": "USA",
+                      "type": "text"
+                    },
+                    {
+                      "key": "payment[primaryPaymentMethod]",
+                      "value": "card",
+                      "type": "text"
+                    },
+                    {
+                      "key": "preferences[emailNotifications]",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "preferences[smsNotifications]",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "preferences[courseUpdates]",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "preferences[promotionalEmails]",
+                      "value": "false",
+                      "type": "text"
+                    },
+                    {
+                      "key": "preferences[language]",
+                      "value": "en",
+                      "type": "text"
+                    },
+                    {
+                      "key": "profilePicture",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/users",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "users"]
+                }
+              }
+            },
+            {
+              "name": "update-user",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "firstName",
+                      "value": "John",
+                      "type": "text"
+                    },
+                    {
+                      "key": "lastName",
+                      "value": "Smith",
+                      "type": "text"
+                    },
+                    {
+                      "key": "phone",
+                      "value": "+1234567890",
+                      "type": "text"
+                    },
+                    {
+                      "key": "dateOfBirth",
+                      "value": "1990-01-01",
+                      "type": "text"
+                    },
+                    {
+                      "key": "gender",
+                      "value": "Male",
+                      "type": "text"
+                    },
+                    {
+                      "key": "address[street]",
+                      "value": "123 Main St",
+                      "type": "text"
+                    },
+                    {
+                      "key": "address[city]",
+                      "value": "New York",
+                      "type": "text"
+                    },
+                    {
+                      "key": "address[state]",
+                      "value": "NY",
+                      "type": "text"
+                    },
+                    {
+                      "key": "address[postalCode]",
+                      "value": "10001",
+                      "type": "text"
+                    },
+                    {
+                      "key": "address[country]",
+                      "value": "USA",
+                      "type": "text"
+                    },
+                    {
+                      "key": "payment[primaryPaymentMethod]",
+                      "value": "card",
+                      "type": "text"
+                    },
+                    {
+                      "key": "preferences[emailNotifications]",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "preferences[smsNotifications]",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "preferences[courseUpdates]",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "preferences[promotionalEmails]",
+                      "value": "false",
+                      "type": "text"
+                    },
+                    {
+                      "key": "preferences[language]",
+                      "value": "en",
+                      "type": "text"
+                    },
+                    {
+                      "key": "profilePicture",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/users/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "users", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "user_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-user",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/users/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "users", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "user_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-user-profile-picture",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/users/:id/profile-picture",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "users", ":id", "profile-picture"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "user_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "instructors",
+          "item": [
+            {
+              "name": "get-all-instructors",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/instructors?page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "instructors"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-instructor-by-id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/instructors/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "instructors", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "instructor_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "create-instructor",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "firstName",
+                      "value": "Jane",
+                      "type": "text"
+                    },
+                    {
+                      "key": "lastName",
+                      "value": "Smith",
+                      "type": "text"
+                    },
+                    {
+                      "key": "email",
+                      "value": "jane.smith@example.com",
+                      "type": "text"
+                    },
+                    {
+                      "key": "password",
+                      "value": "Test@1234",
+                      "type": "text"
+                    },
+                    {
+                      "key": "phone",
+                      "value": "+1234567890",
+                      "type": "text"
+                    },
+                    {
+                      "key": "bio",
+                      "value": "Experienced instructor with 5+ years of teaching experience",
+                      "type": "text"
+                    },
+                    {
+                      "key": "specialization",
+                      "value": "[\"web_development\", \"programming\"]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "dateOfBirth",
+                      "value": "1985-05-15",
+                      "type": "text"
+                    },
+                    {
+                      "key": "gender",
+                      "value": "Female",
+                      "type": "text"
+                    },
+                    {
+                      "key": "address[street]",
+                      "value": "456 Teacher St",
+                      "type": "text"
+                    },
+                    {
+                      "key": "address[city]",
+                      "value": "Los Angeles",
+                      "type": "text"
+                    },
+                    {
+                      "key": "address[state]",
+                      "value": "CA",
+                      "type": "text"
+                    },
+                    {
+                      "key": "address[postalCode]",
+                      "value": "90210",
+                      "type": "text"
+                    },
+                    {
+                      "key": "address[country]",
+                      "value": "USA",
+                      "type": "text"
+                    },
+                    {
+                      "key": "qualifications[0][degree]",
+                      "value": "M.Tech Computer Science",
+                      "type": "text"
+                    },
+                    {
+                      "key": "qualifications[0][institution]",
+                      "value": "Stanford University",
+                      "type": "text"
+                    },
+                    {
+                      "key": "qualifications[0][yearOfCompletion]",
+                      "value": "2010",
+                      "type": "text"
+                    },
+                    {
+                      "key": "qualifications[0][certificationId]",
+                      "value": "STAN-2010-CS-123",
+                      "type": "text"
+                    },
+                    {
+                      "key": "yearsOfExperience",
+                      "value": "8",
+                      "type": "text"
+                    },
+                    {
+                      "key": "bankDetails[accountHolderName]",
+                      "value": "Jane Smith",
+                      "type": "text"
+                    },
+                    {
+                      "key": "bankDetails[accountNumber]",
+                      "value": "123456789012",
+                      "type": "text"
+                    },
+                    {
+                      "key": "bankDetails[ifscCode]",
+                      "value": "BANK0001234",
+                      "type": "text"
+                    },
+                    {
+                      "key": "bankDetails[bankName]",
+                      "value": "Bank of America",
+                      "type": "text"
+                    },
+                    {
+                      "key": "bankDetails[accountType]",
+                      "value": "savings",
+                      "type": "text"
+                    },
+                    {
+                      "key": "profilePicture",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/instructors",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "instructors"]
+                }
+              }
+            },
+            {
+              "name": "update-instructor",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "firstName",
+                      "value": "Jane",
+                      "type": "text"
+                    },
+                    {
+                      "key": "lastName",
+                      "value": "Johnson",
+                      "type": "text"
+                    },
+                    {
+                      "key": "phone",
+                      "value": "+1234567890",
+                      "type": "text"
+                    },
+                    {
+                      "key": "bio",
+                      "value": "Updated bio for instructor",
+                      "type": "text"
+                    },
+                    {
+                      "key": "specialization",
+                      "value": "[\"web_development\", \"data_science\"]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "dateOfBirth",
+                      "value": "1985-05-15",
+                      "type": "text"
+                    },
+                    {
+                      "key": "gender",
+                      "value": "Female",
+                      "type": "text"
+                    },
+                    {
+                      "key": "address[street]",
+                      "value": "456 Teacher St",
+                      "type": "text"
+                    },
+                    {
+                      "key": "address[city]",
+                      "value": "Los Angeles",
+                      "type": "text"
+                    },
+                    {
+                      "key": "address[state]",
+                      "value": "CA",
+                      "type": "text"
+                    },
+                    {
+                      "key": "address[postalCode]",
+                      "value": "90210",
+                      "type": "text"
+                    },
+                    {
+                      "key": "address[country]",
+                      "value": "USA",
+                      "type": "text"
+                    },
+                    {
+                      "key": "qualifications[0][degree]",
+                      "value": "M.Tech Computer Science",
+                      "type": "text"
+                    },
+                    {
+                      "key": "qualifications[0][institution]",
+                      "value": "Stanford University",
+                      "type": "text"
+                    },
+                    {
+                      "key": "qualifications[0][yearOfCompletion]",
+                      "value": "2010",
+                      "type": "text"
+                    },
+                    {
+                      "key": "qualifications[0][certificationId]",
+                      "value": "STAN-2010-CS-123",
+                      "type": "text"
+                    },
+                    {
+                      "key": "yearsOfExperience",
+                      "value": "8",
+                      "type": "text"
+                    },
+                    {
+                      "key": "bankDetails[accountHolderName]",
+                      "value": "Jane Johnson",
+                      "type": "text"
+                    },
+                    {
+                      "key": "bankDetails[accountNumber]",
+                      "value": "123456789012",
+                      "type": "text"
+                    },
+                    {
+                      "key": "bankDetails[ifscCode]",
+                      "value": "BANK0001234",
+                      "type": "text"
+                    },
+                    {
+                      "key": "bankDetails[bankName]",
+                      "value": "Bank of America",
+                      "type": "text"
+                    },
+                    {
+                      "key": "bankDetails[accountType]",
+                      "value": "savings",
+                      "type": "text"
+                    },
+                    {
+                      "key": "profilePicture",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/instructors/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "instructors", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "instructor_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-instructor",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/instructors/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "instructors", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "instructor_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-instructor-profile-picture",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/instructors/:id/profile-picture",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "instructors", ":id", "profile-picture"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "instructor_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "courses",
+          "item": [
+            {
+              "name": "get-all-courses",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/courses?page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "courses"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-course-by-id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/courses/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "courses", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "course_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "create-course",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "Full-Stack Web Development Masterclass",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "A comprehensive course covering frontend and backend web development. Learn HTML, CSS, JavaScript, React, Node.js, Express, MongoDB, and deploy production-ready applications.",
+                      "type": "text"
+                    },
+                    {
+                      "key": "shortDescription",
+                      "value": "Master full-stack development with React, Node.js, and MongoDB from scratch to production.",
+                      "type": "text"
+                    },
+                    {
+                      "key": "category",
+                      "value": "programming",
+                      "type": "text"
+                    },
+                    {
+                      "key": "level",
+                      "value": "intermediate",
+                      "type": "text"
+                    },
+                    {
+                      "key": "language",
+                      "value": "English",
+                      "type": "text"
+                    },
+                    {
+                      "key": "price",
+                      "value": "2999",
+                      "type": "text"
+                    },
+                    {
+                      "key": "currency",
+                      "value": "INR",
+                      "type": "text"
+                    },
+                    {
+                      "key": "discountPrice",
+                      "value": "1499",
+                      "type": "text"
+                    },
+                    {
+                      "key": "discountValidUntil",
+                      "value": "2026-05-11T11:52:41.557Z",
+                      "type": "text"
+                    },
+                    {
+                      "key": "totalModules",
+                      "value": "3",
+                      "type": "text"
+                    },
+                    {
+                      "key": "totalLessons",
+                      "value": "7",
+                      "type": "text"
+                    },
+                    {
+                      "key": "totalDuration",
+                      "value": "840",
+                      "type": "text"
+                    },
+                    {
+                      "key": "trailerVideo",
+                      "value": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                      "type": "text"
+                    },
+                    {
+                      "key": "status",
+                      "value": "published",
+                      "type": "text"
+                    },
+                    {
+                      "key": "isPublished",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "maxStudents",
+                      "value": "1000",
+                      "type": "text"
+                    },
+                    {
+                      "key": "learningOutcomes",
+                      "value": "[\"Build full-stack web applications from scratch\",\"Master React.js for modern frontend development\",\"Create RESTful APIs with Node.js and Express\",\"Work with MongoDB and Mongoose ODM\",\"Deploy applications to production environments\",\"Implement authentication and authorization\",\"Write clean, maintainable, and scalable code\"]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "prerequisites",
+                      "value": "[\"Basic understanding of HTML, CSS, and JavaScript\",\"A computer with internet access\",\"Enthusiasm to learn!\"]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "targetAudience",
+                      "value": "[\"Aspiring web developers\",\"Frontend developers looking to learn backend\",\"Backend developers wanting to learn React\",\"Computer science students\"]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "tags",
+                      "value": "[\"web development\",\"react\",\"nodejs\",\"mongodb\",\"full-stack\",\"javascript\",\"mern\"]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "seoTitle",
+                      "value": "Full-Stack Web Development Course - MERN Stack 2026",
+                      "type": "text"
+                    },
+                    {
+                      "key": "seoDescription",
+                      "value": "Learn full-stack web development with React, Node.js, Express, and MongoDB. Build real-world projects.",
+                      "type": "text"
+                    },
+                    {
+                      "key": "isFree",
+                      "value": "false",
+                      "type": "text"
+                    },
+                    {
+                      "key": "allowPreview",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "certificateEnabled",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "thumbnail",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/courses",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "courses"]
+                }
+              }
+            },
+            {
+              "name": "update-course",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "Updated Full-Stack Web Development Masterclass",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "Updated comprehensive course covering frontend and backend web development.",
+                      "type": "text"
+                    },
+                    {
+                      "key": "shortDescription",
+                      "value": "Updated master full-stack development course.",
+                      "type": "text"
+                    },
+                    {
+                      "key": "category",
+                      "value": "programming",
+                      "type": "text"
+                    },
+                    {
+                      "key": "level",
+                      "value": "intermediate",
+                      "type": "text"
+                    },
+                    {
+                      "key": "language",
+                      "value": "English",
+                      "type": "text"
+                    },
+                    {
+                      "key": "price",
+                      "value": "2999",
+                      "type": "text"
+                    },
+                    {
+                      "key": "currency",
+                      "value": "INR",
+                      "type": "text"
+                    },
+                    {
+                      "key": "discountPrice",
+                      "value": "1499",
+                      "type": "text"
+                    },
+                    {
+                      "key": "discountValidUntil",
+                      "value": "2026-05-11T11:52:41.557Z",
+                      "type": "text"
+                    },
+                    {
+                      "key": "totalModules",
+                      "value": "3",
+                      "type": "text"
+                    },
+                    {
+                      "key": "totalLessons",
+                      "value": "7",
+                      "type": "text"
+                    },
+                    {
+                      "key": "totalDuration",
+                      "value": "840",
+                      "type": "text"
+                    },
+                    {
+                      "key": "trailerVideo",
+                      "value": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                      "type": "text"
+                    },
+                    {
+                      "key": "status",
+                      "value": "published",
+                      "type": "text"
+                    },
+                    {
+                      "key": "isPublished",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "maxStudents",
+                      "value": "1000",
+                      "type": "text"
+                    },
+                    {
+                      "key": "learningOutcomes",
+                      "value": "[\"Build full-stack web applications from scratch\",\"Master React.js for modern frontend development\",\"Create RESTful APIs with Node.js and Express\",\"Work with MongoDB and Mongoose ODM\",\"Deploy applications to production environments\",\"Implement authentication and authorization\",\"Write clean, maintainable, and scalable code\"]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "prerequisites",
+                      "value": "[\"Basic understanding of HTML, CSS, and JavaScript\",\"A computer with internet access\",\"Enthusiasm to learn!\"]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "targetAudience",
+                      "value": "[\"Aspiring web developers\",\"Frontend developers looking to learn backend\",\"Backend developers wanting to learn React\",\"Computer science students\"]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "tags",
+                      "value": "[\"web development\",\"react\",\"nodejs\",\"mongodb\",\"full-stack\",\"javascript\",\"mern\"]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "seoTitle",
+                      "value": "Full-Stack Web Development Course - MERN Stack 2026",
+                      "type": "text"
+                    },
+                    {
+                      "key": "seoDescription",
+                      "value": "Learn full-stack web development with React, Node.js, Express, and MongoDB. Build real-world projects.",
+                      "type": "text"
+                    },
+                    {
+                      "key": "isFree",
+                      "value": "false",
+                      "type": "text"
+                    },
+                    {
+                      "key": "allowPreview",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "certificateEnabled",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "thumbnail",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/courses/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "courses", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "course_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-course",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/courses/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "courses", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "course_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "modules",
+          "item": [
+            {
+              "name": "get-all-modules",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/modules?page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "modules"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-module-by-id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/modules/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "modules", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "module_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "create-module",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "Introduction to React",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "Learn the basics of React.js framework",
+                      "type": "text"
+                    },
+                    {
+                      "key": "course",
+                      "value": "course_id_here",
+                      "type": "text"
+                    },
+                    {
+                      "key": "order",
+                      "value": "1",
+                      "type": "text"
+                    },
+                    {
+                      "key": "isPublished",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "thumbnail",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/modules",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "modules"]
+                }
+              }
+            },
+            {
+              "name": "update-module",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "Updated Introduction to React",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "Updated basics of React.js framework",
+                      "type": "text"
+                    },
+                    {
+                      "key": "order",
+                      "value": "1",
+                      "type": "text"
+                    },
+                    {
+                      "key": "isPublished",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "thumbnail",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/modules/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "modules", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "module_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-module",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/modules/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "modules", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "module_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "lessons",
+          "item": [
+            {
+              "name": "get-all-lessons",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/lessons?page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "lessons"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-lesson-by-id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/lessons/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "lessons", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "lesson_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "create-lesson",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "What is React?",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "Introduction to React concepts",
+                      "type": "text"
+                    },
+                    {
+                      "key": "module",
+                      "value": "module_id_here",
+                      "type": "text"
+                    },
+                    {
+                      "key": "type",
+                      "value": "video",
+                      "type": "text"
+                    },
+                    {
+                      "key": "content[videoUrl]",
+                      "value": "https://example.com/video.mp4",
+                      "type": "text"
+                    },
+                    {
+                      "key": "content[videoDuration]",
+                      "value": "600",
+                      "type": "text"
+                    },
+                    {
+                      "key": "order",
+                      "value": "1",
+                      "type": "text"
+                    },
+                    {
+                      "key": "isFree",
+                      "value": "false",
+                      "type": "text"
+                    },
+                    {
+                      "key": "isPublished",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "thumbnail",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/lessons",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "lessons"]
+                }
+              }
+            },
+            {
+              "name": "update-lesson",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "Updated: What is React?",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "Updated introduction to React concepts",
+                      "type": "text"
+                    },
+                    {
+                      "key": "type",
+                      "value": "video",
+                      "type": "text"
+                    },
+                    {
+                      "key": "content[videoUrl]",
+                      "value": "https://example.com/video.mp4",
+                      "type": "text"
+                    },
+                    {
+                      "key": "content[videoDuration]",
+                      "value": "600",
+                      "type": "text"
+                    },
+                    {
+                      "key": "order",
+                      "value": "1",
+                      "type": "text"
+                    },
+                    {
+                      "key": "isFree",
+                      "value": "false",
+                      "type": "text"
+                    },
+                    {
+                      "key": "isPublished",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "thumbnail",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/lessons/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "lessons", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "lesson_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-lesson",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/lessons/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "lessons", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "lesson_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "enrollments",
+          "item": [
+            {
+              "name": "get-all-enrollments",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/enrollments?page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "enrollments"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-enrollment-by-id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/enrollments/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "enrollments", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "enrollment_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "create-enrollment",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"user\": \"user_id_here\",\n  \"course\": \"course_id_here\",\n  \"paymentMethod\": \"card\",\n  \"totalAmount\": 2999,\n  \"currency\": \"INR\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/enrollments",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "enrollments"]
+                }
+              }
+            },
+            {
+              "name": "update-enrollment",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"active\",\n  \"progressPercentage\": 25,\n  \"completedLessons\": 2,\n  \"lastAccessedAt\": \"2026-02-10T12:00:00.000Z\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/enrollments/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "enrollments", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "enrollment_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-enrollment",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/enrollments/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "enrollments", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "enrollment_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "payments",
+          "item": [
+            {
+              "name": "get-payment-stats",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/payments/stats",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "payments", "stats"]
+                }
+              }
+            },
+            {
+              "name": "get-all-payments",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/payments?page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "payments"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-payment-by-id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/payments/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "payments", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "payment_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "update-payment",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"completed\",\n  \"transactionId\": \"txn_123456789\",\n  \"paymentDate\": \"2026-02-10T12:00:00.000Z\",\n  \"notes\": \"Payment processed successfully\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/payments/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "payments", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "payment_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-payment",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/payments/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "payments", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "payment_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "admin-process-refund",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refundAmount\": 1499,\n  \"reason\": \"Customer requested refund\",\n  \"notes\": \"Processing full refund as per policy\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/payments/:id/refund",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "payments", ":id", "refund"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "payment_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "reviews",
+          "item": [
+            {
+              "name": "get-all-reviews",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/reviews?page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "reviews"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-review-by-id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/reviews/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "reviews", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "review_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "update-review",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"rating\": 5,\n  \"reviewText\": \"Excellent course! Highly recommended.\",\n  \"isApproved\": true,\n  \"isVerified\": true\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/reviews/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "reviews", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "review_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-review",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/reviews/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "reviews", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "review_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "assignments",
+          "item": [
+            {
+              "name": "get-all-assignments",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/assignments?page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "assignments"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-assignment-by-id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/assignments/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "assignments", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "assignment_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "create-assignment",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "Build a React Todo App",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "Create a fully functional todo application using React.js",
+                      "type": "text"
+                    },
+                    {
+                      "key": "course",
+                      "value": "course_id_here",
+                      "type": "text"
+                    },
+                    {
+                      "key": "module",
+                      "value": "module_id_here",
+                      "type": "text"
+                    },
+                    {
+                      "key": "type",
+                      "value": "project",
+                      "type": "text"
+                    },
+                    {
+                      "key": "maxScore",
+                      "value": "100",
+                      "type": "text"
+                    },
+                    {
+                      "key": "passingScore",
+                      "value": "60",
+                      "type": "text"
+                    },
+                    {
+                      "key": "dueDate",
+                      "value": "2026-03-10T23:59:59.000Z",
+                      "type": "text"
+                    },
+                    {
+                      "key": "instructions",
+                      "value": "Submit your code as a GitHub repository link. Include a README with setup instructions.",
+                      "type": "text"
+                    },
+                    {
+                      "key": "isMandatory",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "isPublished",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "thumbnail",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/assignments",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "assignments"]
+                }
+              }
+            },
+            {
+              "name": "update-assignment",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "Updated: Build a React Todo App",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "Updated: Create a fully functional todo application using React.js",
+                      "type": "text"
+                    },
+                    {
+                      "key": "maxScore",
+                      "value": "100",
+                      "type": "text"
+                    },
+                    {
+                      "key": "passingScore",
+                      "value": "60",
+                      "type": "text"
+                    },
+                    {
+                      "key": "dueDate",
+                      "value": "2026-03-10T23:59:59.000Z",
+                      "type": "text"
+                    },
+                    {
+                      "key": "instructions",
+                      "value": "Updated instructions: Submit your code as a GitHub repository link.",
+                      "type": "text"
+                    },
+                    {
+                      "key": "isMandatory",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "isPublished",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "thumbnail",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/assignments/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "assignments", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "assignment_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-assignment",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/assignments/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "assignments", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "assignment_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "submissions",
+          "item": [
+            {
+              "name": "get-all-submissions",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/submissions?page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "submissions"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-submission-by-id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/submissions/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "submissions", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "submission_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "update-submission",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"graded\",\n  \"score\": 85,\n  \"feedback\": \"Good work! Consider adding more comments to your code.\",\n  \"gradedBy\": \"admin_id_here\",\n  \"gradedAt\": \"2026-02-10T14:00:00.000Z\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/submissions/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "submissions", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "submission_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-submission",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/submissions/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "submissions", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "submission_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "certificates",
+          "item": [
+            {
+              "name": "get-all-certificates",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/certificates?page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "certificates"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-certificate-by-id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/certificates/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "certificates", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "certificate_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "create-certificate",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"user\": \"user_id_here\",\n  \"course\": \"course_id_here\",\n  \"enrollment\": \"enrollment_id_here\",\n  \"certificateNumber\": \"CERT-2026-001\",\n  \"issuedDate\": \"2026-02-10T12:00:00.000Z\",\n  \"expiryDate\": \"2029-02-10T12:00:00.000Z\",\n  \"grade\": \"A\",\n  \"score\": 95,\n  \"completionPercentage\": 100,\n  \"verificationCode\": \"VER-ABC123\",\n  \"isActive\": true\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/certificates",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "certificates"]
+                }
+              }
+            },
+            {
+              "name": "update-certificate",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"grade\": \"A+\",\n  \"score\": 98,\n  \"isActive\": true,\n  \"revokedAt\": null,\n  \"revokeReason\": null\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/certificates/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "certificates", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "certificate_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-certificate",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/certificates/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "certificates", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "certificate_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "revoke-certificate",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"revokeReason\": \"Violation of academic integrity policy\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/certificates/:id/revoke",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "certificates", ":id", "revoke"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "certificate_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "live-classes",
+          "item": [
+            {
+              "name": "get-all-live-classes",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/live-classes?page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "live-classes"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-live-class-by-id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/live-classes/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "live-classes", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "live_class_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "update-live-class",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Updated Live Class Title\",\n  \"description\": \"Updated description\",\n  \"scheduledDate\": \"2026-02-15T10:00:00.000Z\",\n  \"duration\": 90,\n  \"maxParticipants\": 50,\n  \"meetingLink\": \"https://zoom.us/meeting/updated\",\n  \"meetingId\": \"123-456-789\",\n  \"passcode\": \"updated123\",\n  \"isActive\": true\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/live-classes/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "live-classes", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "live_class_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-live-class",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/live-classes/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "live-classes", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "live_class_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "video-packages",
+          "item": [
+            {
+              "name": "get-all-video-packages",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/video-packages?page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "video-packages"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-video-package-by-id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/video-packages/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "video-packages", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "video_package_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "update-video-package",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Updated Video Package Title\",\n  \"description\": \"Updated description\",\n  \"price\": 1999,\n  \"isPublished\": true,\n  \"category\": \"web_development\",\n  \"tags\": [\"react\", \"javascript\", \"tutorial\"],\n  \"totalViews\": 150,\n  \"rating\": 4.5\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/video-packages/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "video-packages", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "video_package_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-video-package",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/video-packages/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "video-packages", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "video_package_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "materials",
+          "item": [
+            {
+              "name": "get-all-materials",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/materials?page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "materials"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-material-by-id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/materials/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "materials", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "material_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "update-material",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Updated Material Title\",\n  \"description\": \"Updated description\",\n  \"fileUrl\": \"https://example.com/updated-file.pdf\",\n  \"fileSize\": 2048576,\n  \"isPublished\": true,\n  \"downloadCount\": 25\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/materials/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "materials", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "material_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-material",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/materials/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "materials", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "material_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "progress",
+          "item": [
+            {
+              "name": "get-all-progress",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/progress?page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "progress"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "update-progress",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"progressPercentage\": 75,\n  \"completedLessons\": 5,\n  \"totalLessons\": 7,\n  \"timeSpent\": 1800,\n  \"lastAccessedAt\": \"2026-02-10T15:00:00.000Z\",\n  \"isCompleted\": false\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/admin/progress/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "progress", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "progress_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-progress",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/admin/progress/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["admin", "progress", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "progress_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "instructor",
+      "item": [
+        {
+          "name": "profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseurl}}/instructor/profile",
+              "host": ["{{baseurl}}"],
+              "path": ["instructor", "profile"]
+            }
+          }
+        },
+        {
+          "name": "update-profile",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "firstName",
+                  "value": "Khushbu",
+                  "type": "text"
+                },
+                {
+                  "key": "lastName",
+                  "value": "Bhargav",
+                  "type": "text"
+                },
+                {
+                  "key": "phone",
+                  "value": "+919876543210",
+                  "type": "text"
+                },
+                {
+                  "key": "bio",
+                  "value": "Experienced instructor with 5+ years in web development and programming education.",
+                  "type": "text"
+                },
+                {
+                  "key": "specialization",
+                  "value": "[\"web_development\", \"programming\", \"react\"]",
+                  "type": "text"
+                },
+                {
+                  "key": "dateOfBirth",
+                  "value": "1990-01-01",
+                  "type": "text"
+                },
+                {
+                  "key": "gender",
+                  "value": "Female",
+                  "type": "text"
+                },
+                {
+                  "key": "address[street]",
+                  "value": "123 Instructor Lane",
+                  "type": "text"
+                },
+                {
+                  "key": "address[city]",
+                  "value": "Mumbai",
+                  "type": "text"
+                },
+                {
+                  "key": "address[state]",
+                  "value": "Maharashtra",
+                  "type": "text"
+                },
+                {
+                  "key": "address[postalCode]",
+                  "value": "400001",
+                  "type": "text"
+                },
+                {
+                  "key": "address[country]",
+                  "value": "India",
+                  "type": "text"
+                },
+                {
+                  "key": "qualifications[0][degree]",
+                  "value": "M.Tech Computer Science",
+                  "type": "text"
+                },
+                {
+                  "key": "qualifications[0][institution]",
+                  "value": "IIT Bombay",
+                  "type": "text"
+                },
+                {
+                  "key": "qualifications[0][yearOfCompletion]",
+                  "value": "2015",
+                  "type": "text"
+                },
+                {
+                  "key": "qualifications[0][certificationId]",
+                  "value": "IITB-2015-CS-456",
+                  "type": "text"
+                },
+                {
+                  "key": "yearsOfExperience",
+                  "value": "8",
+                  "type": "text"
+                },
+                {
+                  "key": "bankDetails[accountHolderName]",
+                  "value": "Khushbu Bhargav",
+                  "type": "text"
+                },
+                {
+                  "key": "bankDetails[accountNumber]",
+                  "value": "987654321098",
+                  "type": "text"
+                },
+                {
+                  "key": "bankDetails[ifscCode]",
+                  "value": "SBIN0001234",
+                  "type": "text"
+                },
+                {
+                  "key": "bankDetails[bankName]",
+                  "value": "State Bank of India",
+                  "type": "text"
+                },
+                {
+                  "key": "bankDetails[accountType]",
+                  "value": "savings",
+                  "type": "text"
+                },
+                {
+                  "key": "profilePicture",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseurl}}/instructor/profile",
+              "host": ["{{baseurl}}"],
+              "path": ["instructor", "profile"]
+            }
+          }
+        },
+        {
+          "name": "delete-profile-picture",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseurl}}/instructor/profile/picture",
+              "host": ["{{baseurl}}"],
+              "path": ["instructor", "profile", "picture"]
+            }
+          }
+        },
+        {
+          "name": "update-preferences",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emailNotifications\": true,\n  \"smsNotifications\": false,\n  \"courseUpdates\": true,\n  \"promotionalEmails\": false,\n  \"language\": \"en\"\n}"
+            },
+            "url": {
+              "raw": "{{baseurl}}/instructor/preferences",
+              "host": ["{{baseurl}}"],
+              "path": ["instructor", "preferences"]
+            }
+          }
+        },
+        {
+          "name": "dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseurl}}/instructor/dashboard",
+              "host": ["{{baseurl}}"],
+              "path": ["instructor", "dashboard"]
+            }
+          }
+        },
+        {
+          "name": "courses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseurl}}/instructor/courses?page=1&limit=10",
+              "host": ["{{baseurl}}"],
+              "path": ["instructor", "courses"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "students",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseurl}}/instructor/students?page=1&limit=10",
+              "host": ["{{baseurl}}"],
+              "path": ["instructor", "students"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "earnings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseurl}}/instructor/earnings?page=1&limit=10",
+              "host": ["{{baseurl}}"],
+              "path": ["instructor", "earnings"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "live-classes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseurl}}/instructor/live-classes?page=1&limit=10",
+              "host": ["{{baseurl}}"],
+              "path": ["instructor", "live-classes"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "video-packages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseurl}}/instructor/video-packages?page=1&limit=10",
+              "host": ["{{baseurl}}"],
+              "path": ["instructor", "video-packages"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "materials",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseurl}}/instructor/materials?page=1&limit=10",
+              "host": ["{{baseurl}}"],
+              "path": ["instructor", "materials"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "assignments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseurl}}/instructor/assignments?page=1&limit=10",
+              "host": ["{{baseurl}}"],
+              "path": ["instructor", "assignments"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "pending-submissions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseurl}}/instructor/submissions/pending?page=1&limit=10",
+              "host": ["{{baseurl}}"],
+              "path": ["instructor", "submissions", "pending"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "update-bank-details",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountHolderName\": \"Khushbu Bhargav\",\n  \"accountNumber\": \"987654321098\",\n  \"ifscCode\": \"SBIN0001234\",\n  \"bankName\": \"State Bank of India\",\n  \"accountType\": \"savings\"\n}"
+            },
+            "url": {
+              "raw": "{{baseurl}}/instructor/bank-details",
+              "host": ["{{baseurl}}"],
+              "path": ["instructor", "bank-details"]
+            }
+          }
+        },
+        {
+          "name": "deactivate-account",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseurl}}/instructor/deactivate",
+              "host": ["{{baseurl}}"],
+              "path": ["instructor", "deactivate"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "user",
+      "item": [
+        {
+          "name": "profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseurl}}/user/profile",
+              "host": ["{{baseurl}}"],
+              "path": ["user", "profile"]
+            }
+          }
+        },
+        {
+          "name": "update-profile",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "firstName",
+                  "value": "Gray",
+                  "type": "text"
+                },
+                {
+                  "key": "lastName",
+                  "value": "Green",
+                  "type": "text"
+                },
+                {
+                  "key": "phone",
+                  "value": "+919123456789",
+                  "type": "text"
+                },
+                {
+                  "key": "dateOfBirth",
+                  "value": "1995-05-15",
+                  "type": "text"
+                },
+                {
+                  "key": "gender",
+                  "value": "Male",
+                  "type": "text"
+                },
+                {
+                  "key": "address[street]",
+                  "value": "456 User Street",
+                  "type": "text"
+                },
+                {
+                  "key": "address[city]",
+                  "value": "Delhi",
+                  "type": "text"
+                },
+                {
+                  "key": "address[state]",
+                  "value": "Delhi",
+                  "type": "text"
+                },
+                {
+                  "key": "address[postalCode]",
+                  "value": "110001",
+                  "type": "text"
+                },
+                {
+                  "key": "address[country]",
+                  "value": "India",
+                  "type": "text"
+                },
+                {
+                  "key": "payment[primaryPaymentMethod]",
+                  "value": "card",
+                  "type": "text"
+                },
+                {
+                  "key": "preferences[emailNotifications]",
+                  "value": "true",
+                  "type": "text"
+                },
+                {
+                  "key": "preferences[smsNotifications]",
+                  "value": "true",
+                  "type": "text"
+                },
+                {
+                  "key": "preferences[courseUpdates]",
+                  "value": "true",
+                  "type": "text"
+                },
+                {
+                  "key": "preferences[promotionalEmails]",
+                  "value": "false",
+                  "type": "text"
+                },
+                {
+                  "key": "preferences[language]",
+                  "value": "en",
+                  "type": "text"
+                },
+                {
+                  "key": "profilePicture",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseurl}}/user/profile",
+              "host": ["{{baseurl}}"],
+              "path": ["user", "profile"]
+            }
+          }
+        },
+        {
+          "name": "delete-profile-picture",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseurl}}/user/profile/picture",
+              "host": ["{{baseurl}}"],
+              "path": ["user", "profile", "picture"]
+            }
+          }
+        },
+        {
+          "name": "update-preferences",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emailNotifications\": true,\n  \"smsNotifications\": true,\n  \"courseUpdates\": true,\n  \"promotionalEmails\": false,\n  \"language\": \"en\"\n}"
+            },
+            "url": {
+              "raw": "{{baseurl}}/user/preferences",
+              "host": ["{{baseurl}}"],
+              "path": ["user", "preferences"]
+            }
+          }
+        },
+        {
+          "name": "enrollments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseurl}}/user/enrollments?page=1&limit=10",
+              "host": ["{{baseurl}}"],
+              "path": ["user", "enrollments"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "enrollment-details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseurl}}/user/enrollments/:enrollmentId",
+              "host": ["{{baseurl}}"],
+              "path": ["user", "enrollments", ":enrollmentId"],
+              "variable": [
+                {
+                  "key": "enrollmentId",
+                  "value": "enrollment_id_here"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "progress",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseurl}}/user/progress?page=1&limit=10",
+              "host": ["{{baseurl}}"],
+              "path": ["user", "progress"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "learning-stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseurl}}/user/progress/stats",
+              "host": ["{{baseurl}}"],
+              "path": ["user", "progress", "stats"]
+            }
+          }
+        },
+        {
+          "name": "course-progress",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseurl}}/user/progress/course/:courseId",
+              "host": ["{{baseurl}}"],
+              "path": ["user", "progress", "course", ":courseId"],
+              "variable": [
+                {
+                  "key": "courseId",
+                  "value": "course_id_here"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "update-lesson-progress",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"progressPercentage\": 100,\n  \"timeSpent\": 1800,\n  \"completed\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseurl}}/user/progress/lesson/:lessonId",
+              "host": ["{{baseurl}}"],
+              "path": ["user", "progress", "lesson", ":lessonId"],
+              "variable": [
+                {
+                  "key": "lessonId",
+                  "value": "lesson_id_here"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "reviews",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseurl}}/user/reviews?page=1&limit=10",
+              "host": ["{{baseurl}}"],
+              "path": ["user", "reviews"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "certificates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseurl}}/user/certificates?page=1&limit=10",
+              "host": ["{{baseurl}}"],
+              "path": ["user", "certificates"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "transactions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseurl}}/user/transactions?page=1&limit=10",
+              "host": ["{{baseurl}}"],
+              "path": ["user", "transactions"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "deactivate-account",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseurl}}/user/deactivate",
+              "host": ["{{baseurl}}"],
+              "path": ["user", "deactivate"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "resources",
+      "item": [
+        {
+          "name": "courses",
+          "item": [
+            {
+              "name": "get-public-courses",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/courses?page=1&limit=10&category=programming&level=intermediate",
+                  "host": ["{{baseurl}}"],
+                  "path": ["courses"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    },
+                    {
+                      "key": "category",
+                      "value": "programming"
+                    },
+                    {
+                      "key": "level",
+                      "value": "intermediate"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-course-details",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/courses/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["courses", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "course_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-course-reviews",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/courses/:id/reviews?page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["courses", ":id", "reviews"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "course_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "create-course",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "My New Course",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "A comprehensive course on new technology",
+                      "type": "text"
+                    },
+                    {
+                      "key": "shortDescription",
+                      "value": "Learn new technology from scratch",
+                      "type": "text"
+                    },
+                    {
+                      "key": "category",
+                      "value": "technology",
+                      "type": "text"
+                    },
+                    {
+                      "key": "level",
+                      "value": "beginner",
+                      "type": "text"
+                    },
+                    {
+                      "key": "language",
+                      "value": "English",
+                      "type": "text"
+                    },
+                    {
+                      "key": "price",
+                      "value": "1999",
+                      "type": "text"
+                    },
+                    {
+                      "key": "currency",
+                      "value": "INR",
+                      "type": "text"
+                    },
+                    {
+                      "key": "learningOutcomes",
+                      "value": "[\"Learn basics\",\"Build projects\",\"Get certified\"]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "prerequisites",
+                      "value": "[\"Basic computer knowledge\"]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "targetAudience",
+                      "value": "[\"Students\",\"Professionals\"]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "tags",
+                      "value": "[\"technology\",\"programming\"]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "thumbnail",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseurl}}/courses",
+                  "host": ["{{baseurl}}"],
+                  "path": ["courses"]
+                }
+              }
+            },
+            {
+              "name": "update-course",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "Updated Course Title",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "Updated course description",
+                      "type": "text"
+                    },
+                    {
+                      "key": "price",
+                      "value": "2499",
+                      "type": "text"
+                    },
+                    {
+                      "key": "thumbnail",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseurl}}/courses/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["courses", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "course_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-course",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/courses/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["courses", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "course_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "toggle-publish-course",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/courses/:id/publish",
+                  "host": ["{{baseurl}}"],
+                  "path": ["courses", ":id", "publish"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "course_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-course-stats",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/courses/:id/stats",
+                  "host": ["{{baseurl}}"],
+                  "path": ["courses", ":id", "stats"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "course_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "enrollments",
+          "item": [
+            {
+              "name": "enroll-in-course",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"courseId\": \"course_id_here\",\n  \"paymentMethod\": \"card\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/enrollments",
+                  "host": ["{{baseurl}}"],
+                  "path": ["enrollments"]
+                }
+              }
+            },
+            {
+              "name": "check-enrollment",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/enrollments/check/:courseId",
+                  "host": ["{{baseurl}}"],
+                  "path": ["enrollments", "check", ":courseId"],
+                  "variable": [
+                    {
+                      "key": "courseId",
+                      "value": "course_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-enrollment-details",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/enrollments/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["enrollments", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "enrollment_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "request-refund",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reason\": \"Not satisfied with course content\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/enrollments/:id/refund",
+                  "host": ["{{baseurl}}"],
+                  "path": ["enrollments", ":id", "refund"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "enrollment_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-course-enrollments",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/enrollments/course/:courseId?page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["enrollments", "course", ":courseId"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ],
+                  "variable": [
+                    {
+                      "key": "courseId",
+                      "value": "course_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "reviews",
+          "item": [
+            {
+              "name": "get-course-reviews",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/reviews?courseId=course_id_here&page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["reviews"],
+                  "query": [
+                    {
+                      "key": "courseId",
+                      "value": "course_id_here"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "create-review",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"courseId\": \"course_id_here\",\n  \"rating\": 5,\n  \"reviewText\": \"Excellent course! Highly recommended.\",\n  \"pros\": \"Great content, good pace\",\n  \"cons\": \"Could have more examples\",\n  \"recommendToFriend\": true\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/reviews",
+                  "host": ["{{baseurl}}"],
+                  "path": ["reviews"]
+                }
+              }
+            },
+            {
+              "name": "update-review",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"rating\": 4,\n  \"reviewText\": \"Updated review text\",\n  \"pros\": \"Updated pros\",\n  \"cons\": \"Updated cons\",\n  \"recommendToFriend\": false\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/reviews/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["reviews", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "review_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-review",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/reviews/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["reviews", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "review_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "assignments",
+          "item": [
+            {
+              "name": "get-assignments",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/assignments?courseId=course_id_here&page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["assignments"],
+                  "query": [
+                    {
+                      "key": "courseId",
+                      "value": "course_id_here"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-assignment-details",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/assignments/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["assignments", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "assignment_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "create-assignment",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "Final Project Assignment",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "Create a complete web application using the concepts learned",
+                      "type": "text"
+                    },
+                    {
+                      "key": "courseId",
+                      "value": "course_id_here",
+                      "type": "text"
+                    },
+                    {
+                      "key": "moduleId",
+                      "value": "module_id_here",
+                      "type": "text"
+                    },
+                    {
+                      "key": "lessonId",
+                      "value": "lesson_id_here",
+                      "type": "text"
+                    },
+                    {
+                      "key": "type",
+                      "value": "project",
+                      "type": "text"
+                    },
+                    {
+                      "key": "maxScore",
+                      "value": "100",
+                      "type": "text"
+                    },
+                    {
+                      "key": "passingScore",
+                      "value": "60",
+                      "type": "text"
+                    },
+                    {
+                      "key": "dueDate",
+                      "value": "2026-12-31T23:59:59.000Z",
+                      "type": "text"
+                    },
+                    {
+                      "key": "instructions",
+                      "value": "Submit your project with source code and documentation",
+                      "type": "text"
+                    },
+                    {
+                      "key": "resources",
+                      "value": "[\"Project template\",\"Sample code\"]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "attachments",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseurl}}/assignments",
+                  "host": ["{{baseurl}}"],
+                  "path": ["assignments"]
+                }
+              }
+            },
+            {
+              "name": "update-assignment",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "Updated Assignment Title",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "Updated assignment description",
+                      "type": "text"
+                    },
+                    {
+                      "key": "dueDate",
+                      "value": "2026-12-31T23:59:59.000Z",
+                      "type": "text"
+                    },
+                    {
+                      "key": "attachments",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseurl}}/assignments/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["assignments", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "assignment_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-assignment",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/assignments/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["assignments", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "assignment_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "submissions",
+          "item": [
+            {
+              "name": "get-submissions",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/submissions?assignmentId=assignment_id_here&page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["submissions"],
+                  "query": [
+                    {
+                      "key": "assignmentId",
+                      "value": "assignment_id_here"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-submission-details",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/submissions/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["submissions", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "submission_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "submit-assignment",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "assignmentId",
+                      "value": "assignment_id_here",
+                      "type": "text"
+                    },
+                    {
+                      "key": "submissionText",
+                      "value": "Here is my assignment submission with detailed explanation",
+                      "type": "text"
+                    },
+                    {
+                      "key": "submissionFiles",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseurl}}/submissions",
+                  "host": ["{{baseurl}}"],
+                  "path": ["submissions"]
+                }
+              }
+            },
+            {
+              "name": "update-submission",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "submissionText",
+                      "value": "Updated submission text",
+                      "type": "text"
+                    },
+                    {
+                      "key": "submissionFiles",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseurl}}/submissions/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["submissions", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "submission_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "grade-submission",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"score\": 85,\n  \"feedback\": \"Good work! Consider improving the documentation.\",\n  \"gradedBy\": \"instructor_id_here\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/submissions/:id/grade",
+                  "host": ["{{baseurl}}"],
+                  "path": ["submissions", ":id", "grade"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "submission_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-submission",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/submissions/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["submissions", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "submission_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "modules",
+          "item": [
+            {
+              "name": "get-modules",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/modules?courseId=course_id_here&page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["modules"],
+                  "query": [
+                    {
+                      "key": "courseId",
+                      "value": "course_id_here"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-module-details",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/modules/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["modules", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "module_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "create-module",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Introduction to Programming\",\n  \"description\": \"Learn the basics of programming concepts\",\n  \"courseId\": \"course_id_here\",\n  \"order\": 1,\n  \"totalLessons\": 5,\n  \"totalDuration\": 300\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/modules",
+                  "host": ["{{baseurl}}"],
+                  "path": ["modules"]
+                }
+              }
+            },
+            {
+              "name": "update-module",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Updated Module Title\",\n  \"description\": \"Updated module description\",\n  \"order\": 2\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/modules/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["modules", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "module_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-module",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/modules/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["modules", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "module_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "lessons",
+          "item": [
+            {
+              "name": "get-lessons",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/lessons?moduleId=module_id_here&page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["lessons"],
+                  "query": [
+                    {
+                      "key": "moduleId",
+                      "value": "module_id_here"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-lesson-details",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/lessons/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["lessons", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "lesson_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "create-lesson",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "Variables and Data Types",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "Learn about variables and different data types in programming",
+                      "type": "text"
+                    },
+                    {
+                      "key": "moduleId",
+                      "value": "module_id_here",
+                      "type": "text"
+                    },
+                    {
+                      "key": "courseId",
+                      "value": "course_id_here",
+                      "type": "text"
+                    },
+                    {
+                      "key": "order",
+                      "value": "1",
+                      "type": "text"
+                    },
+                    {
+                      "key": "type",
+                      "value": "video",
+                      "type": "text"
+                    },
+                    {
+                      "key": "duration",
+                      "value": "45",
+                      "type": "text"
+                    },
+                    {
+                      "key": "content",
+                      "value": "Lesson content here...",
+                      "type": "text"
+                    },
+                    {
+                      "key": "videoUrl",
+                      "value": "https://www.youtube.com/watch?v=example",
+                      "type": "text"
+                    },
+                    {
+                      "key": "resources",
+                      "value": "[\"Code examples\",\"Exercise files\"]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "isPreview",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "attachments",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseurl}}/lessons",
+                  "host": ["{{baseurl}}"],
+                  "path": ["lessons"]
+                }
+              }
+            },
+            {
+              "name": "update-lesson",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "Updated Lesson Title",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "Updated lesson description",
+                      "type": "text"
+                    },
+                    {
+                      "key": "duration",
+                      "value": "50",
+                      "type": "text"
+                    },
+                    {
+                      "key": "attachments",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseurl}}/lessons/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["lessons", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "lesson_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-lesson",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/lessons/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["lessons", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "lesson_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "live-classes",
+          "item": [
+            {
+              "name": "get-live-classes",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/live-classes?courseId=course_id_here&page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["live-classes"],
+                  "query": [
+                    {
+                      "key": "courseId",
+                      "value": "course_id_here"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-live-class-details",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/live-classes/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["live-classes", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "live_class_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "create-live-class",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Q&A Session\",\n  \"description\": \"Live Q&A session for course doubts\",\n  \"courseId\": \"course_id_here\",\n  \"scheduledAt\": \"2026-02-15T14:00:00.000Z\",\n  \"duration\": 60,\n  \"meetingLink\": \"https://meet.google.com/abc-defg-hij\",\n  \"maxParticipants\": 50,\n  \"isRecorded\": true,\n  \"prerequisites\": \"Complete first 3 modules\",\n  \"agenda\": \"Answer student questions and clarify doubts\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/live-classes",
+                  "host": ["{{baseurl}}"],
+                  "path": ["live-classes"]
+                }
+              }
+            },
+            {
+              "name": "update-live-class",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Updated Live Class Title\",\n  \"description\": \"Updated description\",\n  \"scheduledAt\": \"2026-02-16T15:00:00.000Z\",\n  \"meetingLink\": \"https://meet.google.com/updated-link\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/live-classes/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["live-classes", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "live_class_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-live-class",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/live-classes/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["live-classes", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "live_class_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "video-packages",
+          "item": [
+            {
+              "name": "get-video-packages",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/video-packages?courseId=course_id_here&page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["video-packages"],
+                  "query": [
+                    {
+                      "key": "courseId",
+                      "value": "course_id_here"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-video-package-details",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/video-packages/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["video-packages", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "video_package_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "create-video-package",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "Advanced Topics Package",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "Additional video content for advanced learners",
+                      "type": "text"
+                    },
+                    {
+                      "key": "courseId",
+                      "value": "course_id_here",
+                      "type": "text"
+                    },
+                    {
+                      "key": "price",
+                      "value": "999",
+                      "type": "text"
+                    },
+                    {
+                      "key": "currency",
+                      "value": "INR",
+                      "type": "text"
+                    },
+                    {
+                      "key": "videos",
+                      "value": "[{\"title\":\"Advanced Topic 1\",\"url\":\"https://youtube.com/watch?v=abc\",\"duration\":30},{\"title\":\"Advanced Topic 2\",\"url\":\"https://youtube.com/watch?v=def\",\"duration\":45}]",
+                      "type": "text"
+                    },
+                    {
+                      "key": "totalDuration",
+                      "value": "75",
+                      "type": "text"
+                    },
+                    {
+                      "key": "isActive",
+                      "value": "true",
+                      "type": "text"
+                    },
+                    {
+                      "key": "thumbnail",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseurl}}/video-packages",
+                  "host": ["{{baseurl}}"],
+                  "path": ["video-packages"]
+                }
+              }
+            },
+            {
+              "name": "update-video-package",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "Updated Video Package",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "Updated description",
+                      "type": "text"
+                    },
+                    {
+                      "key": "price",
+                      "value": "1299",
+                      "type": "text"
+                    },
+                    {
+                      "key": "thumbnail",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseurl}}/video-packages/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["video-packages", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "video_package_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-video-package",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/video-packages/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["video-packages", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "video_package_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "materials",
+          "item": [
+            {
+              "name": "get-materials",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/materials?courseId=course_id_here&page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["materials"],
+                  "query": [
+                    {
+                      "key": "courseId",
+                      "value": "course_id_here"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-material-details",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/materials/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["materials", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "material_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "create-material",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "Course Syllabus PDF",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "Complete course syllabus and outline",
+                      "type": "text"
+                    },
+                    {
+                      "key": "courseId",
+                      "value": "course_id_here",
+                      "type": "text"
+                    },
+                    {
+                      "key": "moduleId",
+                      "value": "module_id_here",
+                      "type": "text"
+                    },
+                    {
+                      "key": "type",
+                      "value": "document",
+                      "type": "text"
+                    },
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseurl}}/materials",
+                  "host": ["{{baseurl}}"],
+                  "path": ["materials"]
+                }
+              }
+            },
+            {
+              "name": "update-material",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "title",
+                      "value": "Updated Material Title",
+                      "type": "text"
+                    },
+                    {
+                      "key": "description",
+                      "value": "Updated description",
+                      "type": "text"
+                    },
+                    {
+                      "key": "file",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseurl}}/materials/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["materials", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "material_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-material",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/materials/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["materials", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "material_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "progress",
+          "item": [
+            {
+              "name": "get-progress",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/progress?userId=user_id_here&page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["progress"],
+                  "query": [
+                    {
+                      "key": "userId",
+                      "value": "user_id_here"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-progress-details",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/progress/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["progress", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "progress_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "create-progress",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"userId\": \"user_id_here\",\n  \"courseId\": \"course_id_here\",\n  \"enrollmentId\": \"enrollment_id_here\",\n  \"progressPercentage\": 0,\n  \"completedLessons\": 0,\n  \"totalLessons\": 10,\n  \"timeSpent\": 0,\n  \"isCompleted\": false\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/progress",
+                  "host": ["{{baseurl}}"],
+                  "path": ["progress"]
+                }
+              }
+            },
+            {
+              "name": "update-progress",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"progressPercentage\": 75,\n  \"completedLessons\": 5,\n  \"totalLessons\": 7,\n  \"timeSpent\": 1800,\n  \"lastAccessedAt\": \"2026-02-10T15:00:00.000Z\",\n  \"isCompleted\": false\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/progress/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["progress", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "progress_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-progress",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/progress/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["progress", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "progress_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "certificates",
+          "item": [
+            {
+              "name": "get-certificates",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/certificates?userId=user_id_here&page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["certificates"],
+                  "query": [
+                    {
+                      "key": "userId",
+                      "value": "user_id_here"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-certificate-details",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/certificates/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["certificates", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "certificate_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "create-certificate",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"userId\": \"user_id_here\",\n  \"courseId\": \"course_id_here\",\n  \"enrollmentId\": \"enrollment_id_here\",\n  \"issuedAt\": \"2026-02-10T10:00:00.000Z\",\n  \"certificateNumber\": \"CERT-2026-001\",\n  \"grade\": \"A\",\n  \"completionPercentage\": 100,\n  \"totalScore\": 95,\n  \"issuedBy\": \"instructor_id_here\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/certificates",
+                  "host": ["{{baseurl}}"],
+                  "path": ["certificates"]
+                }
+              }
+            },
+            {
+              "name": "update-certificate",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"grade\": \"A+\",\n  \"totalScore\": 98\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/certificates/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["certificates", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "certificate_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-certificate",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/certificates/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["certificates", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "certificate_id_here"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "payments",
+          "item": [
+            {
+              "name": "get-payments",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/payments?userId=user_id_here&page=1&limit=10",
+                  "host": ["{{baseurl}}"],
+                  "path": ["payments"],
+                  "query": [
+                    {
+                      "key": "userId",
+                      "value": "user_id_here"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "get-payment-details",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/payments/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["payments", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "payment_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "create-payment",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"userId\": \"user_id_here\",\n  \"courseId\": \"course_id_here\",\n  \"amount\": 2999,\n  \"currency\": \"INR\",\n  \"paymentMethod\": \"card\",\n  \"transactionId\": \"TXN_2026_001\",\n  \"status\": \"completed\",\n  \"paymentGateway\": \"razorpay\",\n  \"gatewayResponse\": \"{\\\"order_id\\\":\\\"order_abc123\\\",\\\"payment_id\\\":\\\"pay_def456\\\"}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/payments",
+                  "host": ["{{baseurl}}"],
+                  "path": ["payments"]
+                }
+              }
+            },
+            {
+              "name": "update-payment",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"refunded\",\n  \"refundAmount\": 2999,\n  \"refundReason\": \"Course not suitable\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/payments/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["payments", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "payment_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "delete-payment",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseurl}}/payments/:id",
+                  "host": ["{{baseurl}}"],
+                  "path": ["payments", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "payment_id_here"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "webhook",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "X-Razorpay-Signature",
+                    "value": "signature_here",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"event\": \"payment.captured\",\n  \"entity\": \"event\",\n  \"account_id\": \"acc_abc123\",\n  \"event_id\": \"evt_def456\",\n  \"created_at\": 1640995200,\n  \"payload\": {\n    \"payment\": {\n      \"entity\": {\n        \"id\": \"pay_ghi789\",\n        \"order_id\": \"order_jkl012\",\n        \"amount\": 299900,\n        \"currency\": \"INR\",\n        \"status\": \"captured\"\n      }\n    }\n  }\n}"
+                },
+                "url": {
+                  "raw": "{{baseurl}}/payments/webhook",
+                  "host": ["{{baseurl}}"],
+                  "path": ["payments", "webhook"]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+]
+}

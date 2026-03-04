@@ -7,7 +7,8 @@ const courseSchema = new mongoose.Schema({
         required: [true, "Course title is required"],
         trim: true,
         maxlength: [100, "Title cannot exceed 100 characters"],
-        minlength: [3, "Title must be at least 3 characters"]
+        minlength: [3, "Title must be at least 3 characters"],
+        unique: true
     },
     description: {
         type: String,
@@ -98,11 +99,18 @@ const courseSchema = new mongoose.Schema({
 
     // Media Assets
     thumbnail: {
-        type: String, // Cloudinary URL
-        required: [true, "Course thumbnail is required"]
+        public_id: {
+            type: String,
+            required: [true, "Course thumbnail public_id is required"]
+        },
+        secure_url: {
+            type: String,
+            required: [true, "Course thumbnail secure_url is required"]
+        }
     },
+    //!! trailerVideo not stroing yet --> save to amazons3 cloudwatch CDN and store the URL here
     trailerVideo: {
-        type: String, // Cloudinary URL or YouTube ID
+        type: String, // R2 URL or YouTube ID
     },
     previewLessons: [{
         type: mongoose.Schema.Types.ObjectId,
@@ -121,7 +129,7 @@ const courseSchema = new mongoose.Schema({
     },
     publishedAt: Date,
 
-    // Enrollment and Analytics
+    // Enrollment and Analytics]
     enrolledCount: {
         type: Number,
         default: 0,
@@ -193,7 +201,14 @@ const courseSchema = new mongoose.Schema({
         default: true
     },
 
-    // Audit Fields
+    // Certificates (references to Certificate model)
+    // When certificateEnabled is true, certificates are created and linked here
+    certificates: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Certificate"
+    }],
+
+    // Audit Fields [!! not yet stored yet]
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Instructor"
@@ -230,12 +245,11 @@ courseSchema.virtual("durationHours").get(function() {
 });
 
 // Pre-save middleware to update publishedAt
-courseSchema.pre("save", function(next) {
+courseSchema.pre("save", function() {
     if (this.isModified("status") && this.status === "published" && !this.publishedAt) {
         this.publishedAt = new Date();
         this.isPublished = true;
     }
-    next();
 });
 
 // Static method to find published courses

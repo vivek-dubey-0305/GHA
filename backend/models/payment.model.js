@@ -41,6 +41,52 @@ const paymentSchema = new mongoose.Schema({
         required: true
     },
 
+    // Gateway Compliance Fields (PCI DSS)
+    gatewayOrderId: {
+        type: String,
+        trim: true
+    },
+    gatewaySignature: {
+        type: String,
+        trim: true
+    },
+
+    // Idempotency Protection (prevents duplicate payments from webhook replays)
+    idempotencyKey: {
+        type: String,
+        unique: true,
+        sparse: true
+    },
+
+    // Fraud / Risk Assessment (gateway audit requirements)
+    risk: {
+        isSuspicious: {
+            type: Boolean,
+            default: false
+        },
+        riskScore: {
+            type: Number,
+            min: 0,
+            max: 100
+        },
+        flaggedReason: {
+            type: String,
+            trim: true,
+            maxlength: 500
+        },
+        reviewedAt: Date,
+        reviewedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Admin"
+        }
+    },
+
+    // Device Fingerprinting (fraud detection)
+    deviceFingerprint: {
+        type: String,
+        trim: true
+    },
+
     // Payment Status
     status: {
         type: String,
@@ -129,17 +175,20 @@ const paymentSchema = new mongoose.Schema({
 paymentSchema.index({ user: 1, status: 1 });
 paymentSchema.index({ course: 1, status: 1 });
 paymentSchema.index({ paymentGatewayId: 1 });
+paymentSchema.index({ gatewayOrderId: 1 });
+paymentSchema.index({ idempotencyKey: 1 }, { unique: true, sparse: true });
 paymentSchema.index({ transactionId: 1 });
 paymentSchema.index({ status: 1, createdAt: -1 });
 paymentSchema.index({ initiatedAt: -1 });
 paymentSchema.index({ completedAt: -1 });
+paymentSchema.index({ "risk.isSuspicious": 1 });
 
 // Compound indexes
 paymentSchema.index({ user: 1, course: 1, status: 1 });
 paymentSchema.index({ paymentMethod: 1, status: 1, createdAt: -1 });
 
 // Pre-save middleware to generate transaction ID
-paymentSchema.pre("save", function(next) {
+paymentSchema.pre("save", function() {
     if (this.isNew && !this.transactionId) {
         const timestamp = Date.now().toString(36);
         const random = Math.random().toString(36).substr(2, 8);
@@ -149,8 +198,6 @@ paymentSchema.pre("save", function(next) {
     if (this.isNew && !this.invoiceId) {
         this.invoiceId = `INV-${Date.now()}`;
     }
-
-    next();
 });
 
 // Static method to get user payments

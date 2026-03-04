@@ -30,6 +30,15 @@ export default function Users() {
     }
   }, [createUserSuccess, toast, dispatch]);
 
+  useEffect(() => {
+    console.log('🔍 SEARCH TERM CHANGED:', {
+      value: searchTerm,
+      length: searchTerm.length,
+      timestamp: new Date().toLocaleTimeString(),
+      stack: new Error().stack
+    });
+  }, [searchTerm]);
+
   const handleUserClick = (user) => {
     setSelectedUser(user);
     setShowAddUser(false);
@@ -76,7 +85,14 @@ export default function Users() {
             users={users}
             onUserClick={handleUserClick}
             searchTerm={searchTerm}
-            onSearchChange={setSearchTerm}
+            onSearchChange={(value) => {
+              console.log('📌 SET SEARCH TERM CALLED:', {
+                oldValue: searchTerm,
+                newValue: value,
+                timestamp: new Date().toLocaleTimeString()
+              });
+              setSearchTerm(value);
+            }}
           />
         </div>
 

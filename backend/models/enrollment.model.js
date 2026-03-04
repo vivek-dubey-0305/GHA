@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-const enrollmentSchema = new mongoose.Schema({
+const enrollmentSchema = new mongoose.Schema({  
     // Relationships
     user: {
         type: mongoose.Schema.Types.ObjectId,
@@ -128,12 +128,11 @@ enrollmentSchema.index({ user: 1, status: 1, enrolledAt: -1 });
 enrollmentSchema.index({ course: 1, enrolledAt: -1, status: 1 });
 
 // Pre-save middleware to set expiry date
-enrollmentSchema.pre("save", function(next) {
+enrollmentSchema.pre("save", function() {
     if (this.isModified("enrolledAt") && !this.isLifetime) {
         // Set expiry to 1 year from enrollment if not lifetime
         this.expiryDate = new Date(this.enrolledAt.getTime() + 365 * 24 * 60 * 60 * 1000);
     }
-    next();
 });
 
 // Static method to get user enrollments

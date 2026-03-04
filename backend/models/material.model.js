@@ -146,11 +146,10 @@ materialSchema.index({ downloadCount: -1 });
 materialSchema.index({ createdAt: -1 });
 
 // Pre-save middleware
-materialSchema.pre("save", function(next) {
+materialSchema.pre("save", function() {
     if (this.isModified("status") && this.status === "published") {
         // Could add validation here
     }
-    next();
 });
 
 // Instance methods

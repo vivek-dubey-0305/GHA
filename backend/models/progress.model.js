@@ -103,7 +103,7 @@ progressSchema.index({ user: 1, course: 1, status: 1 });
 progressSchema.index({ course: 1, lesson: 1, status: 1 });
 
 // Pre-save middleware to update timestamps
-progressSchema.pre("save", function(next) {
+progressSchema.pre("save", function() {
     if (this.isModified("status") && this.status === "completed" && !this.completedAt) {
         this.completedAt = new Date();
     }
@@ -111,8 +111,6 @@ progressSchema.pre("save", function(next) {
     if (this.isModified()) {
         this.lastAccessedAt = new Date();
     }
-
-    next();
 });
 
 // Static method to get course progress for a user

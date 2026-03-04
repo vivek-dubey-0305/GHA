@@ -17,6 +17,16 @@ const assignmentSchema = new mongoose.Schema({
         minlength: [10, "Description must be at least 10 characters"]
     },
 
+    // Media Assets
+    thumbnail: {
+        public_id: {
+            type: String
+        },
+        secure_url: {
+            type: String
+        }
+    },
+
     // Relationships
     course: {
         type: mongoose.Schema.Types.ObjectId,
@@ -157,7 +167,7 @@ assignmentSchema.index({ course: 1, isPublished: 1, dueDate: 1 });
 assignmentSchema.index({ createdAt: -1 });
 
 // Pre-save middleware to set passing score default
-assignmentSchema.pre("save", function(next) {
+assignmentSchema.pre("save", function() {
     if (this.isModified("isPublished") && this.isPublished && !this.publishedAt) {
         this.publishedAt = new Date();
     }
@@ -165,8 +175,6 @@ assignmentSchema.pre("save", function(next) {
     if (!this.passingScore) {
         this.passingScore = Math.round(this.maxScore * 0.6); // 60% default
     }
-
-    next();
 });
 
 // Static method to find active assignments for a course

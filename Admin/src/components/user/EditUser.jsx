@@ -1,14 +1,19 @@
 import { X, Plus, Trash2, Upload } from 'lucide-react';
-import { Button, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Switch, Separator, Textarea } from '../ui';
+import { Button, Input, Label, Dropdown, Switch, Separator, Textarea, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui';
+import WarningModal from '../ui/modals/warning-modal';
 import { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { updateUser, uploadUserProfilePicture, selectUpdateUserLoading, selectUpdateUserError, selectUpdateUserSuccess, clearUpdateUserError, resetUpdateUserState } from '../../redux/slices/admin.slice.js';
+import { updateUser, selectUpdateUserLoading, selectUpdateUserError, selectUpdateUserSuccess, clearUpdateUserError, resetUpdateUserState, deleteUserProfilePicture, selectDeleteProfilePictureLoading, selectDeleteProfilePictureError, selectDeleteProfilePictureSuccess } from '../../redux/slices/admin.slice.js';
 
 export function EditUser({ user, onClose, onSave }) {
   const dispatch = useDispatch();
   const updateUserLoading = useSelector(selectUpdateUserLoading);
   const updateUserError = useSelector(selectUpdateUserError);
   const updateUserSuccess = useSelector(selectUpdateUserSuccess);
+
+  const deleteProfilePictureLoading = useSelector(selectDeleteProfilePictureLoading);
+  const deleteProfilePictureError = useSelector(selectDeleteProfilePictureError);
+  const deleteProfilePictureSuccess = useSelector(selectDeleteProfilePictureSuccess);
 
   const [editedUser, setEditedUser] = useState({
     _id: user._id,
@@ -39,26 +44,6 @@ export function EditUser({ user, onClose, onSave }) {
     isKYCVerified: user.isKYCVerified || false,
     isActive: user.isActive !== undefined ? user.isActive : true,
 
-    // Enrollment
-    enrolledCourses: user.enrolledCourses || [],
-
-    // Payment Information
-    payment: {
-      primaryPaymentMethod: user.payment?.primaryPaymentMethod || null,
-      cardDetails: {
-        cardHolderName: user.payment?.cardDetails?.cardHolderName || '',
-        cardNumber: user.payment?.cardDetails?.cardNumber || '',
-        expiryDate: user.payment?.cardDetails?.expiryDate || '',
-        cvv: user.payment?.cardDetails?.cvv || '',
-      },
-      wallet: {
-        balance: user.payment?.wallet?.balance || 0,
-        currency: user.payment?.wallet?.currency || 'INR',
-        transactions: user.payment?.wallet?.transactions || [],
-      },
-      upiId: user.payment?.upiId || '',
-    },
-
     // Learning Progress
     learningProgress: {
       totalCoursesEnrolled: user.learningProgress?.totalCoursesEnrolled || 0,
@@ -76,12 +61,6 @@ export function EditUser({ user, onClose, onSave }) {
       promotionalEmails: user.preferences?.promotionalEmails !== undefined ? user.preferences.promotionalEmails : true,
       language: user.preferences?.language || 'en',
     },
-
-    // Course Reviews
-    courseReviews: user.courseReviews || [],
-
-    // Transactions
-    transactions: user.transactions || [],
 
     // Timestamps
     createdAt: user.createdAt,
@@ -115,52 +94,16 @@ export function EditUser({ user, onClose, onSave }) {
   const handleDeepNestedChange = (parent, child, field, value) => {
     setEditedUser(prev => ({
       ...prev,
-      [parent]: {
+      [parent]: child ? {
         ...prev[parent],
         [child]: {
           ...(prev[parent][child] || {}),
           [field]: value
         }
+      } : {
+        ...prev[parent],
+        [field]: value
       }
-    }));
-  };
-
-  // Handle Enrolled Course
-  const addEnrolledCourse = () => {
-    setEditedUser(prev => ({
-      ...prev,
-      enrolledCourses: [
-        ...prev.enrolledCourses,
-        {
-          courseId: '',
-          instructorId: '',
-          enrollmentDate: new Date().toISOString(),
-          completionPercentage: 0,
-          isCompleted: false,
-          completedAt: null,
-          certificateIssued: false,
-          certificateId: null,
-          progressModules: [],
-          lastAccessedAt: null,
-          status: 'active'
-        }
-      ]
-    }));
-  };
-
-  const removeEnrolledCourse = (index) => {
-    setEditedUser(prev => ({
-      ...prev,
-      enrolledCourses: prev.enrolledCourses.filter((_, i) => i !== index)
-    }));
-  };
-
-  const updateEnrolledCourse = (index, field, value) => {
-    setEditedUser(prev => ({
-      ...prev,
-      enrolledCourses: prev.enrolledCourses.map((course, i) =>
-        i === index ? { ...course, [field]: value } : course
-      )
     }));
   };
 
@@ -246,28 +189,55 @@ export function EditUser({ user, onClose, onSave }) {
     }
   };
 
+  const handleRemoveProfilePicture = async () => {
+    if (!editedUser.profilePicture?.public_id) {
+      // No profile picture to remove
+      return;
+    }
+
+    try {
+      await dispatch(deleteUserProfilePicture(editedUser._id)).unwrap();
+      // Update local state
+      setEditedUser(prev => ({
+        ...prev,
+        profilePicture: null,
+        profilePicturePublicId: null,
+      }));
+      setProfilePicturePreview(null);
+      setProfilePictureFile(null);
+    } catch (error) {
+      // Error is handled by the slice
+    }
+  };
+
   const handleSave = async () => {
     try {
-      // Prepare user data with valid enrolledCourses only
-      const userDataToSubmit = {
-        ...editedUser,
-        enrolledCourses: editedUser.enrolledCourses?.filter(course =>
-          course.courseId &&
-          course.instructorId &&
-          /^[a-f\d]{24}$/i.test(course.courseId) &&
-          /^[a-f\d]{24}$/i.test(course.instructorId)
-        ) || []
-      };
+      // Prepare user data (exclude courseReviews for updates)
+      const { courseReviews, ...userDataToSubmit } = editedUser;
 
-      // Update user data first
-      await dispatch(updateUser({ userId: editedUser._id, userData: userDataToSubmit })).unwrap();
-
-      // If new profile picture is selected, upload it
+      // If profile picture is selected, create FormData
+      let submissionData = userDataToSubmit;
       if (profilePictureFile) {
         const formData = new FormData();
+        
+        // Append all user data as JSON string
+        Object.keys(userDataToSubmit).forEach(key => {
+          if (userDataToSubmit[key] !== undefined && userDataToSubmit[key] !== null) {
+            if (typeof userDataToSubmit[key] === 'object') {
+              formData.append(key, JSON.stringify(userDataToSubmit[key]));
+            } else {
+              formData.append(key, userDataToSubmit[key]);
+            }
+          }
+        });
+        
+        // Append profile picture
         formData.append('profilePicture', profilePictureFile);
-        await dispatch(uploadUserProfilePicture({ userId: editedUser._id, profilePicture: profilePictureFile })).unwrap();
+        submissionData = formData;
       }
+
+      // Update user data (with profile picture if provided)
+      await dispatch(updateUser({ userId: editedUser._id, userData: submissionData })).unwrap();
 
       onSave(editedUser);
     } catch (error) {
@@ -298,6 +268,12 @@ export function EditUser({ user, onClose, onSave }) {
         </div>
       )}
 
+      {deleteProfilePictureError && (
+        <div className="mx-6 mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+          <p className="text-red-400 text-sm">{deleteProfilePictureError}</p>
+        </div>
+      )}
+
       {/* Content - Scrollable */}
       <div className="flex-1 overflow-y-auto">
         <div className="p-6 space-y-8">
@@ -311,7 +287,6 @@ export function EditUser({ user, onClose, onSave }) {
                   id="firstName"
                   value={editedUser.firstName}
                   onChange={(e) => handleChange('firstName', e.target.value)}
-                  className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
                   required
                 />
               </div>
@@ -321,7 +296,6 @@ export function EditUser({ user, onClose, onSave }) {
                   id="lastName"
                   value={editedUser.lastName}
                   onChange={(e) => handleChange('lastName', e.target.value)}
-                  className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
                   required
                 />
               </div>
@@ -332,7 +306,6 @@ export function EditUser({ user, onClose, onSave }) {
                   type="email"
                   value={editedUser.email}
                   onChange={(e) => handleChange('email', e.target.value)}
-                  className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
                   required
                 />
               </div>
@@ -342,7 +315,6 @@ export function EditUser({ user, onClose, onSave }) {
                   id="phone"
                   value={editedUser.phone}
                   onChange={(e) => handleChange('phone', e.target.value)}
-                  className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
                 />
               </div>
               <div>
@@ -352,22 +324,16 @@ export function EditUser({ user, onClose, onSave }) {
                   type="date"
                   value={editedUser.dateOfBirth ? new Date(editedUser.dateOfBirth).toISOString().split('T')[0] : ''}
                   onChange={(e) => handleChange('dateOfBirth', e.target.value)}
-                  className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
                 />
               </div>
               <div>
-                <Label htmlFor="gender" className="text-gray-300">Gender</Label>
-                <Select value={editedUser.gender || ''} onValueChange={(value) => handleChange('gender', value)}>
-                  <SelectTrigger className="bg-[#0f0f0f] border-gray-800 text-white mt-2">
-                    <SelectValue placeholder="Select gender" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#1a1a1a] border-gray-800">
-                    <SelectItem value="Male">Male</SelectItem>
-                    <SelectItem value="Female">Female</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
-                    <SelectItem value="Prefer not to say">Prefer not to say</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Dropdown
+                  value={editedUser.gender || ''}
+                  onChange={(value) => handleChange('gender', value)}
+                  options={['Male', 'Female', 'Other', 'Prefer not to say']}
+                  label="Gender"
+                  placeholder="Select gender"
+                />
               </div>
             </div>
           </div>
@@ -401,7 +367,15 @@ export function EditUser({ user, onClose, onSave }) {
                   onChange={handleProfilePictureChange}
                   className="hidden"
                 />
-                <p className="text-gray-400 text-sm mt-2">Upload a new profile picture (optional)</p>
+                <button
+                  onClick={handleRemoveProfilePicture}
+                  disabled={!editedUser.profilePicture?.public_id || deleteProfilePictureLoading}
+                  className="bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg flex items-center gap-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  {deleteProfilePictureLoading ? 'Removing...' : 'Remove Picture'}
+                </button>
+                {/* <p className="text-gray-400 text-sm mt-2">Upload a new profile picture (optional)</p> */}
               </div>
             </div>
           </div>
@@ -416,7 +390,6 @@ export function EditUser({ user, onClose, onSave }) {
                   id="street"
                   value={editedUser.address.street}
                   onChange={(e) => handleNestedChange('address', 'street', e.target.value)}
-                  className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
                 />
               </div>
               <div>
@@ -425,7 +398,6 @@ export function EditUser({ user, onClose, onSave }) {
                   id="city"
                   value={editedUser.address.city}
                   onChange={(e) => handleNestedChange('address', 'city', e.target.value)}
-                  className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
                 />
               </div>
               <div>
@@ -434,7 +406,6 @@ export function EditUser({ user, onClose, onSave }) {
                   id="state"
                   value={editedUser.address.state}
                   onChange={(e) => handleNestedChange('address', 'state', e.target.value)}
-                  className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
                 />
               </div>
               <div>
@@ -443,7 +414,6 @@ export function EditUser({ user, onClose, onSave }) {
                   id="postalCode"
                   value={editedUser.address.postalCode}
                   onChange={(e) => handleNestedChange('address', 'postalCode', e.target.value)}
-                  className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
                 />
               </div>
               <div>
@@ -452,7 +422,6 @@ export function EditUser({ user, onClose, onSave }) {
                   id="country"
                   value={editedUser.address.country}
                   onChange={(e) => handleNestedChange('address', 'country', e.target.value)}
-                  className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
                 />
               </div>
             </div>
@@ -493,146 +462,25 @@ export function EditUser({ user, onClose, onSave }) {
             </div>
           </div>
 
-          {/* Enrolled Courses */}
+          {/* Learning Progress */}
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white">Enrolled Courses</h3>
-              <Button onClick={addEnrolledCourse} size="sm" className="bg-blue-600 hover:bg-blue-700">
-                <Plus className="w-4 h-4 mr-1" />
-                Add Course
-              </Button>
-            </div>
-            <div className="space-y-4">
-              {editedUser.enrolledCourses?.map((course, index) => (
-                <div key={index} className="p-4 bg-[#0f0f0f] border border-gray-800 rounded-lg">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-white font-medium">Course #{index + 1}</span>
-                    <Button
-                      onClick={() => removeEnrolledCourse(index)}
-                      size="sm"
-                      variant="ghost"
-                      className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <Label className="text-gray-400 text-xs">Course ID (MongoDB ObjectId)</Label>
-                      <Input
-                        value={course.courseId || ''}
-                        onChange={(e) => updateEnrolledCourse(index, 'courseId', e.target.value)}
-                        className={`bg-[#1a1a1a] border-gray-700 text-white mt-1 text-sm ${
-                          course.courseId && !/^[a-f\d]{24}$/i.test(course.courseId)
-                            ? 'border-red-500'
-                            : course.courseId && /^[a-f\d]{24}$/i.test(course.courseId)
-                            ? 'border-green-500'
-                            : ''
-                        }`}
-                        placeholder="e.g., 507f1f77bcf86cd799439011"
-                      />
-                      {course.courseId && !/^[a-f\d]{24}$/i.test(course.courseId) && (
-                        <p className="text-red-400 text-xs mt-1">Invalid ObjectId format</p>
-                      )}
-                    </div>
-                    <div>
-                      <Label className="text-gray-400 text-xs">Instructor ID (MongoDB ObjectId)</Label>
-                      <Input
-                        value={course.instructorId || ''}
-                        onChange={(e) => updateEnrolledCourse(index, 'instructorId', e.target.value)}
-                        className={`bg-[#1a1a1a] border-gray-700 text-white mt-1 text-sm ${
-                          course.instructorId && !/^[a-f\d]{24}$/i.test(course.instructorId)
-                            ? 'border-red-500'
-                            : course.instructorId && /^[a-f\d]{24}$/i.test(course.instructorId)
-                            ? 'border-green-500'
-                            : ''
-                        }`}
-                        placeholder="e.g., 507f1f77bcf86cd799439011"
-                      />
-                      {course.instructorId && !/^[a-f\d]{24}$/i.test(course.instructorId) && (
-                        <p className="text-red-400 text-xs mt-1">Invalid ObjectId format</p>
-                      )}
-                    </div>
-                    <div>
-                      <Label className="text-gray-400 text-xs">Completion %</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={course.completionPercentage || 0}
-                        onChange={(e) => updateEnrolledCourse(index, 'completionPercentage', parseInt(e.target.value) || 0)}
-                        className="bg-[#1a1a1a] border-gray-700 text-white mt-1 text-sm"
-                      />
-                    </div>
-                    <div className="col-span-3">
-                      <Label className="text-gray-400 text-xs">Status</Label>
-                      <Select
-                        value={course.status || 'active'}
-                        onValueChange={(value) => updateEnrolledCourse(index, 'status', value)}
-                      >
-                        <SelectTrigger className="bg-[#1a1a1a] border-gray-700 text-white mt-1 text-sm">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-[#1a1a1a] border-gray-800">
-                          <SelectItem value="active">Active</SelectItem>
-                          <SelectItem value="suspended">Suspended</SelectItem>
-                          <SelectItem value="completed">Completed</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={course.isCompleted || false}
-                        onCheckedChange={(checked) => updateEnrolledCourse(index, 'isCompleted', checked)}
-                      />
-                      <Label className="text-gray-400 text-xs">Completed</Label>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {(!editedUser.enrolledCourses || editedUser.enrolledCourses.length === 0) && (
-                <p className="text-gray-400 text-sm text-center py-8">No enrolled courses</p>
-              )}
-            </div>
-          </div>
-
-          {/* Payment Information */}
-          <div>
-            <h3 className="text-lg font-semibold text-white mb-4">Payment Information</h3>
-            <div className="space-y-4">
-              <div>
-                <Label className="text-gray-300">Primary Payment Method</Label>
-                <Select value={editedUser.payment.primaryPaymentMethod || ''} onValueChange={(value) => handleNestedChange('payment', 'primaryPaymentMethod', value)}>
-                  <SelectTrigger className="bg-[#0f0f0f] border-gray-800 text-white mt-2">
-                    <SelectValue placeholder="Select payment method" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#1a1a1a] border-gray-800">
-                    <SelectItem value="card">Credit/Debit Card</SelectItem>
-                    <SelectItem value="upi">UPI</SelectItem>
-                    <SelectItem value="wallet">Wallet</SelectItem>
-                    <SelectItem value="netbanking">Net Banking</SelectItem>
-                  </SelectContent>
-                </Select>
+            <h3 className="text-lg font-semibold text-white mb-4">Learning Progress</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="p-4 bg-[#0f0f0f] border border-gray-800 rounded-lg">
+                <div className="text-2xl font-bold text-blue-400">{editedUser.learningProgress.totalCoursesEnrolled}</div>
+                <div className="text-sm text-gray-400">Courses Enrolled</div>
               </div>
-              <div>
-                <Label className="text-gray-300">UPI ID</Label>
-                <Input
-                  value={editedUser.payment.upiId}
-                  onChange={(e) => handleNestedChange('payment', 'upiId', e.target.value)}
-                  className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
-                  placeholder="user@upi"
-                />
+              <div className="p-4 bg-[#0f0f0f] border border-gray-800 rounded-lg">
+                <div className="text-2xl font-bold text-green-400">{editedUser.learningProgress.totalCoursesCompleted}</div>
+                <div className="text-sm text-gray-400">Courses Completed</div>
               </div>
-              <div>
-                <Label className="text-gray-300">Wallet Balance</Label>
-                <Input
-                  type="number"
-                  value={editedUser.payment.wallet.balance}
-                  onChange={(e) => handleDeepNestedChange('payment', 'wallet', 'balance', parseFloat(e.target.value) || 0)}
-                  className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
-                />
+              <div className="p-4 bg-[#0f0f0f] border border-gray-800 rounded-lg">
+                <div className="text-2xl font-bold text-yellow-400">{editedUser.learningProgress.totalLearningHours}</div>
+                <div className="text-sm text-gray-400">Learning Hours</div>
+              </div>
+              <div className="p-4 bg-[#0f0f0f] border border-gray-800 rounded-lg">
+                <div className="text-2xl font-bold text-purple-400">{editedUser.learningProgress.certificates}</div>
+                <div className="text-sm text-gray-400">Certificates</div>
               </div>
             </div>
           </div>
@@ -695,8 +543,9 @@ export function EditUser({ user, onClose, onSave }) {
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="p-6 border-t border-gray-800 flex justify-end gap-3">
+      {/* );
+Footer */}
+      <div className="p-6 border-t border-gray-800 flex justify-end galWarning<Modalp-3">
         <Button
           onClick={onClose}
           variant="ghost"
@@ -712,6 +561,5 @@ export function EditUser({ user, onClose, onSave }) {
           {updateUserLoading ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>
-    </div>
-  );
+    </div>  );
 }

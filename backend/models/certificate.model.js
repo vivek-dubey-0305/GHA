@@ -5,7 +5,7 @@ const certificateSchema = new mongoose.Schema({
     certificateId: {
         type: String,
         unique: true,
-        required: true
+        required: function() { return !this.isTemplate; }
     },
     title: {
         type: String,
@@ -18,7 +18,7 @@ const certificateSchema = new mongoose.Schema({
     user: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
-        required: [true, "Certificate must belong to a user"]
+        required: function() { return !this.isTemplate; } // Not required for templates
     },
     course: {
         type: mongoose.Schema.Types.ObjectId,
@@ -29,6 +29,12 @@ const certificateSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "Instructor",
         required: [true, "Certificate must have an instructor"]
+    },
+
+    // Is this a template certificate?
+    isTemplate: {
+        type: Boolean,
+        default: false
     },
 
     // Certificate Details
@@ -76,19 +82,20 @@ const certificateSchema = new mongoose.Schema({
 
     // Certificate Assets
     certificateUrl: {
-        type: String, // Cloudinary URL for PDF/image
+        type: String, // R2 URL for PDF/image
         required: true
     },
     shareableUrl: {
         type: String,
-        unique: true
+        unique: true,
+        required: function() { return !this.isTemplate; }
     },
 
     // Verification
     verificationCode: {
         type: String,
         unique: true,
-        required: true
+        required: function() { return !this.isTemplate; }
     },
 
     // Skills/Competencies Earned
@@ -137,20 +144,20 @@ certificateSchema.index({ user: 1, status: 1 });
 certificateSchema.index({ course: 1, issuedAt: -1 });
 
 // Pre-save middleware to generate unique IDs
-certificateSchema.pre("save", async function(next) {
-    if (this.isNew) {
+certificateSchema.pre("save", async function() {
+    if (this.isNew && !this.isTemplate) {
         // Generate certificate ID
         const timestamp = Date.now().toString(36);
         const random = Math.random().toString(36).substr(2, 5);
         this.certificateId = `CERT-${timestamp}-${random}`.toUpperCase();
 
         // Generate verification code
-        this.verificationCode = require("crypto").randomBytes(16).toString("hex");
+        // const crypto = await import("crypto");
+        this.verificationCode = crypto.default.randomBytes(16).toString("hex");
 
         // Generate shareable URL
         this.shareableUrl = `cert/${this.verificationCode}`;
     }
-    next();
 });
 
 // Static method to verify certificate

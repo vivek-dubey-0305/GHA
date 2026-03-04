@@ -165,11 +165,10 @@ adminSchema.pre(/^find/, function() {
 });
 
 // Pre-findOneAndDelete middleware to prevent super admin deletion
-adminSchema.pre("findOneAndDelete", function(next) {
+adminSchema.pre("findOneAndDelete", function() {
     if (this._conditions.isSuperAdmin) {
-        return next(new Error("Cannot delete super admin"));
+        throw new Error("Cannot delete super admin");
     }
-    next();
 });
 
 // Instance method to compare passwords

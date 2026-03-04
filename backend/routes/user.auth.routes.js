@@ -1,6 +1,5 @@
 import express from "express";
 import { verifyUserToken } from "../middlewares/user.auth.middleware.js";
-import { upload, handleMulterError } from "../middlewares/multer.middleware.js";
 import {
     registerUser,
     loginUser,
@@ -8,7 +7,7 @@ import {
     logoutUser,
     resendOtp,
     getUserProfile,
-    uploadProfilePictureUser,
+    // uploadProfilePictureUser,
     refreshAccessToken,
     forgotPassword,
     resetPassword,
@@ -24,7 +23,7 @@ const router = express.Router();
 /**
  * User (Student) Authentication Routes
  * OTP-based login flow with password reset
- * Profile picture management with Cloudinary
+ * Profile picture management with R2
  */
 
 // Public routes
@@ -44,12 +43,12 @@ router.get("/sessions", verifyUserToken, getUserSessions);
 router.post("/logout-session", verifyUserToken, logoutSession);
 router.post("/logout-all-sessions", verifyUserToken, logoutAllSessions);
 router.post("/change-password", verifyUserToken, changePassword);
-router.post(
-    "/upload-profile-picture",
-    verifyUserToken,
-    upload.single("profilePicture"),
-    uploadProfilePictureUser,
-    handleMulterError
-);
+// router.post(
+//     "/upload-profile-picture",
+//     verifyUserToken,
+//     upload.single("profilePicture"),
+//     uploadProfilePictureUser,
+//     handleMulterError
+// );
 
 export default router;

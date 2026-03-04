@@ -4,12 +4,11 @@ import crypto from "crypto";
 import { asyncHandler } from "../middlewares/async.middleware.js";
 import { errorResponse, successResponse } from "../utils/response.utils.js";
 import { convertToMilliseconds } from "../utils/time.utils.js";
-import { uploadProfilePicture, deleteProfilePicture, updateProfilePicture } from "../services/cloudinary.service.js";
 import logger from "../configs/logger.config.js";
 
 /**
  * User (Student) Authentication Controller
- * Handles registration, login, OTP verification, password reset, and profile management
+ * Handles registration, login, OTP verification and password reset
  */
 
 // @route   POST /api/v1/user/register
@@ -419,61 +418,6 @@ export const getUserProfile = asyncHandler(async (req, res) => {
     return successResponse(res, 200, "User profile retrieved", user);
 });
 
-// @route   POST /api/v1/user/upload-profile-picture
-// @desc    Upload or update profile picture to Cloudinary
-// @access  Private
-export const uploadProfilePictureUser = asyncHandler(async (req, res) => {
-    const userId = req.user?.id;
-
-    logger.info(`User profile picture upload attempt: ${userId}`);
-
-    if (!userId) {
-        logger.warn(`Profile picture upload failed - User not authenticated`);
-        return errorResponse(res, 401, "Unauthorized");
-    }
-
-    if (!req.file) {
-        logger.warn(`Profile picture upload failed - No file provided for: ${userId}`);
-        return errorResponse(res, 400, "No file provided");
-    }
-
-    try {
-        const user = await User.findById(userId);
-
-        if (!user) {
-            logger.warn(`Profile picture upload failed - User not found: ${userId}`);
-            return errorResponse(res, 404, "User not found");
-        }
-
-        const userName = `${user.firstName}_${user.lastName}`;
-        const oldPublicId = user.profilePicture ? user.profilePicture.split('/').pop().split('.')[0] : null;
-
-        logger.info(`Uploading profile picture for user: ${userName} (${userId})`);
-
-        // Upload to Cloudinary
-        const uploadResult = await updateProfilePicture(
-            req.file,
-            "student",
-            userName,
-            oldPublicId
-        );
-
-        // Update user profile picture URL
-        user.profilePicture = uploadResult.url;
-        await user.save({ validateBeforeSave: false });
-
-        logger.info(`Profile picture updated successfully for user: ${userId}`);
-
-        return successResponse(res, 200, "Profile picture uploaded successfully", {
-            profilePicture: uploadResult.url,
-            cloudinaryId: uploadResult.cloudinaryId,
-            size: uploadResult.size
-        });
-    } catch (error) {
-        logger.error(`Profile picture upload error for user ${userId}: ${error.message}`);
-        return errorResponse(res, 500, "Failed to upload profile picture. Please try again.");
-    }
-});
 
 // @route   POST /api/v1/user/forgot-password
 // @desc    Request password reset link

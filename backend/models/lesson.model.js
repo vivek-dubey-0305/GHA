@@ -34,33 +34,27 @@ const lessonSchema = new mongoose.Schema({
         min: [1, "Order must be at least 1"]
     },
 
+    // Media Assets
+    thumbnail: {
+        public_id: {
+            type: String
+        },
+        secure_url: {
+            type: String
+        }
+    },
+
     // Lesson Type and Content
     type: {
         type: String,
         required: [true, "Lesson type is required"],
-        enum: ["video", "article", "assignment", "live"],
+        enum: ["video", "article", "assignment", "live", "material"],
         default: "video"
     },
 
-    // Content based on type
+    // Content based on type — uses references to actual models
     content: {
-        // For video lessons
-        videoUrl: {
-            type: String, // Cloudinary URL or external URL
-            validate: {
-                validator: function(value) {
-                    if (this.type === "video" && !value) return false;
-                    return true;
-                },
-                message: "Video URL is required for video lessons"
-            }
-        },
-        videoDuration: {
-            type: Number, // in seconds
-            min: 0
-        },
-
-        // For article lessons
+        // For article lessons only
         articleContent: {
             type: String,
             validate: {
@@ -71,19 +65,32 @@ const lessonSchema = new mongoose.Schema({
                 message: "Article content must be at least 10 characters for article lessons"
             }
         },
+    },
 
-        // For assignment lessons
-        assignmentId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "Assignment"
-        },
+    // === MODEL REFERENCES (one per lesson type) ===
 
-        // For live lessons
-        liveSessionId: {
-            type: String // Zoom meeting ID or similar
-        },
-        scheduledAt: Date,
-        duration: Number // in minutes
+    // type = "video" → VideoPackage model
+    videoPackageId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "VideoPackage"
+    },
+
+    // type = "assignment" → Assignment model
+    assignmentId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Assignment"
+    },
+
+    // type = "live" → LiveClass model
+    liveClassId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "LiveClass"
+    },
+
+    // type = "material" → Material model
+    materialId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Material"
     },
 
     // Lesson Settings
@@ -97,16 +104,8 @@ const lessonSchema = new mongoose.Schema({
     },
     publishedAt: Date,
 
-    // Learning Resources
-    attachments: [{
-        name: String,
-        url: String, // Cloudinary URL
-        type: {
-            type: String,
-            enum: ["pdf", "doc", "ppt", "image", "other"]
-        },
-        size: Number // in bytes
-    }],
+    // Learning Resources — materials referenced via materialId
+    // Additional materials can be linked separately
 
     // Engagement Metrics
     viewCount: {
@@ -145,11 +144,10 @@ lessonSchema.index({ createdAt: -1 });
 lessonSchema.index({ course: 1, module: 1, order: 1, isPublished: 1 });
 
 // Pre-save middleware to update publishedAt
-lessonSchema.pre("save", function(next) {
+lessonSchema.pre("save", function() {
     if (this.isModified("isPublished") && this.isPublished && !this.publishedAt) {
         this.publishedAt = new Date();
     }
-    next();
 });
 
 // Static method to find published lessons for a module

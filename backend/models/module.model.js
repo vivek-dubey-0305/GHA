@@ -39,10 +39,21 @@ const moduleSchema = new mongoose.Schema({
         default: 0,
         min: 0
     },
+    //to ne stored in indina time format not only seconds
     totalDuration: {
         type: Number, // in minutes
         default: 0,
         min: 0
+    },
+
+    // Media Assets
+    thumbnail: {
+        public_id: {
+            type: String
+        },
+        secure_url: {
+            type: String
+        }
     },
 
     // Module Status
@@ -82,11 +93,10 @@ moduleSchema.index({ createdAt: -1 });
 moduleSchema.index({ course: 1, order: 1, isPublished: 1 });
 
 // Pre-save middleware to update publishedAt
-moduleSchema.pre("save", function(next) {
+moduleSchema.pre("save", function() {
     if (this.isModified("isPublished") && this.isPublished && !this.publishedAt) {
         this.publishedAt = new Date();
     }
-    next();
 });
 
 // Static method to find published modules for a course
