@@ -28,11 +28,15 @@ const videoPackageSchema = new mongoose.Schema({
         maxlength: [1000, "Description cannot exceed 1000 characters"]
     },
 
-    // Videos in Package
+    // Videos in Package (stored on Bunny Stream)
     videos: [{
         videoId: {
             type: mongoose.Schema.Types.ObjectId,
             required: true
+        },
+        bunnyVideoId: {
+            type: String,    // Bunny Stream GUID — primary identifier for playback/delete
+            default: ""
         },
         title: {
             type: String,
@@ -47,8 +51,8 @@ const videoPackageSchema = new mongoose.Schema({
         },
         duration: {
             type: Number, // in seconds
-            required: true,
-            min: 1
+            default: 0,
+            min: 0
         },
         fileSize: {
             type: Number, // in bytes
@@ -59,12 +63,12 @@ const videoPackageSchema = new mongoose.Schema({
             default: Date.now
         },
         url: {
-            type: String,
-            required: true
+            type: String,  // Signed HLS playback URL (regenerated on access)
+            default: ""
         },
         thumbnail: {
-            type: String,
-            required: true
+            type: String,  // Bunny auto-generated or custom R2 thumbnail URL
+            default: ""
         },
         status: {
             type: String,
@@ -178,13 +182,12 @@ videoPackageSchema.index({ totalViews: -1 });
 videoPackageSchema.index({ createdAt: -1 });
 
 // Pre-save middleware to update stats
-videoPackageSchema.pre("save", function(next) {
+videoPackageSchema.pre("save", function() {
     if (this.isModified("videos")) {
         this.totalVideos = this.videos.length;
         this.totalDuration = this.videos.reduce((sum, video) => sum + (video.duration || 0), 0);
         this.totalSize = this.videos.reduce((sum, video) => sum + (video.fileSize || 0), 0);
     }
-    next();
 });
 
 // Instance methods
@@ -193,13 +196,14 @@ videoPackageSchema.methods.addVideo = function(videoData) {
 
     this.videos.push({
         videoId: videoData.videoId,
+        bunnyVideoId: videoData.bunnyVideoId || "",
         title: videoData.title,
         description: videoData.description,
         duration: videoData.duration,
         fileSize: videoData.fileSize,
         url: videoData.url,
         thumbnail: videoData.thumbnail,
-        status: "uploading",
+        status: videoData.status || "uploading",
         order: order
     });
 

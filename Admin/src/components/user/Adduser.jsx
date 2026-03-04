@@ -1,8 +1,9 @@
-import { X, Plus, Trash2, Upload } from 'lucide-react';
-import { Button, Input, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Switch, Separator, Textarea } from '../ui';
-import { useState } from 'react';
+import { Upload, X, Plus, Trash2 } from 'lucide-react';
+import { Button, Input, Label, Dropdown, Switch, Separator, Textarea } from '../ui';
+import { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { createUser, uploadUserProfilePicture, selectCreateUserLoading, selectCreateUserError, selectCreateUserSuccess, clearCreateUserError, resetCreateUserState } from '../../redux/slices/admin.slice.js';
+import { validateFields, validators } from '../../utils/validators.js';
 
 export function AddUser({ onClose, onAdd }) {
   const dispatch = useDispatch();
@@ -18,7 +19,7 @@ export function AddUser({ onClose, onAdd }) {
     phone: '',
     password: '',
     dateOfBirth: null,
-    gender: null,
+    gender: '',
 
     // Profile Picture
     profilePicture: null,
@@ -38,26 +39,6 @@ export function AddUser({ onClose, onAdd }) {
     isKYCVerified: false,
     isActive: true,
 
-    // Enrollment
-    enrolledCourses: [],
-
-    // Payment Information
-    payment: {
-      primaryPaymentMethod: null,
-      cardDetails: {
-        cardHolderName: '',
-        cardNumber: '',
-        expiryDate: '',
-        cvv: '',
-      },
-      wallet: {
-        balance: 0,
-        currency: 'INR',
-        transactions: [],
-      },
-      upiId: '',
-    },
-
     // Learning Progress
     learningProgress: {
       totalCoursesEnrolled: 0,
@@ -75,23 +56,52 @@ export function AddUser({ onClose, onAdd }) {
       promotionalEmails: true,
       language: 'en',
     },
-
-    // Course Reviews
-    courseReviews: [],
-
-    // Transactions
-    transactions: [],
   });
 
+  const [validationErrors, setValidationErrors] = useState({});
   const [profilePictureFile, setProfilePictureFile] = useState(null);
   const [profilePicturePreview, setProfilePicturePreview] = useState(null);
 
+  // Log when component mounts
+  useEffect(() => {
+    console.log('✅ AddUser component MOUNTED');
+  }, []);
+
+  // Log when newUser changes (autofill detection)
+  useEffect(() => {
+    if (newUser.firstName || newUser.lastName || newUser.email) {
+      console.log('🔄 FORM STATE CHANGED (Autofill Detection):', {
+        firstName: newUser.firstName,
+        lastName: newUser.lastName,
+        email: newUser.email,
+        phone: newUser.phone,
+        timestamp: new Date().toLocaleTimeString()
+      });
+    }
+  }, [newUser.firstName, newUser.lastName, newUser.email, newUser.phone]);
+
   // Handle basic input changes
   const handleChange = (field, value) => {
+    console.log('📝 FORM FIELD CHANGE:', {
+      field,
+      value,
+      timestamp: new Date().toLocaleTimeString(),
+      eventType: 'handleChange',
+      stack: new Error().stack
+    });
+    
     setNewUser(prev => ({
       ...prev,
       [field]: value
     }));
+
+    // Clear validation error for this field
+    if (validationErrors[field]) {
+      setValidationErrors(prev => ({
+        ...prev,
+        [field]: null
+      }));
+    }
   };
 
   // Handle nested object changes
@@ -103,167 +113,190 @@ export function AddUser({ onClose, onAdd }) {
         [field]: value
       }
     }));
+
+    // Clear validation error for nested fields
+    const fieldName = parent === 'address' && field === 'postalCode' ? 'postalCode' : null;
+    if (fieldName && validationErrors[fieldName]) {
+      setValidationErrors(prev => ({
+        ...prev,
+        [fieldName]: null
+      }));
+    }
   };
 
   // Handle deeply nested changes
   const handleDeepNestedChange = (parent, child, field, value) => {
     setNewUser(prev => ({
       ...prev,
-      [parent]: {
+      [parent]: child ? {
         ...prev[parent],
         [child]: {
           ...(prev[parent][child] || {}),
           [field]: value
         }
+      } : {
+        ...prev[parent],
+        [field]: value
       }
     }));
   };
 
-  // Handle Enrolled Course
-  const addEnrolledCourse = () => {
-    setNewUser(prev => ({
-      ...prev,
-      enrolledCourses: [
-        ...prev.enrolledCourses,
-        {
-          courseId: '',
-          instructorId: '',
-          enrollmentDate: new Date().toISOString(),
-          completionPercentage: 0,
-          isCompleted: false,
-          completedAt: null,
-          certificateIssued: false,
-          certificateId: null,
-          progressModules: [],
-          lastAccessedAt: null,
-          status: 'active'
-        }
-      ]
-    }));
+  // Handle field validation on blur
+  const handleFieldBlur = (fieldName, value) => {
+    const isRequired = ['firstName', 'lastName', 'email', 'password'].includes(fieldName);
+    const validator = validators[fieldName];
+    if (validator) {
+      const error = validator(value, isRequired);
+      setValidationErrors(prev => ({
+        ...prev,
+        [fieldName]: error
+      }));
+    }
   };
 
-  const removeEnrolledCourse = (index) => {
-    setNewUser(prev => ({
-      ...prev,
-      enrolledCourses: prev.enrolledCourses.filter((_, i) => i !== index)
-    }));
+  // Handle nested field validation on blur
+  const handleNestedFieldBlur = (parent, field, value) => {
+    const fieldName = parent === 'address' && field === 'postalCode' ? 'postalCode' : null;
+    if (fieldName) {
+      const isRequired = false; // postalCode is optional
+      const validator = validators[fieldName];
+      if (validator) {
+        const error = validator(value, isRequired);
+        setValidationErrors(prev => ({
+          ...prev,
+          [fieldName]: error
+        }));
+      }
+    }
   };
 
-  const updateEnrolledCourse = (index, field, value) => {
-    setNewUser(prev => ({
-      ...prev,
-      enrolledCourses: prev.enrolledCourses.map((course, i) =>
-        i === index ? { ...course, [field]: value } : course
-      )
-    }));
-  };
-
-  // Handle Transaction
-  const addTransaction = () => {
-    setNewUser(prev => ({
-      ...prev,
-      transactions: [
-        ...prev.transactions,
-        {
-          transactionId: '',
-          courseId: '',
-          courseName: '',
-          amount: 0,
-          currency: 'INR',
-          paymentMethod: '',
-          paymentStatus: 'pending',
-          transactionDate: new Date().toISOString(),
-        }
-      ]
-    }));
-  };
-
-  const removeTransaction = (index) => {
-    setNewUser(prev => ({
-      ...prev,
-      transactions: prev.transactions.filter((_, i) => i !== index)
-    }));
-  };
-
-  const updateTransaction = (index, field, value) => {
-    setNewUser(prev => ({
-      ...prev,
-      transactions: prev.transactions.map((transaction, i) =>
-        i === index ? { ...transaction, [field]: value } : transaction
-      )
-    }));
-  };
-
-  // Handle Course Review
-  const addCourseReview = () => {
-    setNewUser(prev => ({
-      ...prev,
-      courseReviews: [
-        ...prev.courseReviews,
-        {
-          courseId: '',
-          courseName: '',
-          rating: 5,
-          review: '',
-          reviewDate: new Date().toISOString(),
-          isVerified: false,
-        }
-      ]
-    }));
-  };
-
-  const removeCourseReview = (index) => {
-    setNewUser(prev => ({
-      ...prev,
-      courseReviews: prev.courseReviews.filter((_, i) => i !== index)
-    }));
-  };
-
-  const updateCourseReview = (index, field, value) => {
-    setNewUser(prev => ({
-      ...prev,
-      courseReviews: prev.courseReviews.map((review, i) =>
-        i === index ? { ...review, [field]: value } : review
-      )
-    }));
-  };
-
+  // Handle profile picture change
   const handleProfilePictureChange = (e) => {
     const file = e.target.files?.[0];
     if (file) {
+      console.log('Profile picture selected:', file.name, file.type, file.size);
       setProfilePictureFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
+        console.log('Profile picture loaded:', reader.result?.substring(0, 50) + '...');
         setProfilePicturePreview(reader.result);
       };
+      reader.onerror = () => {
+        console.error('Error reading file');
+      };
       reader.readAsDataURL(file);
+    } else {
+      // Clear preview if no file selected
+      setProfilePictureFile(null);
+      setProfilePicturePreview(null);
     }
   };
 
   const handleSubmit = async () => {
+    // Validate required fields
+    const fieldsToValidate = {
+      firstName: newUser.firstName,
+      lastName: newUser.lastName,
+      email: newUser.email,
+      password: newUser.password,
+      phone: newUser.phone,
+      gender: newUser.gender,
+      postalCode: newUser.address.postalCode,
+    };
+
+    const requiredFields = ['firstName', 'lastName', 'email', 'password'];
+    const { errors, hasErrors } = validateFields(fieldsToValidate, requiredFields);
+
+    if (hasErrors) {
+      setValidationErrors(errors);
+      return;
+    }
+
     try {
-      // Prepare user data with valid enrolledCourses only
+      // Clear any previous errors
+      setValidationErrors({});
+
+      // Prepare user data for submission (exclude courseReviews and learningProgress for new users)
+      const { courseReviews, learningProgress, ...userDataWithoutReviews } = newUser;
       const userDataToSubmit = {
-        ...newUser,
-        enrolledCourses: newUser.enrolledCourses.filter(course =>
-          course.courseId &&
-          course.instructorId &&
-          /^[a-f\d]{24}$/i.test(course.courseId) &&
-          /^[a-f\d]{24}$/i.test(course.instructorId)
-        )
+        ...userDataWithoutReviews,
+        // Remove empty strings for optional fields
+        phone: newUser.phone || undefined,
+        gender: newUser.gender || undefined,
+        address: {
+          ...newUser.address,
+          postalCode: newUser.address.postalCode || undefined,
+        }
       };
 
-      // Create user first
-      const result = await dispatch(createUser(userDataToSubmit)).unwrap();
-
-      // If user created successfully and profile picture is selected, upload it
-      if (result && profilePictureFile) {
+      // If profile picture is selected, create FormData
+      let submissionData = userDataToSubmit;
+      if (profilePictureFile) {
         const formData = new FormData();
+        
+        // Append all user data as JSON string
+        Object.keys(userDataToSubmit).forEach(key => {
+          if (userDataToSubmit[key] !== undefined && userDataToSubmit[key] !== null) {
+            if (typeof userDataToSubmit[key] === 'object') {
+              formData.append(key, JSON.stringify(userDataToSubmit[key]));
+            } else {
+              formData.append(key, userDataToSubmit[key]);
+            }
+          }
+        });
+        
+        // Append profile picture
         formData.append('profilePicture', profilePictureFile);
-        await dispatch(uploadUserProfilePicture({ id: result.data._id, formData })).unwrap();
+        submissionData = formData;
       }
 
+      // Create user
+      const result = await dispatch(createUser(submissionData)).unwrap();
+
+      // Close modal and notify parent
       onAdd();
+      onClose();
+      
+      // Reset form state
+      setNewUser({
+        firstName: '',
+        lastName: '',
+        email: '',
+        phone: '',
+        password: '',
+        dateOfBirth: null,
+        gender: '',
+        profilePicture: null,
+        address: {
+          street: '',
+          city: '',
+          state: '',
+          postalCode: '',
+          country: '',
+        },
+        isEmailVerified: false,
+        isPhoneVerified: false,
+        isKYCVerified: false,
+        isActive: true,
+        learningProgress: {
+          totalCoursesEnrolled: 0,
+          totalCoursesCompleted: 0,
+          totalLearningHours: 0,
+          certificates: 0,
+          averageRating: 0,
+        },
+        preferences: {
+          emailNotifications: true,
+          smsNotifications: false,
+          courseUpdates: true,
+          promotionalEmails: true,
+          language: 'en',
+        },
+        courseReviews: [],
+      });
+      setValidationErrors({});
+      setProfilePictureFile(null);
+      setProfilePicturePreview(null);
     } catch (error) {
       console.error('Failed to create user:', error);
     }
@@ -289,8 +322,15 @@ export function AddUser({ onClose, onAdd }) {
           </div>
         )}
 
+        {/* Validation Errors Summary */}
+        {Object.keys(validationErrors).some(key => validationErrors[key]) && (
+          <div className="mx-6 mt-4 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+            <p className="text-yellow-400 text-sm font-medium">Please fix the validation errors below before submitting.</p>
+          </div>
+        )}
+
         {/* Content - Scrollable */}
-        <div className="flex-1 overflow-y-auto">
+        <form className="flex-1 overflow-y-auto" autoComplete="on" onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
           <div className="p-6 space-y-8">
             {/* Basic Information */}
             <div>
@@ -301,20 +341,44 @@ export function AddUser({ onClose, onAdd }) {
                   <Input
                     id="firstName"
                     value={newUser.firstName}
-                    onChange={(e) => handleChange('firstName', e.target.value)}
-                    className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
+                    onChange={(e) => {
+                      console.log('✍️ FIRST NAME INPUT:', {
+                        value: e.target.value,
+                        timestamp: new Date().toLocaleTimeString(),
+                        inputType: e.nativeEvent?.inputType,
+                      });
+                      handleChange('firstName', e.target.value);
+                    }}
+                    onBlur={(e) => handleFieldBlur('firstName', e.target.value)}
+                    className={`bg-[#0f0f0f] border-2 text-black mt-2 transition-colors duration-200 ${validationErrors.firstName ? 'border-red-500 bg-red-50' : 'border-gray-800 focus:border-blue-500'}`}
                     required
+                    autoComplete="given-name"
                   />
+                  {validationErrors.firstName && (
+                    <p className="text-red-400 text-xs mt-1 font-medium animate-pulse">{validationErrors.firstName}</p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="lastName" className="text-gray-300">Last Name *</Label>
                   <Input
                     id="lastName"
                     value={newUser.lastName}
-                    onChange={(e) => handleChange('lastName', e.target.value)}
-                    className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
+                    onChange={(e) => {
+                      console.log('✍️ LAST NAME INPUT:', {
+                        value: e.target.value,
+                        timestamp: new Date().toLocaleTimeString(),
+                        inputType: e.nativeEvent?.inputType,
+                      });
+                      handleChange('lastName', e.target.value);
+                    }}
+                    onBlur={(e) => handleFieldBlur('lastName', e.target.value)}
+                    className={`bg-[#0f0f0f] border-2 text-black mt-2 transition-colors duration-200 ${validationErrors.lastName ? 'border-red-500 bg-red-50' : 'border-gray-800 focus:border-blue-500'}`}
                     required
+                    autoComplete="family-name"
                   />
+                  {validationErrors.lastName && (
+                    <p className="text-red-400 text-xs mt-1 font-medium animate-pulse">{validationErrors.lastName}</p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="email" className="text-gray-300">Email *</Label>
@@ -322,10 +386,22 @@ export function AddUser({ onClose, onAdd }) {
                     id="email"
                     type="email"
                     value={newUser.email}
-                    onChange={(e) => handleChange('email', e.target.value)}
-                    className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
+                    onChange={(e) => {
+                      console.log('✍️ EMAIL INPUT:', {
+                        value: e.target.value,
+                        timestamp: new Date().toLocaleTimeString(),
+                        inputType: e.nativeEvent?.inputType,
+                      });
+                      handleChange('email', e.target.value);
+                    }}
+                    onBlur={(e) => handleFieldBlur('email', e.target.value)}
+                    className={`bg-[#0f0f0f] border-2 text-black mt-2 transition-colors duration-200 ${validationErrors.email ? 'border-red-500 bg-red-50' : 'border-gray-800 focus:border-blue-500'}`}
                     required
+                    autoComplete="email"
                   />
+                  {validationErrors.email && (
+                    <p className="text-red-400 text-xs mt-1 font-medium animate-pulse">{validationErrors.email}</p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="phone" className="text-gray-300">Phone</Label>
@@ -333,8 +409,13 @@ export function AddUser({ onClose, onAdd }) {
                     id="phone"
                     value={newUser.phone}
                     onChange={(e) => handleChange('phone', e.target.value)}
-                    className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
+                    onBlur={(e) => handleFieldBlur('phone', e.target.value)}
+                    className={`bg-[#0f0f0f] border-2 text-black mt-2 transition-colors duration-200 ${validationErrors.phone ? 'border-red-500 bg-red-50' : 'border-gray-800 focus:border-blue-500'}`}
+                    autoComplete="tel"
                   />
+                  {validationErrors.phone && (
+                    <p className="text-red-400 text-xs mt-1 font-medium animate-pulse">{validationErrors.phone}</p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="password" className="text-gray-300">Password *</Label>
@@ -343,9 +424,14 @@ export function AddUser({ onClose, onAdd }) {
                     type="password"
                     value={newUser.password}
                     onChange={(e) => handleChange('password', e.target.value)}
-                    className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
+                    onBlur={(e) => handleFieldBlur('password', e.target.value)}
+                    className={`bg-[#0f0f0f] border-2 text-black mt-2 transition-colors duration-200 ${validationErrors.password ? 'border-red-500 bg-red-50' : 'border-gray-800 focus:border-blue-500'}`}
                     required
+                    autoComplete="new-password"
                   />
+                  {validationErrors.password && (
+                    <p className="text-red-400 text-xs mt-1 font-medium animate-pulse">{validationErrors.password}</p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="dateOfBirth" className="text-gray-300">Date of Birth</Label>
@@ -354,22 +440,21 @@ export function AddUser({ onClose, onAdd }) {
                     type="date"
                     value={newUser.dateOfBirth ? new Date(newUser.dateOfBirth).toISOString().split('T')[0] : ''}
                     onChange={(e) => handleChange('dateOfBirth', e.target.value)}
-                    className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
+                    className="bg-[#0f0f0f] border-gray-800 text-black mt-2"
                   />
                 </div>
                 <div className="col-span-2">
-                  <Label htmlFor="gender" className="text-gray-300">Gender</Label>
-                  <Select value={newUser.gender || ''} onValueChange={(value) => handleChange('gender', value)}>
-                    <SelectTrigger className="bg-[#0f0f0f] border-gray-800 text-white mt-2">
-                      <SelectValue placeholder="Select gender" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-[#1a1a1a] border-gray-800">
-                      <SelectItem value="Male">Male</SelectItem>
-                      <SelectItem value="Female">Female</SelectItem>
-                      <SelectItem value="Other">Other</SelectItem>
-                      <SelectItem value="Prefer not to say">Prefer not to say</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Dropdown
+                    value={newUser.gender}
+                    onChange={(value) => {
+                      handleChange('gender', value);
+                      setTimeout(() => handleFieldBlur('gender', value), 0);
+                    }}
+                    options={['Male', 'Female', 'Other', 'Prefer not to say']}
+                    label="Gender"
+                    placeholder="Select gender"
+                    error={validationErrors.gender}
+                  />
                 </div>
               </div>
             </div>
@@ -414,7 +499,7 @@ export function AddUser({ onClose, onAdd }) {
                     id="street"
                     value={newUser.address.street}
                     onChange={(e) => handleNestedChange('address', 'street', e.target.value)}
-                    className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
+                    className="bg-[#0f0f0f] border-gray-800 text-black mt-2"
                   />
                 </div>
                 <div>
@@ -423,7 +508,7 @@ export function AddUser({ onClose, onAdd }) {
                     id="city"
                     value={newUser.address.city}
                     onChange={(e) => handleNestedChange('address', 'city', e.target.value)}
-                    className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
+                    className="bg-[#0f0f0f] border-gray-800 text-black mt-2"
                   />
                 </div>
                 <div>
@@ -432,7 +517,7 @@ export function AddUser({ onClose, onAdd }) {
                     id="state"
                     value={newUser.address.state}
                     onChange={(e) => handleNestedChange('address', 'state', e.target.value)}
-                    className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
+                    className="bg-[#0f0f0f] border-gray-800 text-black mt-2"
                   />
                 </div>
                 <div>
@@ -441,8 +526,12 @@ export function AddUser({ onClose, onAdd }) {
                     id="postalCode"
                     value={newUser.address.postalCode}
                     onChange={(e) => handleNestedChange('address', 'postalCode', e.target.value)}
-                    className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
+                    onBlur={(e) => handleNestedFieldBlur('address', 'postalCode', e.target.value)}
+                    className={`bg-[#0f0f0f] border-2 text-black mt-2 transition-colors duration-200 ${validationErrors.postalCode ? 'border-red-500 bg-red-50' : 'border-gray-800 focus:border-blue-500'}`}
                   />
+                  {validationErrors.postalCode && (
+                    <p className="text-red-400 text-xs mt-1 font-medium animate-pulse">{validationErrors.postalCode}</p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="country" className="text-gray-300">Country</Label>
@@ -450,7 +539,7 @@ export function AddUser({ onClose, onAdd }) {
                     id="country"
                     value={newUser.address.country}
                     onChange={(e) => handleNestedChange('address', 'country', e.target.value)}
-                    className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
+                    className="bg-[#0f0f0f] border-gray-800 text-black mt-2"
                   />
                 </div>
               </div>
@@ -491,150 +580,6 @@ export function AddUser({ onClose, onAdd }) {
               </div>
             </div>
 
-            {/* Enrolled Courses */}
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-white">Enrolled Courses</h3>
-                <Button onClick={addEnrolledCourse} size="sm" className="bg-blue-600 hover:bg-blue-700">
-                  <Plus className="w-4 h-4 mr-1" />
-                  Add Course
-                </Button>
-              </div>
-              <div className="space-y-4">
-                {newUser.enrolledCourses.map((course, index) => (
-                  <div key={index} className="p-4 bg-[#0f0f0f] border border-gray-800 rounded-lg">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-white font-medium">Course #{index + 1}</span>
-                      <Button
-                        onClick={() => removeEnrolledCourse(index)}
-                        size="sm"
-                        variant="ghost"
-                        className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                    <div className="grid grid-cols-3 gap-3">
-                      <div>
-                        <Label className="text-gray-400 text-xs">Course ID (MongoDB ObjectId)</Label>
-                        <Input
-                          value={course.courseId}
-                          onChange={(e) => updateEnrolledCourse(index, 'courseId', e.target.value)}
-                          className={`bg-[#1a1a1a] border-gray-700 text-white mt-1 text-sm ${
-                            course.courseId && !/^[a-f\d]{24}$/i.test(course.courseId)
-                              ? 'border-red-500'
-                              : course.courseId && /^[a-f\d]{24}$/i.test(course.courseId)
-                              ? 'border-green-500'
-                              : ''
-                          }`}
-                          placeholder="e.g., 507f1f77bcf86cd799439011"
-                        />
-                        {course.courseId && !/^[a-f\d]{24}$/i.test(course.courseId) && (
-                          <p className="text-red-400 text-xs mt-1">Invalid ObjectId format</p>
-                        )}
-                      </div>
-                      <div>
-                        <Label className="text-gray-400 text-xs">Instructor ID (MongoDB ObjectId)</Label>
-                        <Input
-                          value={course.instructorId}
-                          onChange={(e) => updateEnrolledCourse(index, 'instructorId', e.target.value)}
-                          className={`bg-[#1a1a1a] border-gray-700 text-white mt-1 text-sm ${
-                            course.instructorId && !/^[a-f\d]{24}$/i.test(course.instructorId)
-                              ? 'border-red-500'
-                              : course.instructorId && /^[a-f\d]{24}$/i.test(course.instructorId)
-                              ? 'border-green-500'
-                              : ''
-                          }`}
-                          placeholder="e.g., 507f1f77bcf86cd799439011"
-                        />
-                        {course.instructorId && !/^[a-f\d]{24}$/i.test(course.instructorId) && (
-                          <p className="text-red-400 text-xs mt-1">Invalid ObjectId format</p>
-                        )}
-                      </div>
-                      <div>
-                        <Label className="text-gray-400 text-xs">Completion %</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          max="100"
-                          value={course.completionPercentage}
-                          onChange={(e) => updateEnrolledCourse(index, 'completionPercentage', parseInt(e.target.value) || 0)}
-                          className="bg-[#1a1a1a] border-gray-700 text-white mt-1 text-sm"
-                        />
-                      </div>
-                      <div className="col-span-3">
-                        <Label className="text-gray-400 text-xs">Status</Label>
-                        <Select
-                          value={course.status}
-                          onValueChange={(value) => updateEnrolledCourse(index, 'status', value)}
-                        >
-                          <SelectTrigger className="bg-[#1a1a1a] border-gray-700 text-white mt-1 text-sm">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className="bg-[#1a1a1a] border-gray-800">
-                            <SelectItem value="active">Active</SelectItem>
-                            <SelectItem value="suspended">Suspended</SelectItem>
-                            <SelectItem value="completed">Completed</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <div className="mt-3 flex items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={course.isCompleted}
-                          onCheckedChange={(checked) => updateEnrolledCourse(index, 'isCompleted', checked)}
-                        />
-                        <Label className="text-gray-400 text-xs">Completed</Label>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {newUser.enrolledCourses.length === 0 && (
-                  <p className="text-gray-400 text-sm text-center py-8">No enrolled courses added yet</p>
-                )}
-              </div>
-            </div>
-
-            {/* Payment Information */}
-            <div>
-              <h3 className="text-lg font-semibold text-white mb-4">Payment Information</h3>
-              <div className="space-y-4">
-                <div>
-                  <Label className="text-gray-300">Primary Payment Method</Label>
-                  <Select value={newUser.payment.primaryPaymentMethod || ''} onValueChange={(value) => handleNestedChange('payment', 'primaryPaymentMethod', value)}>
-                    <SelectTrigger className="bg-[#0f0f0f] border-gray-800 text-white mt-2">
-                      <SelectValue placeholder="Select payment method" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-[#1a1a1a] border-gray-800">
-                      <SelectItem value="card">Credit/Debit Card</SelectItem>
-                      <SelectItem value="upi">UPI</SelectItem>
-                      <SelectItem value="wallet">Wallet</SelectItem>
-                      <SelectItem value="netbanking">Net Banking</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-gray-300">UPI ID</Label>
-                  <Input
-                    value={newUser.payment.upiId}
-                    onChange={(e) => handleNestedChange('payment', 'upiId', e.target.value)}
-                    className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
-                    placeholder="user@upi"
-                  />
-                </div>
-                <div>
-                  <Label className="text-gray-300">Wallet Balance</Label>
-                  <Input
-                    type="number"
-                    value={newUser.payment.wallet.balance}
-                    onChange={(e) => handleDeepNestedChange('payment', 'wallet', 'balance', parseFloat(e.target.value) || 0)}
-                    className="bg-[#0f0f0f] border-gray-800 text-white mt-2"
-                  />
-                </div>
-              </div>
-            </div>
-
             {/* Preferences */}
             <div>
               <h3 className="text-lg font-semibold text-white mb-4">Preferences</h3>
@@ -670,7 +615,7 @@ export function AddUser({ onClose, onAdd }) {
               </div>
             </div>
           </div>
-        </div>
+        </form>
 
         {/* Footer */}
         <div className="p-6 border-t border-gray-800 flex justify-end gap-3">

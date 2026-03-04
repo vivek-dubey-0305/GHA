@@ -1,14 +1,50 @@
-import { Search, MoreVertical } from 'lucide-react';
+import { Search, MoreVertical, Trash2 } from 'lucide-react';
 import { mockUsers } from '../../data/mockUser';
-import { Badge } from '../ui';
+import { Badge, SearchBar } from '../ui';
+import WarningModal from '../ui/modals/warning-modal';
+import { useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { deleteUser, selectDeleteUserLoading, selectDeleteUserError, selectDeleteUserSuccess } from '../../redux/slices/admin.slice';
 
 
 export function ListUser({ users, onUserClick, searchTerm, onSearchChange }) {
+  const dispatch = useDispatch();
+  const deleteUserLoading = useSelector(selectDeleteUserLoading);
+  const deleteUserError = useSelector(selectDeleteUserError);
+  const deleteUserSuccess = useSelector(selectDeleteUserSuccess);
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
+
   const filteredUsers = users.filter(user => 
     (user.firstName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
     (user.lastName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
     (user.email?.toLowerCase() || '').includes(searchTerm.toLowerCase())
   );
+
+  const handleDeleteClick = (user) => {
+    setUserToDelete(user);
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (userToDelete) {
+      try {
+        await dispatch(deleteUser(userToDelete._id)).unwrap();
+        // Optionally, you can remove from local state or call a callback
+        // For now, assume parent will re-fetch
+        setShowDeleteModal(false);
+        setUserToDelete(null);
+      } catch (error) {
+        // Error handled by slice
+      }
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteModal(false);
+    setUserToDelete(null);
+  };
 
   return (
     <div className="flex-1 p-8">
@@ -19,16 +55,19 @@ export function ListUser({ users, onUserClick, searchTerm, onSearchChange }) {
       </div>
 
       {/* Search Bar */}
-      <div className="mb-6 relative">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Search by name or email..."
-          value={searchTerm}
-          onChange={(e) => onSearchChange(e.target.value)}
-          className="w-full bg-[#1a1a1a] text-white border border-gray-800 rounded-lg pl-12 pr-4 py-3 focus:outline-none focus:border-gray-600 transition-colors"
-        />
-      </div>
+      <SearchBar
+        value={searchTerm}
+        onChange={(value) => {
+          console.log('📌 SET SEARCH TERM CALLED:', {
+            oldValue: searchTerm,
+            newValue: value,
+            timestamp: new Date().toLocaleTimeString()
+          });
+          onSearchChange(value);
+        }}
+        placeholder="Search by name or email..."
+        context="users"
+      />
 
       {/* Table */}
       <div className="bg-[#1a1a1a] rounded-lg border border-gray-800 overflow-hidden">
@@ -55,9 +94,9 @@ export function ListUser({ users, onUserClick, searchTerm, onSearchChange }) {
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center">
-                        {user.profilePicture ? (
+                        {user.profilePicture?.secure_url ? (
                           <img 
-                            src={user.profilePicture} 
+                            src={user.profilePicture.secure_url} 
                             alt={`${user.firstName} ${user.lastName}`} 
                             className="w-full h-full object-cover"
                           />
@@ -74,7 +113,7 @@ export function ListUser({ users, onUserClick, searchTerm, onSearchChange }) {
                   </td>
                   <td className="px-6 py-4 text-gray-300">{user?.email}</td>
                   <td className="px-6 py-4 text-gray-300">{user?.phone}</td>
-                  <td className="px-6 py-4 text-gray-300">{user?.learningProgress.totalCoursesEnrolled}</td>
+                  <td className="px-6 py-4 text-gray-300">{user?.learningProgress?.totalCoursesEnrolled || 0}</td>
                   <td className="px-6 py-4">
                     <Badge variant={user?.isActive ? "default" : "secondary"} className={user?.isActive ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"}>
                       {user?.isActive ? 'Active' : 'Inactive'}
@@ -95,13 +134,13 @@ export function ListUser({ users, onUserClick, searchTerm, onSearchChange }) {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <button 
-                      className="text-gray-400 hover:text-white transition-colors p-2"
+                      className="text-red-500 hover:text-red-700 transition-colors p-2"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onUserClick(user);
+                        handleDeleteClick(user);
                       }}
                     >
-                      <MoreVertical className="w-5 h-5" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </td>
                 </tr>
@@ -125,6 +164,17 @@ export function ListUser({ users, onUserClick, searchTerm, onSearchChange }) {
           </button>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <WarningModal
+        isOpen={showDeleteModal}
+        onClose={handleCancelDelete}
+        title="Delete User"
+        message={`Are you sure you want to delete ${userToDelete?.firstName} ${userToDelete?.lastName}? This action cannot be undone and will also remove their profile picture from storage.`}
+        confirmText="Delete User"
+        cancelText="Cancel"
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 }

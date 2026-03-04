@@ -112,12 +112,43 @@ import adminAuthRouter from "./routes/admin.auth.routes.js";
 import userAuthRouter from "./routes/user.auth.routes.js";
 import instructorAuthRouter from "./routes/instructor.auth.routes.js";
 import adminRouter from "./routes/admin.routes.js";
+import userRouter from "./routes/user.routes.js";
+import instructorRouter from "./routes/instructor.routes.js";
+import courseRouter from "./routes/course.routes.js";
+import moduleRouter from "./routes/module.routes.js";
+import lessonRouter from "./routes/lesson.routes.js";
+import enrollmentRouter from "./routes/enrollment.routes.js";
+import reviewRouter from "./routes/review.routes.js";
+import assignmentRouter from "./routes/assignment.routes.js";
+import submissionRouter from "./routes/submission.routes.js";
+import liveClassRouter from "./routes/liveclass.routes.js";
+import videoPackageRouter from "./routes/videopackage.routes.js";
+import materialRouter from "./routes/material.routes.js";
+import progressRouter from "./routes/progress.routes.js";
+import certificateRouter from "./routes/certificate.routes.js";
+import paymentRouter from "./routes/payment.routes.js";
+import walletRouter from "./routes/wallet.routes.js";
+import payoutRouter from "./routes/payout.routes.js";
 
 // Import models to register them with Mongoose
 import { User } from "./models/user.model.js";
 import { Course } from "./models/course.model.js";
 import { Instructor } from "./models/instructor.model.js";
 import { Admin } from "./models/admin.model.js";
+import { Enrollment } from "./models/enrollment.model.js";
+import { Module } from "./models/module.model.js";
+import { Lesson } from "./models/lesson.model.js";
+import { Payment } from "./models/payment.model.js";
+import { Review } from "./models/review.model.js";
+import { Assignment } from "./models/assignment.model.js";
+import { Submission } from "./models/submission.model.js";
+import { Certificate } from "./models/certificate.model.js";
+import { LiveClass } from "./models/liveclass.model.js";
+import { VideoPackage } from "./models/videopackage.model.js";
+import { Material } from "./models/material.model.js";
+import { Progress } from "./models/progress.model.js";
+import { Wallet } from "./models/wallet.model.js";
+import { Payout } from "./models/payout.model.js";
 
 const app = express();
 
@@ -185,11 +216,34 @@ app.get("/csrf-token", csrfProtection, (req, res) => {
     res.json({ csrfToken: req.csrfToken() });
 });
 
-// API routes
+// API routes - Auth
 app.use("/api/v1/admin/auth", adminAuthRouter);
-app.use("/api/v1/admin", adminRouter);
 app.use("/api/v1/user/auth", userAuthRouter);
-app.use("/api/v1/instructor/auth", instructorAuthRouter); 
+app.use("/api/v1/instructor/auth", instructorAuthRouter);
+
+// API routes - Admin (full CRUD for all models)
+app.use("/api/v1/admin", adminRouter);
+
+// API routes - User & Instructor self-management
+app.use("/api/v1/user", userRouter);
+app.use("/api/v1/instructor", instructorRouter);
+
+// API routes - Resource CRUD
+app.use("/api/v1/courses", courseRouter);
+app.use("/api/v1/modules", moduleRouter);
+app.use("/api/v1/lessons", lessonRouter);
+app.use("/api/v1/enrollments", enrollmentRouter);
+app.use("/api/v1/reviews", reviewRouter);
+app.use("/api/v1/assignments", assignmentRouter);
+app.use("/api/v1/submissions", submissionRouter);
+app.use("/api/v1/live-classes", liveClassRouter);
+app.use("/api/v1/video-packages", videoPackageRouter);
+app.use("/api/v1/materials", materialRouter);
+app.use("/api/v1/progress", progressRouter);
+app.use("/api/v1/certificates", certificateRouter);
+app.use("/api/v1/payments", paymentRouter);
+app.use("/api/v1/wallet", walletRouter);
+app.use("/api/v1/payouts", payoutRouter);
 
 // ================= ERROR HANDLER (LAST) =================
 app.use(errorMiddleware);

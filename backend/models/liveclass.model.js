@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-// Live Class Schema - Production Grade with Zoom Integration
+// Live Class Schema - Production Grade with Bunny Stream Live Integration
 const liveClassSchema = new mongoose.Schema({
     // Relationships
     instructor: {
@@ -44,22 +44,22 @@ const liveClassSchema = new mongoose.Schema({
         default: "UTC"
     },
 
-    // Zoom Integration
-    zoomMeetingId: {
+    // Bunny Stream Live Integration
+    bunnyVideoId: {
         type: String,
-        required: [true, "Zoom meeting ID is required"]
+        required: [true, "Bunny video ID is required"]
     },
-    zoomJoinUrl: {
+    rtmpUrl: {
         type: String,
-        required: [true, "Zoom join URL is required"]
+        select: false // Only for instructor (OBS ingest)
     },
-    zoomStartUrl: {
+    rtmpKey: {
         type: String,
-        select: false // Only for instructor
+        select: false // Only for instructor (OBS stream key — sensitive)
     },
-    zoomPassword: {
+    playbackUrl: {
         type: String,
-        select: false
+        required: [true, "Playback URL is required"]
     },
 
     // Capacity and Attendance
@@ -96,7 +96,7 @@ const liveClassSchema = new mongoose.Schema({
         default: "scheduled"
     },
 
-    // Recording
+    // Recording (Bunny auto-saves recordings after live ends)
     recordingUrl: String,
     recordingStatus: {
         type: String,
@@ -154,11 +154,10 @@ liveClassSchema.index({ "registeredParticipants.user": 1 });
 liveClassSchema.index({ createdAt: -1 });
 
 // Pre-save middleware
-liveClassSchema.pre("save", function(next) {
+liveClassSchema.pre("save", function() {
     if (this.isModified("status") && this.status === "completed" && !this.endedAt) {
         this.endedAt = new Date();
     }
-    next();
 });
 
 // Instance methods
@@ -178,6 +177,14 @@ liveClassSchema.methods.endClass = function(recordingData = {}) {
     this.status = "completed";
     this.endedAt = new Date();
 
+    // Bunny auto-saves recordings after live stream ends.
+    // The recording is at the same bunnyVideoId — we just mark it accordingly.
+    if (this.bunnyVideoId) {
+        this.recordingStatus = "processing"; // Bunny is encoding the recording
+        this.recordingAvailable = false;     // Will become true once Bunny finishes encoding
+    }
+
+    // Allow manual override if recording data is provided
     if (recordingData.recordingUrl) {
         this.recordingUrl = recordingData.recordingUrl;
         this.recordingStatus = "completed";

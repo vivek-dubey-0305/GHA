@@ -6,12 +6,15 @@ import { apiClient } from '../../utils/api.utils.js';
 // Get all users with pagination
 export const getAllUsers = createAsyncThunk(
   'admin/getAllUsers',
-  async ({ page = 1, limit = 10 } = {}, { rejectWithValue }) => {
+  async ({ page = 1, limit = 10, status, isActive, search } = {}, { rejectWithValue }) => {
     try {
-      const response = await apiClient.get(`/users`, {
-        params: { page, limit }
-      });
-      console.log("REsponmseUsers:/n", response.data)
+      const params = { page, limit };
+      if (status) params.status = status;
+      if (isActive !== undefined) params.isActive = isActive;
+      if (search) params.search = search;
+
+      const response = await apiClient.get(`/users`, { params });
+      console.log("Admin get all user repsonse: ",response)
       return response.data;
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Failed to fetch users';

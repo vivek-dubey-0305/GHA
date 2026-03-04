@@ -81,18 +81,18 @@ reviewSchema.index({ course: 1, isApproved: 1, rating: -1 });
 reviewSchema.index({ course: 1, isVerified: 1, createdAt: -1 });
 
 // Pre-save middleware to validate review eligibility
-reviewSchema.pre("save", async function(next) {
+reviewSchema.pre("save", async function() {
     if (this.isNew) {
         // Check if user is enrolled and has made progress
         const Enrollment = mongoose.model("Enrollment");
         const enrollment = await Enrollment.findOne({
             user: this.user,
             course: this.course,
-            status: "active"
+            status: { $in: ["active", "completed"] }
         });
 
         if (!enrollment) {
-            return next(new Error("User must be enrolled in the course to leave a review"));
+            throw new Error("User must be enrolled in the course to leave a review");
         }
 
         // Check if user has completed at least some lessons (optional)
@@ -105,7 +105,6 @@ reviewSchema.pre("save", async function(next) {
 
         this.isVerified = progressCount > 0;
     }
-    next();
 });
 
 // Post-save middleware to update course rating

@@ -100,72 +100,10 @@ const userSchema = new mongoose.Schema({
     // Enrollment Information (Virtual - handled by Enrollment model)
     // enrolledCourses moved to separate Enrollment collection
 
-    // Payment Information
-    payment: {
-        primaryPaymentMethod: {
-            type: String,
-            enum: ["credit_card", "debit_card", "upi", "bank_transfer", "wallet"],
-            default: null
-        },
-        cardDetails: {
-            cardHolderName: String,
-            cardNumber: String, // Encrypted in production
-            expiryDate: String, // MM/YY format, encrypted
-            cvv: String // Encrypted, only for validation
-        },
-        bankDetails: {
-            accountHolderName: String,
-            accountNumber: String, // Encrypted
-            ifscCode: String,
-            bankName: String
-        },
-        upiId: String,
-        wallet: {
-            balance: {
-                type: Number,
-                default: 0
-            },
-            currency: {
-                type: String,
-                default: "USD"
-            }
-        }
-    },
-
-    // Transaction History
-    transactions: [{
-        transactionId: {
-            type: String,
-            unique: true,
-            sparse: true
-        },
-        courseId: mongoose.Schema.Types.ObjectId,
-        courseName: String,
-        amount: {
-            type: Number,
-            required: true
-        },
-        currency: {
-            type: String,
-            default: "INR"
-        },
-        paymentMethod: String,
-        paymentStatus: {
-            type: String,
-            enum: ["pending", "success", "failed", "refunded"],
-            default: "pending"
-        },
-        gatewayTransactionId: String,
-        refundAmount: {
-            type: Number,
-            default: 0
-        },
-        refundReason: String,
-        transactionDate: {
-            type: Date,
-            default: Date.now
-        }
-    }],
+    // NOTE: Payment information (card details, bank details, UPI, wallet) removed
+    // for PCI DSS compliance. All payment data handled via centralised Payment gateway.
+    // Wallet balance tracked in separate Wallet collection.
+    // Transaction history tracked in separate Payment collection.
 
     // Security Fields
     sessions: [{
@@ -268,25 +206,6 @@ const userSchema = new mongoose.Schema({
         }
     },
 
-    // Course Reviews and Ratings
-    courseReviews: [{
-        courseId: mongoose.Schema.Types.ObjectId,
-        rating: {
-            type: Number,
-            min: 1,
-            max: 5,
-            required: true
-        },
-        review: {
-            type: String,
-            maxlength: [500, "Review cannot exceed 500 characters"]
-        },
-        reviewDate: {
-            type: Date,
-            default: Date.now
-        }
-    }],
-
     // Soft Delete
     deletedAt: Date,
     deletionReason: String,
@@ -312,18 +231,11 @@ userSchema.index({ createdAt: -1 });
 userSchema.index({ isActive: 1 });
 userSchema.index({ isEmailVerified: 1 });
 userSchema.index({ deletedAt: 1 });
-userSchema.index({ "transactions.transactionId": 1 });
 userSchema.index({ verificationCodeExpires: 1 }, { expireAfterSeconds: 0 });
 
 // Virtual for account lock status
 userSchema.virtual("isLocked").get(function() {
     return !!(this.lockUntil && this.lockUntil > Date.now());
-});
-
-// Virtual for enrolled courses (queries Enrollment model)
-userSchema.virtual("enrolledCourses").get(function() {
-    const Enrollment = mongoose.model("Enrollment");
-    return Enrollment.find({ user: this._id }).populate("course");
 });
 
 // Pre-save middleware for password hashing
@@ -467,75 +379,6 @@ userSchema.methods.resetLoginAttempts = function() {
     this.save({ validateBeforeSave: false });
 };
 
-// Instance method to enroll in course (creates Enrollment record)
-userSchema.methods.enrollCourse = async function(courseId, paymentId) {
-    const Enrollment = mongoose.model("Enrollment");
-    
-    // Check if already enrolled
-    const existing = await Enrollment.findOne({ user: this._id, course: courseId });
-    if (existing) {
-        throw new Error("Already enrolled in this course");
-    }
-
-    // Get course details for totalLessons
-    const Course = mongoose.model("Course");
-    const course = await Course.findById(courseId);
-    if (!course) {
-        throw new Error("Course not found");
-    }
-
-    const enrollment = new Enrollment({
-        user: this._id,
-        course: courseId,
-        payment: paymentId,
-        totalLessons: course.totalLessons || 0
-    });
-
-    this.learningProgress.totalCoursesEnrolled += 1;
-    await this.save();
-
-    return enrollment.save();
-};
-
-// Instance method to update course progress (updates Enrollment record)
-userSchema.methods.updateCourseProgress = async function(courseId, progressData) {
-    const Enrollment = mongoose.model("Enrollment");
-    
-    const enrollment = await Enrollment.findOne({ user: this._id, course: courseId });
-    if (!enrollment) {
-        throw new Error("Enrollment not found");
-    }
-
-    const result = await enrollment.updateProgress(progressData);
-
-    // Update learning progress if completed
-    if (progressData.completionPercentage === 100 && !enrollment.completedAt) {
-        this.learningProgress.totalCoursesCompleted += 1;
-        await this.save();
-    }
-
-    return result;
-};
-
-// Instance method to add course review
-userSchema.methods.addCourseReview = function(courseId, rating, review) {
-    if (rating < 1 || rating > 5) {
-        throw new Error("Rating must be between 1 and 5");
-    }
-
-    // Remove old review if exists
-    this.courseReviews = this.courseReviews.filter(
-        r => r.courseId.toString() !== courseId.toString()
-    );
-
-    this.courseReviews.push({
-        courseId,
-        rating,
-        review,
-        reviewDate: new Date()
-    });
-};
-
 // Transform output to exclude sensitive fields
 userSchema.methods.toJSON = function() {
     const userObject = this.toObject();
@@ -548,11 +391,6 @@ userSchema.methods.toJSON = function() {
     delete userObject.verificationCode;
     delete userObject.otpAttempts;
     delete userObject.otpLastSentAt;
-    // Don't expose sensitive payment details in API responses
-    if (userObject.payment) {
-        delete userObject.payment.cardDetails;
-        delete userObject.payment.bankDetails;
-    }
     return userObject;
 };
 

@@ -4,56 +4,93 @@ import logger from "../configs/logger.config.js";
 
 /**
  * Multer Middleware Configuration
- * Handles file uploads for Cloudinary integration
- * Supports profile pictures for both instructors and students
+ * Handles file uploads for R2 integration
+ * Supports images, videos, and documents
  */
 
-// Use memory storage for Cloudinary uploads
+// Use memory storage for R2 uploads
 const storage = multer.memoryStorage();
 
-// File filter for image uploads
-const fileFilter = (req, file, cb) => {
+// File filter for image uploads only
+const imageFilter = (req, file, cb) => {
     try {
-        logger.info(`File upload request: ${file.fieldname} - ${file.originalname}`);
-
-        // Allow only specific image types
+        logger.info(`Image upload request: ${file.fieldname} - ${file.originalname}`);
         const allowedMimes = [
-            "image/jpeg",
-            "image/png",
-            "image/gif",
-            "image/webp",
-            "image/jpg"
+            "image/jpeg", "image/png", "image/gif", "image/webp", "image/jpg"
         ];
-
         if (allowedMimes.includes(file.mimetype)) {
-            logger.info(`File validation passed: ${file.originalname}`);
+            logger.info(`Image validation passed: ${file.originalname}`);
             cb(null, true);
         } else {
-            logger.warn(`Invalid file type: ${file.mimetype} for ${file.originalname}`);
+            logger.warn(`Invalid image type: ${file.mimetype} for ${file.originalname}`);
             cb(new Error(`Invalid file type. Allowed: JPEG, PNG, GIF, WebP. Got: ${file.mimetype}`));
         }
     } catch (error) {
-        logger.error(`File filter error: ${error.message}`);
+        logger.error(`Image filter error: ${error.message}`);
         cb(error);
     }
 };
 
-// Multer upload configuration
+// File filter for course media (images + videos + documents)
+const courseMediaFilter = (req, file, cb) => {
+    try {
+        logger.info(`Course media upload request: ${file.fieldname} - ${file.originalname}`);
+        const allowedMimes = [
+            // Images
+            "image/jpeg", "image/png", "image/gif", "image/webp", "image/jpg",
+            // Videos
+            "video/mp4", "video/mpeg", "video/quicktime", "video/x-msvideo",
+            "video/webm", "video/x-matroska",
+            // Documents
+            "application/pdf",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.ms-powerpoint",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/zip", "application/x-zip-compressed",
+            "text/plain", "text/csv", "text/markdown",
+            "application/json",
+            // Audio
+            "audio/mpeg", "audio/mp3", "audio/wav", "audio/ogg",
+        ];
+
+        if (allowedMimes.includes(file.mimetype)) {
+            logger.info(`Course media validation passed: ${file.originalname}`);
+            cb(null, true);
+        } else {
+            logger.warn(`Invalid course media type: ${file.mimetype} for ${file.originalname}`);
+            cb(new Error(`Invalid file type: ${file.mimetype}. Allowed: images, videos, PDF, DOC, PPT, ZIP, TXT`));
+        }
+    } catch (error) {
+        logger.error(`Course media filter error: ${error.message}`);
+        cb(error);
+    }
+};
+
+// Standard image upload configuration (profile pictures, etc.)
 export const upload = multer({
     storage,
-    fileFilter,
+    fileFilter: imageFilter,
     limits: {
         fileSize: 5 * 1024 * 1024, // 5 MB limit
-        files: 1, // Max 1 file per request
+        files: 1,
+    },
+});
+
+// Course media upload - supports larger files (videos up to 500MB)
+export const courseMediaUpload = multer({
+    storage,
+    fileFilter: courseMediaFilter,
+    limits: {
+        fileSize: 500 * 1024 * 1024, // 500 MB limit for videos
+        files: 50, // Allow many files for full course creation
     },
 });
 
 /**
  * Custom error handler for multer errors
- * @param {Error} error - Multer error
- * @param {Object} req - Express request
- * @param {Object} res - Express response
- * @param {Function} next - Express next middleware
  */
 export const handleMulterError = (error, req, res, next) => {
     logger.error(`Multer error: ${error.message}`);
@@ -63,7 +100,7 @@ export const handleMulterError = (error, req, res, next) => {
             logger.warn(`File size exceeded by user: ${req.user?.id}`);
             return res.status(400).json({
                 success: false,
-                message: "File size exceeds 5 MB limit",
+                message: "File size exceeds the allowed limit",
                 error: error.message,
             });
         }
@@ -72,7 +109,7 @@ export const handleMulterError = (error, req, res, next) => {
             logger.warn(`Too many files uploaded by user: ${req.user?.id}`);
             return res.status(400).json({
                 success: false,
-                message: "Only one file is allowed per upload",
+                message: "Too many files uploaded",
                 error: error.message,
             });
         }
@@ -103,4 +140,4 @@ export const handleMulterError = (error, req, res, next) => {
     });
 };
 
-export default { upload, handleMulterError };
+export default { upload, courseMediaUpload, handleMulterError };

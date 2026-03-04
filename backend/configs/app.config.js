@@ -39,11 +39,13 @@ export const smtpConfig = {
     password: process.env.SMTP_PASSWORD,
 };
 
-// Cloudinary Configuration
-export const cloudinaryConfig = {
-    cloudName: process.env.CLOUDINARY_CLOUD_NAME,
-    apiKey: process.env.CLOUDINARY_API_KEY,
-    apiSecret: process.env.CLOUDINARY_API_SECRET,
+// Cloudflare R2 Configuration
+export const r2Config = {
+    accountId: process.env.R2_ACCOUNT_ID,
+    accessKey: process.env.R2_ACCESS_KEY,
+    secretKey: process.env.R2_SECRET_KEY,
+    bucket: process.env.R2_BUCKET || 'gha-images',
+    publicUrl: process.env.R2_PUBLIC_URL,
 };
 
 // Security Configuration
@@ -75,9 +77,10 @@ export const validateConfig = () => {
         'SMTP_HOST',
         'SMTP_MAIL',
         'SMTP_PASSWORD',
-        'CLOUDINARY_CLOUD_NAME',
-        'CLOUDINARY_API_KEY',
-        'CLOUDINARY_API_SECRET'
+        'R2_ACCOUNT_ID',
+        'R2_ACCESS_KEY',
+        'R2_SECRET_KEY',
+        'R2_PUBLIC_URL'
     ];
 
     const missingVars = requiredVars.filter(varName => !process.env[varName]);

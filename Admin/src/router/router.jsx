@@ -15,6 +15,20 @@ const Users = lazy(() => import('../pages/UserPages/Users'));
 const Instructors = lazy(() => import('../pages/InstructorPages/Instructors'));
 const Courses = lazy(() => import('../pages/CoursePages/Courses'));
 const Revenue = lazy(() => import('../pages/RevenuePages/Revenue'));
+const Modules = lazy(() => import('../pages/ModulePages/Modules'));
+const Lessons = lazy(() => import('../pages/LessonPages/Lessons'));
+const Enrollments = lazy(() => import('../pages/EnrollmentPages/Enrollments'));
+const Assignments = lazy(() => import('../pages/AssignmentPages/Assignments'));
+const Certificates = lazy(() => import('../pages/CertificatePages/Certificates'));
+const Payments = lazy(() => import('../pages/PaymentPages/Payments'));
+const Wallets = lazy(() => import('../pages/WalletPages/Wallets'));
+const Payouts = lazy(() => import('../pages/PayoutPages/Payouts'));
+const Reviews = lazy(() => import('../pages/ReviewPages/Reviews'));
+const Submissions = lazy(() => import('../pages/SubmissionPages/Submissions'));
+const LiveClasses = lazy(() => import('../pages/LiveClassPages/LiveClasses'));
+const VideoPackages = lazy(() => import('../pages/VideoPackagePages/VideoPackages'));
+const Materials = lazy(() => import('../pages/MaterialPages/Materials'));
+const Progress = lazy(() => import('../pages/ProgressPages/Progress'));
 
 // Loading fallback component
 const LoadingFallback = () => (
@@ -159,6 +173,146 @@ const router = createBrowserRouter([
           <ProtectedRoute>
             <Suspense fallback={<LoadingFallback />}>
               <Revenue />
+            </Suspense>
+          </ProtectedRoute>
+        )
+      },
+      {
+        path: 'modules',
+        element: (
+          <ProtectedRoute>
+            <Suspense fallback={<LoadingFallback />}>
+              <Modules />
+            </Suspense>
+          </ProtectedRoute>
+        )
+      },
+      {
+        path: 'lessons',
+        element: (
+          <ProtectedRoute>
+            <Suspense fallback={<LoadingFallback />}>
+              <Lessons />
+            </Suspense>
+          </ProtectedRoute>
+        )
+      },
+      {
+        path: 'enrollments',
+        element: (
+          <ProtectedRoute>
+            <Suspense fallback={<LoadingFallback />}>
+              <Enrollments />
+            </Suspense>
+          </ProtectedRoute>
+        )
+      },
+      {
+        path: 'assignments',
+        element: (
+          <ProtectedRoute>
+            <Suspense fallback={<LoadingFallback />}>
+              <Assignments />
+            </Suspense>
+          </ProtectedRoute>
+        )
+      },
+      {
+        path: 'certificates',
+        element: (
+          <ProtectedRoute>
+            <Suspense fallback={<LoadingFallback />}>
+              <Certificates />
+            </Suspense>
+          </ProtectedRoute>
+        )
+      },
+      {
+        path: 'payments',
+        element: (
+          <ProtectedRoute>
+            <Suspense fallback={<LoadingFallback />}>
+              <Payments />
+            </Suspense>
+          </ProtectedRoute>
+        )
+      },
+      {
+        path: 'wallets',
+        element: (
+          <ProtectedRoute>
+            <Suspense fallback={<LoadingFallback />}>
+              <Wallets />
+            </Suspense>
+          </ProtectedRoute>
+        )
+      },
+      {
+        path: 'payouts',
+        element: (
+          <ProtectedRoute>
+            <Suspense fallback={<LoadingFallback />}>
+              <Payouts />
+            </Suspense>
+          </ProtectedRoute>
+        )
+      },
+      {
+        path: 'reviews',
+        element: (
+          <ProtectedRoute>
+            <Suspense fallback={<LoadingFallback />}>
+              <Reviews />
+            </Suspense>
+          </ProtectedRoute>
+        )
+      },
+      {
+        path: 'submissions',
+        element: (
+          <ProtectedRoute>
+            <Suspense fallback={<LoadingFallback />}>
+              <Submissions />
+            </Suspense>
+          </ProtectedRoute>
+        )
+      },
+      {
+        path: 'live-classes',
+        element: (
+          <ProtectedRoute>
+            <Suspense fallback={<LoadingFallback />}>
+              <LiveClasses />
+            </Suspense>
+          </ProtectedRoute>
+        )
+      },
+      {
+        path: 'video-packages',
+        element: (
+          <ProtectedRoute>
+            <Suspense fallback={<LoadingFallback />}>
+              <VideoPackages />
+            </Suspense>
+          </ProtectedRoute>
+        )
+      },
+      {
+        path: 'materials',
+        element: (
+          <ProtectedRoute>
+            <Suspense fallback={<LoadingFallback />}>
+              <Materials />
+            </Suspense>
+          </ProtectedRoute>
+        )
+      },
+      {
+        path: 'progress',
+        element: (
+          <ProtectedRoute>
+            <Suspense fallback={<LoadingFallback />}>
+              <Progress />
             </Suspense>
           </ProtectedRoute>
         )

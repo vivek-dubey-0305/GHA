@@ -74,8 +74,8 @@ const instructorSchema = new mongoose.Schema({
     },
     gender: {
         type: String,
-        enum: ["Male", "Female", "Other"],
-        // required: true
+        enum: ["Male", "Female", "Other", "Prefer not to say"],
+        default: null
     },
     address: {
         street: String,
@@ -162,17 +162,8 @@ const instructorSchema = new mongoose.Schema({
         ref: "Course"
     }],
 
-    // Zoom Integration for Live Classes
-    zoomIntegration: {
-        zoomUserId: String,
-        zoomAccessToken: String, // Encrypted in production
-        zoomRefreshToken: String, // Encrypted in production
-        isConnected: {
-            type: Boolean,
-            default: false
-        },
-        connectedAt: Date
-    },
+    // Bunny Stream Integration for Live Classes (credentials are global per library, not per instructor)
+    // Instructors do not need individual stream credentials - RTMP creds are generated per LiveClass
 
     // Live Classes (References)
     liveClasses: [{
@@ -282,67 +273,9 @@ const instructorSchema = new mongoose.Schema({
         }
     },
 
-    // Bank Details for Admin Payments (Encrypted in production)
-    bankDetails: {
-        accountHolderName: String,
-        accountNumber: String, // Encrypted
-        ifscCode: String,
-        bankName: String,
-        accountType: {
-            type: String,
-            enum: ["savings", "current"],
-            default: "savings"
-        }
-    },
-
-    // Payment and Earnings (Admin Tracked)
-    earnings: {
-        totalEarnings: {
-            type: Number,
-            default: 0
-        },
-        pendingPayment: {
-            type: Number,
-            default: 0
-        },
-        paidAmount: {
-            type: Number,
-            default: 0
-        },
-        currency: {
-            type: String,
-            default: "USD"
-        }
-    },
-
-    // Payment History (Admin initiated only)
-    paymentHistory: [{
-        paymentId: {
-            type: String,
-            unique: true,
-            sparse: true
-        },
-        amount: Number,
-        currency: String,
-        paymentMethod: {
-            type: String,
-            enum: ["bank_transfer", "check", "wire_transfer"],
-            default: "bank_transfer"
-        },
-        paymentStatus: {
-            type: String,
-            enum: ["pending", "processed", "failed", "cancelled"],
-            default: "pending"
-        },
-        initiatedBy: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "Admin"
-        },
-        transactionId: String,
-        paymentDate: Date,
-        remarks: String,
-        processedAt: Date
-    }],
+    // NOTE: Bank details, earnings, payment history removed for PCI DSS compliance.
+    // All financial data handled via centralised Wallet + Payout collections.
+    // Wallet tracks balance & earnings. Payout handles withdrawals to bank/UPI.
 
     // Soft Delete
     deletedAt: Date,
@@ -372,7 +305,6 @@ instructorSchema.index({ deletedAt: 1 });
 instructorSchema.index({ "courses": 1 });
 instructorSchema.index({ "liveClasses": 1 });
 instructorSchema.index({ "videoPackages": 1 });
-instructorSchema.index({ "paymentHistory.paymentId": 1 });
 instructorSchema.index({ verificationCodeExpires: 1 }, { expireAfterSeconds: 0 });
 
 // Virtual for account lock status
@@ -598,14 +530,7 @@ instructorSchema.methods.toJSON = function() {
     delete instructorObject.verificationCode;
     delete instructorObject.otpAttempts;
     delete instructorObject.otpLastSentAt;
-    // Don't expose sensitive payment/bank details
-    if (instructorObject.bankDetails) {
-        delete instructorObject.bankDetails.accountNumber;
-    }
-    if (instructorObject.zoomIntegration) {
-        delete instructorObject.zoomIntegration.zoomAccessToken;
-        delete instructorObject.zoomIntegration.zoomRefreshToken;
-    }
+    // zoomIntegration removed — Bunny Stream creds are per-LiveClass, not per-instructor
     return instructorObject;
 };
 

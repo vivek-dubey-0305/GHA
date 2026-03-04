@@ -24,6 +24,10 @@ const requiredEnvVars = [
     "NODE_ENV",
     "CONNECTION_STRING",
     "DB_NAME",
+    "R2_ACCOUNT_ID",
+    "R2_ACCESS_KEY",
+    "R2_SECRET_KEY",
+    "R2_PUBLIC_URL",
 ];
 
 // Optional environment variables with defaults
