@@ -24,6 +24,7 @@ const instructorSchema = new mongoose.Schema({
         type: String,
         required: [true, "Email is required"],
         unique: true,
+        sparse: true, // Allow null but enforce uniqueness for non-null values
         lowercase: true,
         trim: true,
         set: v => v.toLowerCase().trim(),
@@ -296,8 +297,8 @@ const instructorSchema = new mongoose.Schema({
 });
 
 // Indexes for performance and security
-instructorSchema.index({ email: 1 }, { unique: true });
-instructorSchema.index({ phone: 1 }, { unique: true, sparse: true });
+// instructorSchema.index({ email: 1 });
+// instructorSchema.index({ phone: 1 });
 instructorSchema.index({ createdAt: -1 });
 instructorSchema.index({ isActive: 1 });
 instructorSchema.index({ isEmailVerified: 1 });

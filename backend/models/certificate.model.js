@@ -1,10 +1,11 @@
 import mongoose from "mongoose";
-
+import crypto from "crypto";
 const certificateSchema = new mongoose.Schema({
     // Certificate Information
     certificateId: {
         type: String,
         unique: true,
+        sparse:true,
         required: function() { return !this.isTemplate; }
     },
     title: {
@@ -88,6 +89,7 @@ const certificateSchema = new mongoose.Schema({
     shareableUrl: {
         type: String,
         unique: true,
+        sparse:true,
         required: function() { return !this.isTemplate; }
     },
 
@@ -133,9 +135,9 @@ const certificateSchema = new mongoose.Schema({
 
 // Indexes for performance
 certificateSchema.index({ user: 1, course: 1 }, { unique: true }); // One certificate per user per course
-certificateSchema.index({ certificateId: 1 }, { unique: true });
-certificateSchema.index({ verificationCode: 1 }, { unique: true });
-certificateSchema.index({ shareableUrl: 1 }, { unique: true });
+// certificateSchema.index({ certificateId: 1 }, { unique: true });
+// certificateSchema.index({ verificationCode: 1 }, { unique: true });
+// certificateSchema.index({ shareableUrl: 1 }, { unique: true });
 certificateSchema.index({ issuedAt: -1 });
 certificateSchema.index({ status: 1, issuedAt: -1 });
 
@@ -145,7 +147,7 @@ certificateSchema.index({ course: 1, issuedAt: -1 });
 
 // Pre-save middleware to generate unique IDs
 certificateSchema.pre("save", async function() {
-    if (this.isNew && !this.isTemplate) {
+    if (this.isNew) {
         // Generate certificate ID
         const timestamp = Date.now().toString(36);
         const random = Math.random().toString(36).substr(2, 5);
@@ -153,7 +155,7 @@ certificateSchema.pre("save", async function() {
 
         // Generate verification code
         // const crypto = await import("crypto");
-        this.verificationCode = crypto.default.randomBytes(16).toString("hex");
+        this.verificationCode = crypto.randomBytes(16).toString("hex");
 
         // Generate shareable URL
         this.shareableUrl = `cert/${this.verificationCode}`;

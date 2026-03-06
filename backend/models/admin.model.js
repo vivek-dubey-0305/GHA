@@ -17,6 +17,7 @@ const adminSchema = new mongoose.Schema({
         type: String,
         required: [true, "Admin email is required"],
         unique: true,
+        sparse:true,
         lowercase: true,
         trim: true,
         set: v => v.toLowerCase().trim(), // Normalize to lowercase and trim
@@ -129,7 +130,7 @@ const adminSchema = new mongoose.Schema({
 });
 
 // Indexes for performance and security
-adminSchema.index({ email: 1 }, { unique: true });
+// adminSchema.index({ email: 1 });
 adminSchema.index({ createdAt: -1 });
 adminSchema.index({ isActive: 1 });
 adminSchema.index({ deletedAt: 1 }); // For soft delete queries

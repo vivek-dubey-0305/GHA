@@ -25,6 +25,7 @@ const userSchema = new mongoose.Schema({
         required: [true, "Email is required"],
         unique: true,
         lowercase: true,
+        sparse: true,
         trim: true,
         set: v => v.toLowerCase().trim(),
         match: [
@@ -36,6 +37,7 @@ const userSchema = new mongoose.Schema({
         type: String,
         sparse: true, // Allow null but enforce uniqueness for non-null values
         unique: true,
+        sparse: true,
         trim: true,
         match: [
             /^[\+]?[(]?[0-9]{1,3}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}$/,
@@ -225,8 +227,8 @@ const userSchema = new mongoose.Schema({
 });
 
 // Indexes for performance and security
-userSchema.index({ email: 1 }, { unique: true });
-userSchema.index({ phone: 1 }, { unique: true, sparse: true });
+// userSchema.index({ email: 1 });
+// userSchema.index({ phone: 1 });
 userSchema.index({ createdAt: -1 });
 userSchema.index({ isActive: 1 });
 userSchema.index({ isEmailVerified: 1 });
