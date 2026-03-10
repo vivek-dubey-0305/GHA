@@ -11,17 +11,19 @@ const Login = () => {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState({});
   const [toastState, setToastState] = useState({ visible: false, type: 'success', message: '' });
+  const [isLoginAttempted, setIsLoginAttempted] = useState(false);
 
   const loginLoading = useSelector(selectLoginLoading);
   const loginError = useSelector(selectLoginError);
   const otpSent = useSelector(selectOtpSent);
 
+  // COMMENTED OUT: OTP verification flow - temporarily using direct authentication via cookies
   // Redirect to verify page when OTP is sent
-  useEffect(() => {
-    if (otpSent) {
-      navigate('/instructor/verify', { state: { email: formData.email } });
-    }
-  }, [otpSent, navigate, formData.email]);
+  // useEffect(() => {
+  //   if (otpSent) {
+  //     navigate('/instructor/verify', { state: { email: formData.email } });
+  //   }
+  // }, [otpSent, navigate, formData.email]);
 
   // Show error toast
   useEffect(() => {
@@ -37,6 +39,18 @@ const Login = () => {
       return () => clearTimeout(timer);
     }
   }, [loginError]);
+
+  // TEMPORARY: Navigate to dashboard after successful login (cookies are set automatically)
+  // Only navigate if a login was attempted, it completed, and there's no error
+  useEffect(() => {
+    if (isLoginAttempted && loginLoading === false && loginError === null) {
+      // Small delay to ensure cookies are set
+      const timer = setTimeout(() => {
+        navigate('/instructor/dashboard');
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoginAttempted, loginLoading, loginError, navigate]);
 
   const validateForm = () => {
     const newErrors = {};
@@ -79,6 +93,7 @@ const Login = () => {
       return;
     }
 
+    setIsLoginAttempted(true);
     dispatch(login({
       email: formData.email,
       password: formData.password
