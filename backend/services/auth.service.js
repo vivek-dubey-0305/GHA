@@ -16,10 +16,13 @@ const MAX_SESSIONS = 5;
 // ─── Cookie helpers ────────────────────────────────────────────────
 
 export const setAuthCookies = (res, accessToken, refreshToken) => {
+    // FIXED: For cross-domain cookies (frontend and API on different domains),
+    // use sameSite: "none" with secure: true in production
+    // For localhost, use sameSite: "lax" with secure: false
     const opts = {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+        secure: process.env.NODE_ENV === "production", // true for HTTPS
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", // "none" for cross-domain in production
     };
     res.cookie("accessToken", accessToken, {
         ...opts,

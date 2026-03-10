@@ -456,11 +456,15 @@ const authSlice = createSlice({
         state.registerError = null;
         state.registerSuccess = false;
       })
-      .addCase(register.fulfilled, (state) => {
+      .addCase(register.fulfilled, (state, action) => {
         state.registerLoading = false;
         state.registerSuccess = true;
-        state.otpSent = true; // Set OTP sent flag for verify page
         state.registerError = null;
+        // FIXED: Directly set authenticated state since OTP is now skipped
+        // Cookies are automatically set by the backend, so just update Redux state
+        state.isAuthenticated = true;
+        state.instructor = action.payload.data.instructor;
+        state.otpSent = false; // No longer needed, but keep for compatibility
       })
       .addCase(register.rejected, (state, action) => {
         state.registerLoading = false;
@@ -474,10 +478,14 @@ const authSlice = createSlice({
         state.loginError = null;
         state.otpSent = false;
       })
-      .addCase(login.fulfilled, (state) => {
+      .addCase(login.fulfilled, (state, action) => {
         state.loginLoading = false;
-        state.otpSent = true;
         state.loginError = null;
+        // FIXED: Directly set authenticated state since OTP is now skipped
+        // Cookies are automatically set by the backend, so just update Redux state
+        state.isAuthenticated = true;
+        state.instructor = action.payload.data.instructor;
+        state.otpSent = false; // No longer needed, but keep for compatibility
       })
       .addCase(login.rejected, (state, action) => {
         state.loginLoading = false;
