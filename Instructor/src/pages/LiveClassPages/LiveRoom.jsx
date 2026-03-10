@@ -16,7 +16,8 @@ import {
 import { useProtectedRoute, useTokenRefreshOnActivity } from '../../hooks/useProtectedRoute';
 import apiClient from '../../utils/api.utils';
 
-const SOCKET_URL = 'http://localhost:5000';
+// const SOCKET_URL = 'http://localhost:5000';
+const SOCKET_URL = 'https://gha-1b4t.onrender.com';
 
 export default function LiveRoom() {
   const { id } = useParams();
