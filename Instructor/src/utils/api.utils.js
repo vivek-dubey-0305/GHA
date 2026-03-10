@@ -96,7 +96,7 @@ export const apiClient = axios.create({
 // Auth-only axios instance without the response interceptor
 // Use this to call refresh-token so the interceptor won't intercept it and cause recursion.
 export const authClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: import.meta.env.VITE_API_BASE_URL_AUTH || 'http://localhost:5000/api/v1/instructor/auth',
   withCredentials: true,
   // no interceptors attached to authClient
 });
@@ -170,6 +170,9 @@ apiClient.interceptors.response.use(
     }
   }
 );
+
+// Same 401 refresh interceptor for generalClient
+// (generalClient removed - use apiClient only)
 
 // Export helper wrapper
 export const api = {

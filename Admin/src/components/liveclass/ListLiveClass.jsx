@@ -1,4 +1,4 @@
-import { Search, MoreVertical, Trash2, Loader2 } from 'lucide-react';
+import { Search, MoreVertical, Trash2, Loader2, Radio, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Badge, WarningModal } from '../ui';
@@ -8,7 +8,7 @@ import {
 } from '../../redux/slices/liveclass.slice.js';
 
 
-export function ListLiveClass({ liveClasses, pagination, onLiveClassClick, onPageChange, searchTerm, onSearchChange }) {
+export function ListLiveClass({ liveClasses, pagination, onLiveClassClick, onPageChange, searchTerm, onSearchChange, onCreateClick }) {
   const dispatch = useDispatch();
   const deleteLoading = useSelector(selectDeleteLiveClassLoading);
 
@@ -52,12 +52,34 @@ export function ListLiveClass({ liveClasses, pagination, onLiveClassClick, onPag
     return map[status] || 'bg-gray-500/20 text-gray-400';
   };
 
+  const typeBadge = (type) => {
+    const map = {
+      lecture: 'bg-purple-500/20 text-purple-400',
+      doubt: 'bg-yellow-500/20 text-yellow-400',
+      instant: 'bg-orange-500/20 text-orange-400',
+      instructor: 'bg-cyan-500/20 text-cyan-400',
+      business: 'bg-pink-500/20 text-pink-400',
+    };
+    return map[type] || 'bg-gray-500/20 text-gray-400';
+  };
+
   return (
     <div className="flex-1 p-8">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-white mb-2">Live Classes</h1>
-        <p className="text-gray-400">Manage scheduled live classes and sessions</p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-white mb-2">Live Classes</h1>
+          <p className="text-gray-400">Manage live classes, business calls, and instructor sessions</p>
+        </div>
+        {onCreateClick && (
+          <button
+            onClick={onCreateClick}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Create Session
+          </button>
+        )}
       </div>
 
       {/* Search Bar */}
@@ -79,8 +101,9 @@ export function ListLiveClass({ liveClasses, pagination, onLiveClassClick, onPag
             <thead>
               <tr className="border-b border-gray-800">
                 <th className="text-left px-6 py-4 text-sm font-semibold text-gray-400">Title</th>
-                <th className="text-left px-6 py-4 text-sm font-semibold text-gray-400">Course</th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-gray-400">Type</th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-gray-400">Instructor</th>
+                <th className="text-left px-6 py-4 text-sm font-semibold text-gray-400">Course</th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-gray-400">Scheduled At</th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-gray-400">Duration</th>
                 <th className="text-left px-6 py-4 text-sm font-semibold text-gray-400">Status</th>
@@ -95,13 +118,24 @@ export function ListLiveClass({ liveClasses, pagination, onLiveClassClick, onPag
                   className="border-b border-gray-800 hover:bg-gray-900/50 cursor-pointer transition-colors"
                 >
                   <td className="px-6 py-4">
-                    <p className="text-white font-medium">{lc.title}</p>
+                    <div className="flex items-center gap-2">
+                      {lc.status === 'live' && <Radio className="w-3 h-3 text-green-400 animate-pulse" />}
+                      <p className="text-white font-medium">{lc.title}</p>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <Badge variant="default" className={typeBadge(lc.sessionType)}>
+                      {lc.sessionType || 'lecture'}
+                    </Badge>
                   </td>
                   <td className="px-6 py-4 text-gray-300">
-                    <span className="text-xs font-mono text-gray-500">{lc.courseId}</span>
+                    {lc.instructor?.firstName
+                      ? `${lc.instructor.firstName} ${lc.instructor.lastName || ''}`
+                      : <span className="text-xs font-mono text-gray-500">{lc.instructor}</span>
+                    }
                   </td>
                   <td className="px-6 py-4 text-gray-300">
-                    <span className="text-xs font-mono text-gray-500">{lc.instructorId}</span>
+                    {lc.course?.title || <span className="text-gray-600">—</span>}
                   </td>
                   <td className="px-6 py-4 text-gray-300">
                     {lc.scheduledAt ? new Date(lc.scheduledAt).toLocaleString() : '—'}
@@ -110,10 +144,7 @@ export function ListLiveClass({ liveClasses, pagination, onLiveClassClick, onPag
                     {lc.duration ? `${lc.duration} mins` : '—'}
                   </td>
                   <td className="px-6 py-4">
-                    <Badge
-                      variant="default"
-                      className={statusBadge(lc.status)}
-                    >
+                    <Badge variant="default" className={statusBadge(lc.status)}>
                       {lc.status || 'unknown'}
                     </Badge>
                   </td>

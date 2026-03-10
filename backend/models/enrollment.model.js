@@ -160,7 +160,7 @@ enrollmentSchema.statics.getCourseEnrollments = function(courseId, options = {})
 // Static method to get enrollment stats for a course
 enrollmentSchema.statics.getCourseStats = function(courseId) {
     return this.aggregate([
-        { $match: { course: mongoose.Types.ObjectId(courseId) } },
+        { $match: { course: new mongoose.Types.ObjectId(courseId) } },
         {
             $group: {
                 _id: "$status",

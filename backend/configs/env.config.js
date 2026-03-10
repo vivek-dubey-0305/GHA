@@ -35,7 +35,11 @@ const optionalEnvVars = {
     "PORT": "5000",
     "EMAIL_USER": null,
     "EMAIL_PASS": null,
-    "PAYMENT_SECRET_KEY": null
+    "PAYMENT_SECRET_KEY": null,
+    "CLOUDFLARE_STREAM_SUBDOMAIN": null,
+    "CLOUDFLARE_STREAM_KEY_ID": null,
+    "CLOUDFLARE_STREAM_JWK": null,
+    "CLOUDFLARE_API_TOKEN": null,
 };
 
 /**

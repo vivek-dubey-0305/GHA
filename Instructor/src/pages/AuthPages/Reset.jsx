@@ -1,23 +1,27 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import axios from 'axios';
+import { useDispatch, useSelector } from 'react-redux';
+import { resetPasswordThunk, selectResetPasswordLoading, selectResetPasswordError, selectResetPasswordSuccess, clearResetPasswordError } from '../../redux/slices/auth.slice';
 import { Card, Button, Input, SuccessToast, ErrorToast } from '../../components/ui';
 import { validatePassword, getPasswordStrengthMessage } from '../../utils/auth.utils';
 
 const Reset = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const dispatch = useDispatch();
 
   const [formData, setFormData] = useState({
     password: '',
     confirmPassword: ''
   });
   const [errors, setErrors] = useState({});
-  const [loading, setLoading] = useState(false);
   const [toastState, setToastState] = useState({ visible: false, type: 'success', message: '', title: '' });
   const [passwordStrength, setPasswordStrength] = useState('');
 
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1/instructor';
+  const resetPasswordLoading = useSelector(selectResetPasswordLoading);
+  const resetPasswordError = useSelector(selectResetPasswordError);
+  const resetPasswordSuccess = useSelector(selectResetPasswordSuccess);
+
   const resetToken = searchParams.get('token');
 
   // Validate token exists
@@ -34,6 +38,33 @@ const Reset = () => {
       }, 3000);
     }
   }, [resetToken, navigate]);
+
+  // Handle reset password success
+  useEffect(() => {
+    if (resetPasswordSuccess) {
+      setToastState({
+        visible: true,
+        type: 'success',
+        title: 'Success',
+        message: 'Password reset successfully. Redirecting to login...'
+      });
+      setTimeout(() => {
+        navigate('/instructor/login');
+      }, 3000);
+    }
+  }, [resetPasswordSuccess, navigate]);
+
+  // Handle reset password error
+  useEffect(() => {
+    if (resetPasswordError) {
+      setToastState({
+        visible: true,
+        type: 'error',
+        title: 'Reset Failed',
+        message: resetPasswordError
+      });
+    }
+  }, [resetPasswordError]);
 
   const handlePasswordChange = (e) => {
     const { value } = e.target;
@@ -80,42 +111,15 @@ const Reset = () => {
       return;
     }
 
-    setLoading(true);
+    // Clear previous errors
+    dispatch(clearResetPasswordError());
 
-    try {
-      // Call reset password endpoint
-      // Note: This endpoint needs to be created in the backend
-      await axios.post(
-        `${API_BASE_URL}/reset-password`,
-        {
-          token: resetToken,
-          password: formData.password,
-          confirmPassword: formData.confirmPassword
-        }
-      );
-
-      setToastState({
-        visible: true,
-        type: 'success',
-        title: 'Success',
-        message: 'Password reset successfully. Redirecting to login...'
-      });
-
-      setTimeout(() => {
-        navigate('/instructor/login');
-      }, 3000);
-    } catch (error) {
-      const message = error.response?.data?.message || 'Failed to reset password. Please try again.';
-      
-      setToastState({
-        visible: true,
-        type: 'error',
-        title: 'Reset Failed',
-        message
-      });
-    } finally {
-      setLoading(false);
-    }
+    // Dispatch reset password action
+    dispatch(resetPasswordThunk({
+      token: resetToken,
+      password: formData.password,
+      confirmPassword: formData.confirmPassword
+    }));
   };
 
   if (!resetToken) {
@@ -192,11 +196,11 @@ const Reset = () => {
             type="submit"
             variant="primary"
             size="md"
-            loading={loading}
-            disabled={loading}
+            loading={resetPasswordLoading}
+            disabled={resetPasswordLoading}
             className="w-full"
           >
-            {loading ? 'Resetting...' : 'Reset Password'}
+            {resetPasswordLoading ? 'Resetting...' : 'Reset Password'}
           </Button>
 
           {/* Back to Login */}

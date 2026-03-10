@@ -143,7 +143,7 @@ reviewSchema.statics.getUserReviews = function(userId, options = {}) {
 // Static method to get average rating for course
 reviewSchema.statics.getCourseRating = function(courseId) {
     return this.aggregate([
-        { $match: { course: mongoose.Types.ObjectId(courseId), isApproved: true } },
+        { $match: { course: new mongoose.Types.ObjectId(courseId), isApproved: true } },
         {
             $group: {
                 _id: null,

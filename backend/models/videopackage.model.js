@@ -253,7 +253,7 @@ videoPackageSchema.statics.getPublishedPackages = function(instructorId, limit =
 
 videoPackageSchema.statics.getPackageStats = function(instructorId) {
     return this.aggregate([
-        { $match: { instructor: mongoose.Types.ObjectId(instructorId) } },
+        { $match: { instructor: new mongoose.Types.ObjectId(instructorId) } },
         {
             $group: {
                 _id: null,

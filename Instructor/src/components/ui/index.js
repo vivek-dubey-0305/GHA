@@ -4,6 +4,10 @@ export { default as Card } from './Card';
 export { default as Form } from './Form';
 export { default as Input } from './Input';
 
+// Layout Components
+export { InstructorLayout } from '../layout/InstructorLayout';
+export { default as InstructorSidebar } from '../layout/InstructorSidebar';
+
 // Modal Components
 export { default as BaseModal } from './modals/BaseModal';
 export { default as ErrorModal } from './modals/ErrorModal';

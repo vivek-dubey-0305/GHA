@@ -13,13 +13,11 @@ import {
   selectCoursesLoading,
   selectCoursesError,
   selectCoursePagination,
-  selectCreateCourseSuccess,
   selectCreateFullCourseSuccess,
-  selectUpdateCourseSuccess,
+  selectUpdateFullCourseSuccess,
   selectDeleteCourseSuccess,
-  resetCreateCourseState,
   resetCreateFullCourseState,
-  resetUpdateCourseState,
+  resetUpdateFullCourseState,
   resetDeleteCourseState,
 } from '../../redux/slices/course.slice.js';
 
@@ -30,9 +28,8 @@ export default function Courses() {
   const coursesLoading = useSelector(selectCoursesLoading);
   const coursesError = useSelector(selectCoursesError);
   const pagination = useSelector(selectCoursePagination);
-  const createCourseSuccess = useSelector(selectCreateCourseSuccess);
   const createFullCourseSuccess = useSelector(selectCreateFullCourseSuccess);
-  const updateCourseSuccess = useSelector(selectUpdateCourseSuccess);
+  const updateFullCourseSuccess = useSelector(selectUpdateFullCourseSuccess);
   const deleteCourseSuccess = useSelector(selectDeleteCourseSuccess);
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [showAddCourse, setShowAddCourse] = useState(false);
@@ -56,23 +53,21 @@ export default function Courses() {
   }, [dispatch, currentPage]);
 
   useEffect(() => {
-    if (createCourseSuccess || createFullCourseSuccess) {
+    if (createFullCourseSuccess) {
       toast.success('Course created successfully!');
-      dispatch(resetCreateCourseState());
       dispatch(resetCreateFullCourseState());
       dispatch(getAllCourses({ page: currentPage }));
       setShowAddCourse(false);
       setDraftToResume(null);
     }
-  }, [createCourseSuccess, createFullCourseSuccess, toast, dispatch, currentPage]);
+  }, [createFullCourseSuccess, toast, dispatch, currentPage]);
 
   useEffect(() => {
-    if (updateCourseSuccess) {
-      toast.success('Course updated successfully!');
-      dispatch(resetUpdateCourseState());
+    if (updateFullCourseSuccess) {
+      dispatch(resetUpdateFullCourseState());
       dispatch(getAllCourses({ page: currentPage }));
     }
-  }, [updateCourseSuccess, toast, dispatch, currentPage]);
+  }, [updateFullCourseSuccess, dispatch, currentPage]);
 
   useEffect(() => {
     if (deleteCourseSuccess) {
@@ -104,12 +99,13 @@ export default function Courses() {
     setDraftToResume(null);
   };
 
-  const handleCloseEditSidebar = () => {
+  const handleCloseEditCourse = () => {
     setSelectedCourse(null);
   };
 
   const handleSaveCourse = () => {
-    handleCloseEditSidebar();
+    // EditCourse handles its own success toast & refresh; just close
+    setSelectedCourse(null);
   };
 
   const handleAddCourse = () => {
@@ -147,24 +143,13 @@ export default function Courses() {
           />
         </div>
 
-        {/* Edit Course Sidebar (kept as sidebar overlay) */}
+        {/* Full-screen Edit Course Modal */}
         {selectedCourse && (
-          <>
-            <div
-              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
-              onClick={handleCloseEditSidebar}
-              aria-label="Close sidebar"
-            />
-            <div className="fixed inset-y-0 right-0 z-50 w-[500px] overflow-y-auto overflow-x-hidden bg-[#1a1a1a] overscroll-contain">
-              <div className="h-full" onClick={(e) => e.stopPropagation()}>
-                <EditCourse
-                  course={selectedCourse}
-                  onClose={handleCloseEditSidebar}
-                  onSave={handleSaveCourse}
-                />
-              </div>
-            </div>
-          </>
+          <EditCourse
+            course={selectedCourse}
+            onClose={handleCloseEditCourse}
+            onSave={handleSaveCourse}
+          />
         )}
 
         {/* Full-screen Add Course Modal */}
