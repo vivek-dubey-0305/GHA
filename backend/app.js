@@ -129,6 +129,11 @@ import certificateRouter from "./routes/certificate.routes.js";
 import paymentRouter from "./routes/payment.routes.js";
 import walletRouter from "./routes/wallet.routes.js";
 import payoutRouter from "./routes/payout.routes.js";
+import couponRouter from "./routes/coupon.routes.js";
+import announcementRouter from "./routes/announcement.routes.js";
+import discussionRouter from "./routes/discussion.routes.js";
+import notificationRouter from "./routes/notification.routes.js";
+import analyticsRouter from "./routes/analytics.routes.js";
 
 // Import models to register them with Mongoose
 import { User } from "./models/user.model.js";
@@ -149,6 +154,10 @@ import { Material } from "./models/material.model.js";
 import { Progress } from "./models/progress.model.js";
 import { Wallet } from "./models/wallet.model.js";
 import { Payout } from "./models/payout.model.js";
+import { Coupon } from "./models/coupon.model.js";
+import { Announcement } from "./models/announcement.model.js";
+import { Discussion } from "./models/discussion.model.js";
+import { Notification } from "./models/notification.model.js";
 
 const app = express();
 
@@ -244,6 +253,11 @@ app.use("/api/v1/certificates", certificateRouter);
 app.use("/api/v1/payments", paymentRouter);
 app.use("/api/v1/wallet", walletRouter);
 app.use("/api/v1/payouts", payoutRouter);
+app.use("/api/v1/coupons", couponRouter);
+app.use("/api/v1/announcements", announcementRouter);
+app.use("/api/v1/discussions", discussionRouter);
+app.use("/api/v1/notifications", notificationRouter);
+app.use("/api/v1/analytics", analyticsRouter);
 
 // ================= ERROR HANDLER (LAST) =================
 app.use(errorMiddleware);

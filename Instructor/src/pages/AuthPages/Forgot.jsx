@@ -1,16 +1,21 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import axios from 'axios';
+import { useDispatch, useSelector } from 'react-redux';
+import { forgotPassword, selectForgotPasswordLoading, selectForgotPasswordError, selectForgotPasswordSent, clearForgotPasswordError } from '../../redux/slices/auth.slice';
 import { Card, Button, Input, SuccessToast, ErrorToast } from '../../components/ui';
 import { validateEmail } from '../../utils/auth.utils';
 
 const Forgot = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const dispatch = useDispatch();
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState('');
-  const [loading, setLoading] = useState(false);
   const [toastState, setToastState] = useState({ visible: false, type: 'success', message: '' });
+
+  const forgotPasswordLoading = useSelector(selectForgotPasswordLoading);
+  const forgotPasswordError = useSelector(selectForgotPasswordError);
+  const forgotPasswordSent = useSelector(selectForgotPasswordSent);
 
   // Check if user came from the login page with proper intent
   useEffect(() => {
@@ -19,7 +24,31 @@ const Forgot = () => {
     }
   }, [location.state, navigate]);
 
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1/instructor';
+  // Handle forgot password success
+  useEffect(() => {
+    if (forgotPasswordSent) {
+      setToastState({
+        visible: true,
+        type: 'success',
+        message: 'Password reset link sent to your email. Check your inbox and spam folder.'
+      });
+      setEmail('');
+      setTimeout(() => {
+        navigate('/instructor/login');
+      }, 3000);
+    }
+  }, [forgotPasswordSent, navigate]);
+
+  // Handle forgot password error
+  useEffect(() => {
+    if (forgotPasswordError) {
+      setToastState({
+        visible: true,
+        type: 'error',
+        message: forgotPasswordError
+      });
+    }
+  }, [forgotPasswordError]);
 
   const validateForm = () => {
     if (!email.trim()) {
@@ -48,41 +77,11 @@ const Forgot = () => {
       return;
     }
 
-    setLoading(true);
+    // Clear previous errors
+    dispatch(clearForgotPasswordError());
 
-    try {
-      // Create forgot password request
-      // Note: This endpoint needs to be created in the backend
-      // For now, we'll assume it exists
-      await axios.post(
-        `${API_BASE_URL}/forgot-password`,
-        { email }
-      );
-
-      setToastState({
-        visible: true,
-        type: 'success',
-        message: 'Password reset link sent to your email. Check your inbox and spam folder.'
-      });
-
-      // Clear form
-      setEmail('');
-
-      // Redirect after 3 seconds
-      setTimeout(() => {
-        navigate('/instructor/login');
-      }, 3000);
-    } catch (error) {
-      const message = error.response?.data?.message || 'Failed to send reset link. Please try again.';
-      
-      setToastState({
-        visible: true,
-        type: 'error',
-        message
-      });
-    } finally {
-      setLoading(false);
-    }
+    // Dispatch forgot password action
+    dispatch(forgotPassword({ email }));
   };
 
   return (
@@ -117,11 +116,11 @@ const Forgot = () => {
             type="submit"
             variant="primary"
             size="md"
-            loading={loading}
-            disabled={loading}
+            loading={forgotPasswordLoading}
+            disabled={forgotPasswordLoading}
             className="w-full"
           >
-            {loading ? 'Sending...' : 'Send Reset Link'}
+            {forgotPasswordLoading ? 'Sending...' : 'Send Reset Link'}
           </Button>
 
           {/* Back to Login */}

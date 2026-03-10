@@ -187,7 +187,7 @@ materialSchema.statics.getCourseMaterials = function(courseId, type = null) {
 
 materialSchema.statics.getMaterialStats = function(instructorId) {
     return this.aggregate([
-        { $match: { instructor: mongoose.Types.ObjectId(instructorId) } },
+        { $match: { instructor: new mongoose.Types.ObjectId(instructorId) } },
         {
             $group: {
                 _id: "$type",

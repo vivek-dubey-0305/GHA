@@ -48,11 +48,22 @@ export const r2Config = {
     publicUrl: process.env.R2_PUBLIC_URL,
 };
 
+// Cloudflare Stream Configuration (Live Classes)
+export const cloudflareStreamConfig = {
+    accountId: process.env.R2_ACCOUNT_ID, // Same CF account
+    apiToken: process.env.CLOUDFLARE_API_TOKEN,
+    subdomain: process.env.CLOUDFLARE_STREAM_SUBDOMAIN,
+    keyId: process.env.CLOUDFLARE_STREAM_KEY_ID,
+    jwk: process.env.CLOUDFLARE_STREAM_JWK,
+    defaultTokenExpiry: 14400, // 4 hours in seconds
+    maxTokenExpiry: 86400,     // 24 hours max
+};
+
 // Security Configuration
 export const securityConfig = {
     rateLimit: {
         windowMs: 15 * 60 * 1000, // 15 minutes
-        max: 100, // limit each IP to 100 requests per windowMs
+        max: 1000, // limit each IP to 100 requests per windowMs
     },
     helmet: {
         contentSecurityPolicy: {

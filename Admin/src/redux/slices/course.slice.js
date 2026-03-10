@@ -23,29 +23,15 @@ export const getAllCourses = createAsyncThunk(
   }
 );
 
-// Get course by ID
+// Get course by ID (uses full course endpoint)
 export const getCourseById = createAsyncThunk(
   'course/getCourseById',
   async (courseId, { rejectWithValue }) => {
     try {
-      const response = await apiClient.get(`/courses/${courseId}`);
+      const response = await apiClient.get(`/courses/${courseId}/full`);
       return response.data.data;
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Failed to fetch course';
-      return rejectWithValue(message);
-    }
-  }
-);
-
-// Create new course (simple)
-export const createCourse = createAsyncThunk(
-  'course/createCourse',
-  async (courseData, { rejectWithValue }) => {
-    try {
-      const response = await apiClient.post(`/courses`, courseData);
-      return response.data;
-    } catch (error) {
-      const message = error.response?.data?.message || error.message || 'Failed to create course';
       return rejectWithValue(message);
     }
   }
@@ -101,6 +87,37 @@ export const saveDraftCourse = createAsyncThunk(
   }
 );
 
+// Get full course structure (with modules, lessons, details)
+export const getFullCourse = createAsyncThunk(
+  'course/getFullCourse',
+  async (courseId, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.get(`/courses/${courseId}/full`);
+      return response.data.data;
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || 'Failed to fetch full course';
+      return rejectWithValue(message);
+    }
+  }
+);
+
+// Update full course structure (course + modules + lessons + certificates + media)
+export const updateFullCourse = createAsyncThunk(
+  'course/updateFullCourse',
+  async ({ courseId, formData }, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.put(`/courses/${courseId}/full`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 600000,
+      });
+      return response.data.data;
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || 'Failed to update full course';
+      return rejectWithValue(message);
+    }
+  }
+);
+
 // Get draft courses
 export const getDraftCourses = createAsyncThunk(
   'course/getDraftCourses',
@@ -117,26 +134,12 @@ export const getDraftCourses = createAsyncThunk(
   }
 );
 
-// Update course
-export const updateCourse = createAsyncThunk(
-  'course/updateCourse',
-  async ({ courseId, courseData }, { rejectWithValue }) => {
-    try {
-      const response = await apiClient.put(`/courses/${courseId}`, courseData);
-      return response.data;
-    } catch (error) {
-      const message = error.response?.data?.message || error.message || 'Failed to update course';
-      return rejectWithValue(message);
-    }
-  }
-);
-
-// Delete course
+// Delete course (full delete with all related data)
 export const deleteCourse = createAsyncThunk(
   'course/deleteCourse',
   async (courseId, { rejectWithValue }) => {
     try {
-      const response = await apiClient.delete(`/courses/${courseId}`);
+      const response = await apiClient.delete(`/courses/${courseId}/full`);
       return response.data;
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Failed to delete course';
@@ -187,11 +190,6 @@ const initialState = {
   courseLoading: false,
   courseError: null,
 
-  // Create course
-  createCourseLoading: false,
-  createCourseError: null,
-  createCourseSuccess: false,
-
   // Create full course
   createFullCourseLoading: false,
   createFullCourseError: null,
@@ -202,10 +200,15 @@ const initialState = {
   saveDraftError: null,
   saveDraftSuccess: false,
 
-  // Update course
-  updateCourseLoading: false,
-  updateCourseError: null,
-  updateCourseSuccess: false,
+  // Full course
+  fullCourse: null,
+  fullCourseLoading: false,
+  fullCourseError: null,
+
+  // Update full course
+  updateFullCourseLoading: false,
+  updateFullCourseError: null,
+  updateFullCourseSuccess: false,
 
   // Delete course
   deleteCourseLoading: false,
@@ -231,17 +234,16 @@ const courseSlice = createSlice({
   reducers: {
     clearCoursesError: (state) => { state.coursesError = null; },
     clearCourseError: (state) => { state.courseError = null; },
-    clearCreateCourseError: (state) => { state.createCourseError = null; state.createCourseSuccess = false; },
-    clearUpdateCourseError: (state) => { state.updateCourseError = null; state.updateCourseSuccess = false; },
     clearDeleteCourseError: (state) => { state.deleteCourseError = null; state.deleteCourseSuccess = false; },
     clearCreateFullCourseError: (state) => { state.createFullCourseError = null; state.createFullCourseSuccess = false; },
     clearSaveDraftError: (state) => { state.saveDraftError = null; state.saveDraftSuccess = false; },
+    clearUpdateFullCourseError: (state) => { state.updateFullCourseError = null; state.updateFullCourseSuccess = false; },
     resetCourseStates: (state) => { state.currentCourse = null; state.courseLoading = false; state.courseError = null; },
-    resetCreateCourseState: (state) => { state.createCourseLoading = false; state.createCourseError = null; state.createCourseSuccess = false; },
+    resetFullCourseState: (state) => { state.fullCourse = null; state.fullCourseLoading = false; state.fullCourseError = null; },
     resetCreateFullCourseState: (state) => { state.createFullCourseLoading = false; state.createFullCourseError = null; state.createFullCourseSuccess = false; },
     resetSaveDraftState: (state) => { state.saveDraftLoading = false; state.saveDraftError = null; state.saveDraftSuccess = false; },
-    resetUpdateCourseState: (state) => { state.updateCourseLoading = false; state.updateCourseError = null; state.updateCourseSuccess = false; },
     resetDeleteCourseState: (state) => { state.deleteCourseLoading = false; state.deleteCourseError = null; state.deleteCourseSuccess = false; },
+    resetUpdateFullCourseState: (state) => { state.updateFullCourseLoading = false; state.updateFullCourseError = null; state.updateFullCourseSuccess = false; },
     setCreationProgress: (state, action) => { state.creationProgress = action.payload; },
     resetCreationProgress: (state) => { state.creationProgress = { step: 'idle', percent: 0, message: '' }; },
   },
@@ -259,10 +261,6 @@ const courseSlice = createSlice({
       .addCase(getCourseById.pending, (state) => { state.courseLoading = true; state.courseError = null; })
       .addCase(getCourseById.fulfilled, (state, action) => { state.courseLoading = false; state.currentCourse = action.payload; })
       .addCase(getCourseById.rejected, (state, action) => { state.courseLoading = false; state.courseError = action.payload; })
-      // createCourse
-      .addCase(createCourse.pending, (state) => { state.createCourseLoading = true; state.createCourseError = null; state.createCourseSuccess = false; })
-      .addCase(createCourse.fulfilled, (state, action) => { state.createCourseLoading = false; state.createCourseSuccess = true; state.courses.push(action.payload); })
-      .addCase(createCourse.rejected, (state, action) => { state.createCourseLoading = false; state.createCourseError = action.payload; })
       // createFullCourse
       .addCase(createFullCourse.pending, (state) => { state.createFullCourseLoading = true; state.createFullCourseError = null; state.createFullCourseSuccess = false; state.creationProgress = { step: 'preparing', percent: 5, message: 'Preparing course data...' }; })
       .addCase(createFullCourse.fulfilled, (state, action) => { state.createFullCourseLoading = false; state.createFullCourseSuccess = true; state.courses.unshift(action.payload); state.creationProgress = { step: 'done', percent: 100, message: 'Course created successfully!' }; })
@@ -285,15 +283,6 @@ const courseSlice = createSlice({
         state.draftPagination = action.payload.pagination;
       })
       .addCase(getDraftCourses.rejected, (state, action) => { state.draftCoursesLoading = false; state.draftCoursesError = action.payload; })
-      // updateCourse
-      .addCase(updateCourse.pending, (state) => { state.updateCourseLoading = true; state.updateCourseError = null; state.updateCourseSuccess = false; })
-      .addCase(updateCourse.fulfilled, (state, action) => {
-        state.updateCourseLoading = false; state.updateCourseSuccess = true;
-        const index = state.courses.findIndex(course => course._id === action.payload._id);
-        if (index !== -1) state.courses[index] = action.payload;
-        if (state.currentCourse && state.currentCourse._id === action.payload._id) state.currentCourse = action.payload;
-      })
-      .addCase(updateCourse.rejected, (state, action) => { state.updateCourseLoading = false; state.updateCourseError = action.payload; })
       // deleteCourse
       .addCase(deleteCourse.pending, (state) => { state.deleteCourseLoading = true; state.deleteCourseError = null; state.deleteCourseSuccess = false; })
       .addCase(deleteCourse.fulfilled, (state, action) => {
@@ -305,16 +294,32 @@ const courseSlice = createSlice({
       // getInstructorsForSelect
       .addCase(getInstructorsForSelect.pending, (state) => { state.instructorsForSelectLoading = true; })
       .addCase(getInstructorsForSelect.fulfilled, (state, action) => { state.instructorsForSelectLoading = false; state.instructorsForSelect = action.payload; })
-      .addCase(getInstructorsForSelect.rejected, (state) => { state.instructorsForSelectLoading = false; });
+      .addCase(getInstructorsForSelect.rejected, (state) => { state.instructorsForSelectLoading = false; })
+      // getFullCourse
+      .addCase(getFullCourse.pending, (state) => { state.fullCourseLoading = true; state.fullCourseError = null; })
+      .addCase(getFullCourse.fulfilled, (state, action) => { state.fullCourseLoading = false; state.fullCourse = action.payload; })
+      .addCase(getFullCourse.rejected, (state, action) => { state.fullCourseLoading = false; state.fullCourseError = action.payload; })
+      // updateFullCourse
+      .addCase(updateFullCourse.pending, (state) => { state.updateFullCourseLoading = true; state.updateFullCourseError = null; state.updateFullCourseSuccess = false; })
+      .addCase(updateFullCourse.fulfilled, (state, action) => {
+        state.updateFullCourseLoading = false;
+        state.updateFullCourseSuccess = true;
+        if (action.payload?.course) {
+          state.fullCourse = { ...state.fullCourse, course: action.payload.course };
+          const idx = state.courses.findIndex(c => c._id === action.payload.course._id);
+          if (idx !== -1) state.courses[idx] = action.payload.course;
+        }
+      })
+      .addCase(updateFullCourse.rejected, (state, action) => { state.updateFullCourseLoading = false; state.updateFullCourseError = action.payload; });
   },
 });
 
 // Export actions
 export const {
-  clearCoursesError, clearCourseError, clearCreateCourseError, clearUpdateCourseError, clearDeleteCourseError,
-  clearCreateFullCourseError, clearSaveDraftError,
-  resetCourseStates, resetCreateCourseState, resetCreateFullCourseState, resetSaveDraftState,
-  resetUpdateCourseState, resetDeleteCourseState,
+  clearCoursesError, clearCourseError, clearDeleteCourseError,
+  clearCreateFullCourseError, clearSaveDraftError, clearUpdateFullCourseError,
+  resetCourseStates, resetFullCourseState, resetCreateFullCourseState, resetSaveDraftState,
+  resetDeleteCourseState, resetUpdateFullCourseState,
   setCreationProgress, resetCreationProgress,
 } = courseSlice.actions;
 
@@ -328,9 +333,6 @@ export const selectCoursePagination = (state) => state.course.pagination;
 export const selectCurrentCourse = (state) => state.course.currentCourse;
 export const selectCourseLoading = (state) => state.course.courseLoading;
 export const selectCourseError = (state) => state.course.courseError;
-export const selectCreateCourseLoading = (state) => state.course.createCourseLoading;
-export const selectCreateCourseError = (state) => state.course.createCourseError;
-export const selectCreateCourseSuccess = (state) => state.course.createCourseSuccess;
 export const selectCreateFullCourseLoading = (state) => state.course.createFullCourseLoading;
 export const selectCreateFullCourseError = (state) => state.course.createFullCourseError;
 export const selectCreateFullCourseSuccess = (state) => state.course.createFullCourseSuccess;
@@ -341,12 +343,15 @@ export const selectDraftCourses = (state) => state.course.draftCourses;
 export const selectDraftCoursesLoading = (state) => state.course.draftCoursesLoading;
 export const selectDraftCoursesError = (state) => state.course.draftCoursesError;
 export const selectDraftPagination = (state) => state.course.draftPagination;
-export const selectUpdateCourseLoading = (state) => state.course.updateCourseLoading;
-export const selectUpdateCourseError = (state) => state.course.updateCourseError;
-export const selectUpdateCourseSuccess = (state) => state.course.updateCourseSuccess;
 export const selectDeleteCourseLoading = (state) => state.course.deleteCourseLoading;
 export const selectDeleteCourseError = (state) => state.course.deleteCourseError;
 export const selectDeleteCourseSuccess = (state) => state.course.deleteCourseSuccess;
 export const selectInstructorsForSelect = (state) => state.course.instructorsForSelect;
 export const selectInstructorsForSelectLoading = (state) => state.course.instructorsForSelectLoading;
 export const selectCreationProgress = (state) => state.course.creationProgress;
+export const selectFullCourse = (state) => state.course.fullCourse;
+export const selectFullCourseLoading = (state) => state.course.fullCourseLoading;
+export const selectFullCourseError = (state) => state.course.fullCourseError;
+export const selectUpdateFullCourseLoading = (state) => state.course.updateFullCourseLoading;
+export const selectUpdateFullCourseError = (state) => state.course.updateFullCourseError;
+export const selectUpdateFullCourseSuccess = (state) => state.course.updateFullCourseSuccess;

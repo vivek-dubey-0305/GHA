@@ -10,8 +10,7 @@ import { Submission } from "../models/submission.model.js";
 import { asyncHandler } from "../middlewares/async.middleware.js";
 import { errorResponse, successResponse } from "../utils/response.utils.js";
 import { getPagination, createPaginationResponse } from "../utils/pagination.utils.js";
-import { uploadProfilePicture, updateImage, deleteImage } from "../services/r2.service.js";
-import logger from "../configs/logger.config.js";
+import { getMyProfile as getProfile, updateMyProfile as updateProfile, deleteMyProfilePicture as deleteProfilePicture } from "../services/profile.service.js";
 
 /**
  * Instructor Self-Management Controller
@@ -24,7 +23,7 @@ import logger from "../configs/logger.config.js";
 // @desc    Get own profile
 // @access  Private (Instructor)
 export const getMyProfile = asyncHandler(async (req, res) => {
-    const instructor = await Instructor.findById(req.instructor.id);
+    const instructor = await getProfile(Instructor, req);
     if (!instructor) return errorResponse(res, 404, "Instructor not found");
 
     successResponse(res, 200, "Profile retrieved successfully", instructor);
@@ -34,12 +33,6 @@ export const getMyProfile = asyncHandler(async (req, res) => {
 // @desc    Update own profile (with optional profile picture via form-data)
 // @access  Private (Instructor)
 export const updateMyProfile = asyncHandler(async (req, res) => {
-    const instructorId = req.instructor.id;
-    const updateData = req.body;
-
-    logger.info(`Instructor updating profile: ${instructorId}`);
-
-    // Restricted fields
     const restrictedFields = [
         "password", "email", "isEmailVerified", "isPhoneVerified", "isActive",
         "isSuspended", "suspensionReason", "suspendedAt", "isDocumentsVerified",
@@ -50,33 +43,8 @@ export const updateMyProfile = asyncHandler(async (req, res) => {
         "deletionReason", "createdBy", "updatedBy", "createdAt", "updatedAt",
         "earnings", "paymentHistory", "rating", "bankDetails"
     ];
-    restrictedFields.forEach(field => delete updateData[field]);
 
-    // Handle profile picture upload via form-data
-    if (req.file) {
-        const instructor = await Instructor.findById(instructorId);
-        if (!instructor) return errorResponse(res, 404, "Instructor not found");
-
-        const userName = `${instructor.firstName}_${instructor.lastName}`;
-        const oldPublicId = instructor.profilePicture?.public_id || null;
-
-        try {
-            const uploadResult = await updateImage(
-                oldPublicId, req.file.buffer, uploadProfilePicture, "Instructor", userName
-            );
-            updateData.profilePicture = {
-                public_id: uploadResult.public_id,
-                secure_url: uploadResult.secure_url
-            };
-        } catch (error) {
-            logger.error(`Profile picture upload failed for instructor ${instructorId}: ${error.message}`);
-        }
-    }
-
-    const instructor = await Instructor.findByIdAndUpdate(instructorId, updateData, {
-        new: true,
-        runValidators: true
-    });
+    const instructor = await updateProfile(Instructor, req, restrictedFields, "Instructor");
 
     if (!instructor) return errorResponse(res, 404, "Instructor not found");
 
@@ -87,21 +55,12 @@ export const updateMyProfile = asyncHandler(async (req, res) => {
 // @desc    Delete own profile picture
 // @access  Private (Instructor)
 export const deleteMyProfilePicture = asyncHandler(async (req, res) => {
-    const instructor = await Instructor.findById(req.instructor.id);
-    if (!instructor) return errorResponse(res, 404, "Instructor not found");
-
-    if (!instructor.profilePicture?.public_id) {
-        return errorResponse(res, 400, "No profile picture to delete");
+    try {
+        const result = await deleteProfilePicture(Instructor, req);
+        successResponse(res, 200, result.message);
+    } catch (error) {
+        return errorResponse(res, 404, error.message);
     }
-
-    const deleteResult = await deleteImage(instructor.profilePicture.public_id);
-    if (deleteResult.result === "ok") {
-        instructor.profilePicture = null;
-        await instructor.save({ validateBeforeSave: false });
-        return successResponse(res, 200, "Profile picture deleted successfully");
-    }
-
-    return errorResponse(res, 500, "Failed to delete profile picture");
 });
 
 // ========================= PREFERENCES =========================
@@ -157,7 +116,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
     ]);
 
     successResponse(res, 200, "Dashboard retrieved successfully", {
-        profile: { firstName: instructor.firstName, lastName: instructor.lastName, rating: instructor.rating },
+        profile: { firstName: instructor.firstName, lastName: instructor.lastName, rating: instructor.rating.averageRating },
         stats: {
             totalCourses,
             totalEnrollments,

@@ -166,6 +166,13 @@ const instructorSchema = new mongoose.Schema({
     // Bunny Stream Integration for Live Classes (credentials are global per library, not per instructor)
     // Instructors do not need individual stream credentials - RTMP creds are generated per LiveClass
 
+    // Cloudflare Stream — One Live Input per Instructor (reused across all sessions)
+    cfLiveInputId: { type: String, default: null },       // Cloudflare Live Input UID
+    cfRtmpUrl: { type: String, default: null },            // RTMPS ingest URL
+    cfRtmpKey: { type: String, default: null, select: false }, // Stream key (sensitive)
+    cfSrtUrl: { type: String, default: null },             // SRT ingest URL
+    cfWebRTCUrl: { type: String, default: null },          // WebRTC ingest URL
+
     // Live Classes (References)
     liveClasses: [{
         type: mongoose.Schema.Types.ObjectId,

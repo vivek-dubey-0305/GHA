@@ -4,10 +4,8 @@ import {
     getAllUsers, getUserById, createUser, updateUser, deleteUser, deleteUserProfilePicture,
     // Instructor CRUD
     getAllInstructors, getInstructorById, createInstructor, updateInstructor, deleteInstructor, deleteInstructorProfilePicture,
-    // Course CRUD
-    getAllCourses, getCourseById, createCourse, updateCourse, deleteCourse,
-    // Course Full Flow
-    createFullCourse, saveDraftCourse, getDraftCourses,
+    // Course Operations
+    getAllCourses, getDraftCourses, getFullCourse, createFullCourse, updateFullCourse, deleteFullCourse, saveDraftCourse,
     // Module CRUD
     getAllModules, getModuleById, createModule, updateModule, deleteModule,
     // Lesson CRUD
@@ -62,15 +60,14 @@ router.put("/instructors/:id", upload.single("profilePicture"), updateInstructor
 router.delete("/instructors/:id", deleteInstructor);
 router.delete("/instructors/:id/profile-picture", deleteInstructorProfilePicture);
 
-// ===== Course CRUD =====
+// ===== Course Operations =====
 router.get("/courses/drafts", getDraftCourses);
 router.get("/courses", getAllCourses);
-router.get("/courses/:id", getCourseById);
-router.post("/courses", upload.single("thumbnail"), createCourse);
+router.get("/courses/:id/full", getFullCourse);
 router.post("/courses/full", courseMediaUpload.any(), createFullCourse);
+router.put("/courses/:id/full", courseMediaUpload.any(), updateFullCourse);
 router.put("/courses/:id/save-draft", courseMediaUpload.any(), saveDraftCourse);
-router.put("/courses/:id", upload.single("thumbnail"), updateCourse);
-router.delete("/courses/:id", deleteCourse);
+router.delete("/courses/:id/full", deleteFullCourse);
 
 // ===== Module CRUD =====
 router.get("/modules", getAllModules);

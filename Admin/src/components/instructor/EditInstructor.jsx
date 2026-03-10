@@ -166,8 +166,28 @@ for (let year = currentYear + 10; year >= 1900; year--) {
   YEAR_OPTIONS.push({ value: year.toString(), label: year.toString() });
 }
 
+// Helper: normalize a Mongoose-populated array to plain IDs and extract pre-fetched details
+const normalizeItems = (items) => {
+  const ids = [];
+  const details = {};
+  (items || []).forEach(item => {
+    if (item && typeof item === 'object' && item._id) {
+      const id = item._id.toString();
+      ids.push(id);
+      details[id] = item;
+    } else if (item) {
+      ids.push(String(item));
+    }
+  });
+  return { ids, details };
+};
+
 export function EditInstructor({ instructor, onClose, onSave }) {
   const dispatch = useDispatch();
+  // Normalize populated arrays to IDs and extract known details (computed once)
+  const initCourses = normalizeItems(instructor?.courses);
+  const initLiveClasses = normalizeItems(instructor?.liveClasses);
+  const initVideoPackages = normalizeItems(instructor?.videoPackages);
   const updateInstructorLoading = useSelector(selectUpdateInstructorLoading);
   const updateInstructorError = useSelector(selectUpdateInstructorError);
   const deleteInstructorLoading = useSelector(selectDeleteInstructorLoading);
@@ -202,7 +222,7 @@ export function EditInstructor({ instructor, onClose, onSave }) {
       averageRating: 0,
       totalReviews: 0,
     },
-    courses: instructor?.courses || [],
+    courses: initCourses.ids,
     zoomIntegration: {
       zoomUserId: instructor?.zoomIntegration?.zoomUserId || '',
       zoomAccessToken: instructor?.zoomIntegration?.zoomAccessToken || '',
@@ -210,8 +230,8 @@ export function EditInstructor({ instructor, onClose, onSave }) {
       isConnected: instructor?.zoomIntegration?.isConnected || false,
       connectedAt: instructor?.zoomIntegration?.connectedAt || null,
     },
-    liveClasses: instructor?.liveClasses || [],
-    videoPackages: instructor?.videoPackages || [],
+    liveClasses: initLiveClasses.ids,
+    videoPackages: initVideoPackages.ids,
     isEmailVerified: instructor?.isEmailVerified || false,
     isPhoneVerified: instructor?.isPhoneVerified || false,
     isDocumentsVerified: instructor?.isDocumentsVerified || false,
@@ -235,59 +255,65 @@ export function EditInstructor({ instructor, onClose, onSave }) {
   // State for adding courses
   const [showAddCourse, setShowAddCourse] = useState(false);
   const [newCourseId, setNewCourseId] = useState('');
-  const [courseDetails, setCourseDetails] = useState({});
+  const [courseDetails, setCourseDetails] = useState(initCourses.details);
   const [courseLoading, setCourseLoading] = useState(false);
   const [courseError, setCourseError] = useState('');
   
   // State for adding live classes
   const [showAddLiveClass, setShowAddLiveClass] = useState(false);
   const [newLiveClassId, setNewLiveClassId] = useState('');
-  const [liveClassDetails, setLiveClassDetails] = useState({});
+  const [liveClassDetails, setLiveClassDetails] = useState(initLiveClasses.details);
   const [liveClassLoading, setLiveClassLoading] = useState(false);
   const [liveClassError, setLiveClassError] = useState('');
   
   // State for adding video packages
   const [showAddVideoPackage, setShowAddVideoPackage] = useState(false);
   const [newVideoPackageId, setNewVideoPackageId] = useState('');
-  const [videoPackageDetails, setVideoPackageDetails] = useState({});
+  const [videoPackageDetails, setVideoPackageDetails] = useState(initVideoPackages.details);
   const [videoPackageLoading, setVideoPackageLoading] = useState(false);
   const [videoPackageError, setVideoPackageError] = useState('');
 
   // Fetch details for existing courses, live classes, and video packages
   useEffect(() => {
     const fetchExistingDetails = async () => {
-      // Fetch course details
+      // Fetch course details — skip items already pre-populated (objects from backend populate)
       if (instructor.courses && instructor.courses.length > 0) {
-        for (const courseId of instructor.courses) {
+        for (const course of instructor.courses) {
+          if (typeof course === 'object' && course?._id) continue; // already pre-populated
+          const id = String(course);
           try {
-            const result = await dispatch(getCourseById(courseId)).unwrap();
-            setCourseDetails(prev => ({ ...prev, [courseId]: result.data || result }));
+            const result = await dispatch(getCourseById(id)).unwrap();
+            setCourseDetails(prev => ({ ...prev, [id]: result?.course || result }));
           } catch (error) {
-            console.error(`Failed to fetch course details for ${courseId}:`, error);
+            console.error(`Failed to fetch course details for ${id}:`, error);
           }
         }
       }
 
-      // Fetch live class details
+      // Fetch live class details — skip pre-populated items
       if (instructor.liveClasses && instructor.liveClasses.length > 0) {
-        for (const liveClassId of instructor.liveClasses) {
+        for (const liveClass of instructor.liveClasses) {
+          if (typeof liveClass === 'object' && liveClass?._id) continue;
+          const id = String(liveClass);
           try {
-            const result = await dispatch(getLiveClassById(liveClassId)).unwrap();
-            setLiveClassDetails(prev => ({ ...prev, [liveClassId]: result.data || result }));
+            const result = await dispatch(getLiveClassById(id)).unwrap();
+            setLiveClassDetails(prev => ({ ...prev, [id]: result?.data || result }));
           } catch (error) {
-            console.error(`Failed to fetch live class details for ${liveClassId}:`, error);
+            console.error(`Failed to fetch live class details for ${id}:`, error);
           }
         }
       }
 
-      // Fetch video package details
+      // Fetch video package details — skip pre-populated items
       if (instructor.videoPackages && instructor.videoPackages.length > 0) {
-        for (const videoPackageId of instructor.videoPackages) {
+        for (const videoPkg of instructor.videoPackages) {
+          if (typeof videoPkg === 'object' && videoPkg?._id) continue;
+          const id = String(videoPkg);
           try {
-            const result = await dispatch(getVideoPackageById(videoPackageId)).unwrap();
-            setVideoPackageDetails(prev => ({ ...prev, [videoPackageId]: result.data || result }));
+            const result = await dispatch(getVideoPackageById(id)).unwrap();
+            setVideoPackageDetails(prev => ({ ...prev, [id]: result?.data || result }));
           } catch (error) {
-            console.error(`Failed to fetch video package details for ${videoPackageId}:`, error);
+            console.error(`Failed to fetch video package details for ${id}:`, error);
           }
         }
       }
@@ -353,7 +379,8 @@ export function EditInstructor({ instructor, onClose, onSave }) {
     
     try {
       const result = await dispatch(getCourseById(newCourseId.trim())).unwrap();
-      setCourseDetails(result.data || result);
+      const courseData = result?.course || result;
+      setCourseDetails(prev => ({ ...prev, [newCourseId.trim()]: courseData }));
       
       // Add the course to the list
       setEditedInstructor(prev => prev ? {
@@ -401,7 +428,7 @@ export function EditInstructor({ instructor, onClose, onSave }) {
     
     try {
       const result = await dispatch(getLiveClassById(newLiveClassId.trim())).unwrap();
-      setLiveClassDetails(result.data || result);
+      setLiveClassDetails(prev => ({ ...prev, [newLiveClassId.trim()]: result?.data || result }));
       
       // Add the live class to the list
       setEditedInstructor(prev => prev ? {
@@ -449,7 +476,7 @@ export function EditInstructor({ instructor, onClose, onSave }) {
     
     try {
       const result = await dispatch(getVideoPackageById(newVideoPackageId.trim())).unwrap();
-      setVideoPackageDetails(result.data || result);
+      setVideoPackageDetails(prev => ({ ...prev, [newVideoPackageId.trim()]: result?.data || result }));
       
       // Add the video package to the list
       setEditedInstructor(prev => prev ? {

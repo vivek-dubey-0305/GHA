@@ -4,6 +4,7 @@ import { Enrollment } from "../models/enrollment.model.js";
 import { asyncHandler } from "../middlewares/async.middleware.js";
 import { errorResponse, successResponse } from "../utils/response.utils.js";
 import { getPagination, createPaginationResponse } from "../utils/pagination.utils.js";
+import { isInstructorMaterialOwner } from "../services/ownership.service.js";
 import logger from "../configs/logger.config.js";
 
 /**
@@ -58,8 +59,8 @@ export const createMaterial = asyncHandler(async (req, res) => {
     const materialData = req.body;
 
     // Verify course ownership
-    const course = await Course.findById(materialData.courseId);
-    if (!course || course.instructor.toString() !== req.instructor.id) {
+    const isOwner = await isInstructorMaterialOwner(req.instructor.id, materialData.courseId);
+    if (!isOwner) {
         return errorResponse(res, 403, "You can only create materials for your own courses");
     }
 
@@ -83,7 +84,8 @@ export const updateMaterial = asyncHandler(async (req, res) => {
     const material = await Material.findById(req.params.id);
     if (!material) return errorResponse(res, 404, "Material not found");
 
-    if (material.instructor.toString() !== req.instructor.id) {
+    const isOwner = await isInstructorMaterialOwner(req.instructor.id, req.params.id);
+    if (!isOwner) {
         return errorResponse(res, 403, "You can only update your own materials");
     }
 
@@ -101,7 +103,8 @@ export const deleteMaterial = asyncHandler(async (req, res) => {
     const material = await Material.findById(req.params.id);
     if (!material) return errorResponse(res, 404, "Material not found");
 
-    if (material.instructor.toString() !== req.instructor.id) {
+    const isOwner = await isInstructorMaterialOwner(req.instructor.id, req.params.id);
+    if (!isOwner) {
         return errorResponse(res, 403, "You can only delete your own materials");
     }
 
@@ -117,7 +120,8 @@ export const publishMaterial = asyncHandler(async (req, res) => {
     const material = await Material.findById(req.params.id);
     if (!material) return errorResponse(res, 404, "Material not found");
 
-    if (material.instructor.toString() !== req.instructor.id) {
+    const isOwner = await isInstructorMaterialOwner(req.instructor.id, req.params.id);
+    if (!isOwner) {
         return errorResponse(res, 403, "You can only publish your own materials");
     }
 
@@ -133,7 +137,8 @@ export const archiveMaterial = asyncHandler(async (req, res) => {
     const material = await Material.findById(req.params.id);
     if (!material) return errorResponse(res, 404, "Material not found");
 
-    if (material.instructor.toString() !== req.instructor.id) {
+    const isOwner = await isInstructorMaterialOwner(req.instructor.id, req.params.id);
+    if (!isOwner) {
         return errorResponse(res, 403, "You can only archive your own materials");
     }
 

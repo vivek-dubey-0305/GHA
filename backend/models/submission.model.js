@@ -458,7 +458,7 @@ submissionSchema.statics.getUserSubmissions = function(userId, options = {}) {
 // Static method to get submission statistics
 submissionSchema.statics.getSubmissionStats = function(assignmentId) {
     return this.aggregate([
-        { $match: { assignment: mongoose.Types.ObjectId(assignmentId) } },
+        { $match: { assignment: new mongoose.Types.ObjectId(assignmentId) } },
         {
             $group: {
                 _id: null,

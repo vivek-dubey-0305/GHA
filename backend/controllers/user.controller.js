@@ -6,8 +6,7 @@ import { Certificate } from "../models/certificate.model.js";
 import { asyncHandler } from "../middlewares/async.middleware.js";
 import { errorResponse, successResponse } from "../utils/response.utils.js";
 import { getPagination, createPaginationResponse } from "../utils/pagination.utils.js";
-import { uploadProfilePicture, updateImage, deleteImage } from "../services/r2.service.js";
-import logger from "../configs/logger.config.js";
+import { getMyProfile as getProfile, updateMyProfile as updateProfile, deleteMyProfilePicture as deleteProfilePicture, updatePreferences as updateUserPreferences } from "../services/profile.service.js";
 
 /**
  * User (Student) Self-Management Controller
@@ -20,7 +19,7 @@ import logger from "../configs/logger.config.js";
 // @desc    Get current user profile
 // @access  Private (User)
 export const getMyProfile = asyncHandler(async (req, res) => {
-    const user = await User.findById(req.user.id);
+    const user = await getProfile(User, req);
 
     if (!user) {
         return errorResponse(res, 404, "User not found");
@@ -33,12 +32,6 @@ export const getMyProfile = asyncHandler(async (req, res) => {
 // @desc    Update current user profile (with optional profile picture via form-data)
 // @access  Private (User)
 export const updateMyProfile = asyncHandler(async (req, res) => {
-    const userId = req.user.id;
-    const updateData = req.body;
-
-    logger.info(`User updating profile: ${userId}`);
-
-    // Fields users are NOT allowed to update themselves
     const restrictedFields = [
         "password", "email", "isEmailVerified", "isPhoneVerified",
         "isActive", "sessions", "loginAttempts", "lockUntil",
@@ -47,33 +40,8 @@ export const updateMyProfile = asyncHandler(async (req, res) => {
         "passwordResetToken", "passwordResetExpires", "deletedAt",
         "deletionReason", "createdBy", "updatedBy", "createdAt", "updatedAt"
     ];
-    restrictedFields.forEach(field => delete updateData[field]);
 
-    // Handle profile picture upload via form-data
-    if (req.file) {
-        const user = await User.findById(userId);
-        if (!user) return errorResponse(res, 404, "User not found");
-
-        const userName = `${user.firstName}_${user.lastName}`;
-        const oldPublicId = user.profilePicture?.public_id || null;
-
-        try {
-            const uploadResult = await updateImage(
-                oldPublicId, req.file.buffer, uploadProfilePicture, "Student", userName
-            );
-            updateData.profilePicture = {
-                public_id: uploadResult.public_id,
-                secure_url: uploadResult.secure_url
-            };
-        } catch (error) {
-            logger.error(`Profile picture upload failed for user ${userId}: ${error.message}`);
-        }
-    }
-
-    const user = await User.findByIdAndUpdate(userId, updateData, {
-        new: true,
-        runValidators: true
-    });
+    const user = await updateProfile(User, req, restrictedFields, "Student");
 
     if (!user) return errorResponse(res, 404, "User not found");
 
@@ -84,21 +52,12 @@ export const updateMyProfile = asyncHandler(async (req, res) => {
 // @desc    Delete current user's profile picture
 // @access  Private (User)
 export const deleteMyProfilePicture = asyncHandler(async (req, res) => {
-    const user = await User.findById(req.user.id);
-
-    if (!user) return errorResponse(res, 404, "User not found");
-    if (!user.profilePicture?.public_id) {
-        return errorResponse(res, 400, "No profile picture to delete");
+    try {
+        const result = await deleteProfilePicture(User, req);
+        successResponse(res, 200, result.message);
+    } catch (error) {
+        return errorResponse(res, 404, error.message);
     }
-
-    const deleteResult = await deleteImage(user.profilePicture.public_id);
-    if (deleteResult.result === "ok") {
-        user.profilePicture = null;
-        await user.save({ validateBeforeSave: false });
-        return successResponse(res, 200, "Profile picture deleted successfully");
-    }
-
-    return errorResponse(res, 500, "Failed to delete profile picture");
 });
 
 // ========================= PREFERENCES =========================
@@ -107,20 +66,11 @@ export const deleteMyProfilePicture = asyncHandler(async (req, res) => {
 // @desc    Update user preferences
 // @access  Private (User)
 export const updatePreferences = asyncHandler(async (req, res) => {
-    const { emailNotifications, smsNotifications, courseUpdates, promotionalEmails, language } = req.body;
+    const preferences = await updateUserPreferences(User, req);
 
-    const updateFields = {};
-    if (emailNotifications !== undefined) updateFields["preferences.emailNotifications"] = emailNotifications;
-    if (smsNotifications !== undefined) updateFields["preferences.smsNotifications"] = smsNotifications;
-    if (courseUpdates !== undefined) updateFields["preferences.courseUpdates"] = courseUpdates;
-    if (promotionalEmails !== undefined) updateFields["preferences.promotionalEmails"] = promotionalEmails;
-    if (language) updateFields["preferences.language"] = language;
+    if (!preferences) return errorResponse(res, 404, "User not found");
 
-    const user = await User.findByIdAndUpdate(req.user.id, { $set: updateFields }, { new: true });
-
-    if (!user) return errorResponse(res, 404, "User not found");
-
-    successResponse(res, 200, "Preferences updated successfully", user.preferences);
+    successResponse(res, 200, "Preferences updated successfully", preferences);
 });
 
 // ========================= ENROLLMENTS =========================

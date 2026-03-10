@@ -116,7 +116,7 @@ progressSchema.pre("save", function() {
 // Static method to get course progress for a user
 progressSchema.statics.getCourseProgress = function(userId, courseId) {
     return this.aggregate([
-        { $match: { user: mongoose.Types.ObjectId(userId), course: mongoose.Types.ObjectId(courseId) } },
+        { $match: { user: new mongoose.Types.ObjectId(userId), course: new mongoose.Types.ObjectId(courseId) } },
         {
             $group: {
                 _id: null,
@@ -145,7 +145,7 @@ progressSchema.statics.getCourseProgress = function(userId, courseId) {
 // Static method to get user progress across all courses
 progressSchema.statics.getUserProgress = function(userId) {
     return this.aggregate([
-        { $match: { user: mongoose.Types.ObjectId(userId) } },
+        { $match: { user: new mongoose.Types.ObjectId(userId) } },
         {
             $group: {
                 _id: "$course",
