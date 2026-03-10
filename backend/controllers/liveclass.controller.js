@@ -704,6 +704,22 @@ export const startLiveClass = asyncHandler(async (req, res) => {
     // ── Notify all relevant participants ──
     await notifyLiveStart(req, liveClass);
 
+    // ── Update in-memory broadcast tracking for late joiners ──
+    const io = req.app.get("io");
+    if (io?.activeBroadcasts) {
+        io.activeBroadcasts.set(liveClass._id.toString(), { 
+            startedAt: liveClass.startedAt, 
+            startedBy: req.instructor.id 
+        });
+    }
+
+    // ── Emit broadcast_started Socket.IO event to update UI for all connected instructors ──
+    emitToLiveRoom(req, liveClass._id, "broadcast_started", {
+        liveClassId: liveClass._id,
+        startedAt: liveClass.startedAt,
+        instructorId: req.instructor.id,
+    });
+
     successResponse(res, 200, "You are LIVE! Stream is active.", {
         _id: liveClass._id,
         status: "live",
@@ -733,6 +749,17 @@ export const endLiveClass = asyncHandler(async (req, res) => {
         liveClassId: liveClass._id,
         reason: "instructor_ended",
     });
+
+    // Emit broadcast_stopped to update UI for all connected participants
+    emitToLiveRoom(req, liveClass._id, "broadcast_stopped", {
+        liveClassId: liveClass._id,
+    });
+
+    // ── Clear from active broadcasts tracking ──
+    const io = req.app.get("io");
+    if (io?.activeBroadcasts) {
+        io.activeBroadcasts.delete(liveClass._id.toString());
+    }
 
     successResponse(res, 200, "Live class ended. Recording will be available shortly.", liveClass);
 });

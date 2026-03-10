@@ -54,6 +54,7 @@ connectDB()
         // Track active broadcasts per live class (in-memory)
         // So late joiners immediately know if broadcasting has already started
         const activeBroadcasts = new Map();
+        io.activeBroadcasts = activeBroadcasts; // Store on io so controllers can access it
 
         // Socket.IO connection handling
         io.on("connection", (socket) => {
@@ -99,7 +100,7 @@ connectDB()
                 logger.info(`Socket ${socket.id} joined live:${liveClassId} as ${role}`);
 
                 // If host already started broadcasting, inform late joiners immediately
-                if (activeBroadcasts.has(liveClassId)) {
+                if (activeBroadcasts.has(liveClassId?.toString())) {
                     socket.emit("broadcast_started", { liveClassId });
                 }
             });
@@ -185,7 +186,7 @@ connectDB()
             // Broadcast gate — host controls when participants start watching
             socket.on("start_broadcast", ({ liveClassId }) => {
                 if (socket.liveRole === "Instructor") {
-                    activeBroadcasts.set(liveClassId, { startedAt: new Date(), startedBy: socket.liveUserId });
+                    activeBroadcasts.set(liveClassId?.toString(), { startedAt: new Date(), startedBy: socket.liveUserId });
                     io.to(`live:${liveClassId}`).emit("broadcast_started", { liveClassId });
                     logger.info(`Broadcast started for live:${liveClassId} by ${socket.id}`);
                 }
@@ -193,7 +194,7 @@ connectDB()
 
             socket.on("stop_broadcast", ({ liveClassId }) => {
                 if (socket.liveRole === "Instructor") {
-                    activeBroadcasts.delete(liveClassId);
+                    activeBroadcasts.delete(liveClassId?.toString());
                     io.to(`live:${liveClassId}`).emit("broadcast_stopped", { liveClassId });
                     logger.info(`Broadcast stopped for live:${liveClassId} by ${socket.id}`);
                 }
@@ -209,7 +210,7 @@ connectDB()
                     });
                     // Clean up broadcast state if host disconnects
                     if (socket.liveRole === "Instructor") {
-                        activeBroadcasts.delete(socket.liveClassId);
+                        activeBroadcasts.delete(socket.liveClassId?.toString());
                     }
                 }
             });

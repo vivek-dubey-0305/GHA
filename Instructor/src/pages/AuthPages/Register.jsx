@@ -25,20 +25,36 @@ const Register = () => {
   const registerError = useSelector(selectRegisterError);
   const registerSuccess = useSelector(selectRegisterSuccess);
 
+  // COMMENTED OUT: OTP verification flow - temporarily using direct authentication via cookies
   // Redirect to verify OTP page on successful registration
+  // useEffect(() => {
+  //   if (registerSuccess) {
+  //     setToastState({
+  //       visible: true,
+  //       type: 'success',
+  //       message: 'Registration successful! OTP sent to your email.'
+  //     });
+  //     // Redirect to verify page after 2 seconds
+  //     setTimeout(() => {
+  //       navigate('/instructor/verify', { state: { email: formData.email } });
+  //     }, 2000);
+  //   }
+  // }, [registerSuccess, navigate, formData.email]);
+
+  // TEMPORARY: Navigate to dashboard after successful registration (cookies are set automatically)
   useEffect(() => {
     if (registerSuccess) {
       setToastState({
         visible: true,
         type: 'success',
-        message: 'Registration successful! OTP sent to your email.'
+        message: 'Registration successful! Redirecting to dashboard...'
       });
-      // Redirect to verify page after 2 seconds
+      // Redirect to dashboard after 1.5 seconds
       setTimeout(() => {
-        navigate('/instructor/verify', { state: { email: formData.email } });
-      }, 2000);
+        navigate('/instructor/dashboard');
+      }, 1500);
     }
-  }, [registerSuccess, navigate, formData.email]);
+  }, [registerSuccess, navigate]);
 
   // Show error toast
   useEffect(() => {

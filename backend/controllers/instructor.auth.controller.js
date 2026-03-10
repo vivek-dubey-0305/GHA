@@ -49,15 +49,20 @@ export const registerInstructor = asyncHandler(async (req, res) => {
             specialization: processedSpecialization.length ? processedSpecialization : undefined,
             bio: bio ? bio.trim() : undefined,
             isActive: true,
-            isEmailVerified: false,
+            // TEMPORARY: Mark email as verified to skip OTP (nodemailer not working in production)
+            isEmailVerified: true,
         });
 
-        await generateAndSendOtp(instructor, `${firstName} ${lastName}`, "verify");
+        // Save instructor to database first
+        await instructor.save();
 
-        return successResponse(res, 201, "Registration successful. Please verify your email with the OTP sent.", {
-            email: instructor.email,
-            message: "Check your email for the 6-digit OTP",
-            otpExpiresIn: "10 minutes",
+        // COMMENTED OUT: OTP verification temporarily disabled (nodemailer issues)
+        // await generateAndSendOtp(instructor, `${firstName} ${lastName}`, "verify");
+
+        // TEMPORARY: Issue tokens and set cookies directly instead of OTP
+        return issueTokensAndRespond(instructor, "instructor", req, res, getInstructorData, {
+            setEmailVerified: true,
+            nameForEmail: `${firstName} ${lastName}`,
         });
     } catch (e) {
         logger.error(`Instructor registration error: ${e.message}`);
@@ -74,7 +79,8 @@ export const loginInstructor = asyncHandler(async (req, res) => {
     const instructor = await Instructor.findOne({ email: email.toLowerCase() }).select("+password");
     if (!instructor) return errorResponse(res, 401, "Invalid email or password");
     if (!instructor.isActive) return errorResponse(res, 403, "Instructor account is inactive");
-    if (!instructor.isEmailVerified) return errorResponse(res, 403, "Please verify your email before logging in");
+    // COMMENTED OUT: Email verification check temporarily disabled (OTP/nodemailer not working)
+    // if (!instructor.isEmailVerified) return errorResponse(res, 403, "Please verify your email before logging in");
     if (instructor.isSuspended) return errorResponse(res, 403, `Instructor account is suspended. Reason: ${instructor.suspensionReason || "Not specified"}`);
 
     if (instructor.isLocked) {
@@ -91,19 +97,20 @@ export const loginInstructor = asyncHandler(async (req, res) => {
         return errorResponse(res, 401, `Invalid email or password. Attempts remaining: ${remaining}`);
     }
 
-    try {
-        await generateAndSendOtp(instructor, `${instructor.firstName} ${instructor.lastName}`, "login");
-    } catch {
-        instructor.verificationCode = null;
-        instructor.verificationCodeExpires = null;
-        await instructor.save({ validateBeforeSave: false });
-        return errorResponse(res, 500, "Failed to send OTP email. Please try again later.");
-    }
+    // COMMENTED OUT: OTP generation temporarily disabled (nodemailer not working in production)
+    // try {
+    //     await generateAndSendOtp(instructor, `${instructor.firstName} ${instructor.lastName}`, "login");
+    // } catch {
+    //     instructor.verificationCode = null;
+    //     instructor.verificationCodeExpires = null;
+    //     await instructor.save({ validateBeforeSave: false });
+    //     return errorResponse(res, 500, "Failed to send OTP email. Please try again later.");
+    // }
 
-    return successResponse(res, 200, "OTP sent to email. Verify to login.", {
-        email: instructor.email,
-        message: "Check your email for the 6-digit OTP",
-        otpExpiresIn: "10 minutes",
+    // TEMPORARY: Issue tokens and set cookies directly instead of OTP
+    return issueTokensAndRespond(instructor, "instructor", req, res, getInstructorData, {
+        setEmailVerified: true,
+        nameForEmail: `${instructor.firstName} ${instructor.lastName}`,
     });
 });
 
