@@ -113,12 +113,15 @@ export default function LiveRoom() {
     console.log('[LiveRoom:Video] Initializing HLS.js (low-latency live edge):', hlsUrl.substring(0, 80));
 
     if (Hls.isSupported()) {
+      console.log("Hls is supported ")
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: true,
-        liveSyncDurationCount: 1,       // 1 segment from live edge (~2-4s delay)
-        liveMaxLatencyDurationCount: 2, // auto-seek if >2 segments behind
-        maxBufferLength: 3,             // 3s forward buffer keeps latency low
+        capLevelToPlayerSize: true,
+        liveSyncDurationCount: 2,       // 1 segment from live edge (~2-4s delay)
+        liveMaxLatencyDurationCount: 4, // auto-seek if >2 segments behind
+        maxBufferLength: 6,             // 3s forward buffer keeps latency low
+        maxLiveSyncPlaybackRate: 1.5,   // helps the player catch up if it falls behind
         backBufferLength: 0,            // no backward buffer
         liveBackBufferLength: 0,        // new viewers always jump to live edge
       });
@@ -129,6 +132,17 @@ export default function LiveRoom() {
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         retryCountRef.current = 0;
         console.log('[LiveRoom:Video] ✅ Manifest parsed — snapping to live edge');
+
+        // Force highest available quality initially
+        // if (hls.levels && hls.levels.length > 0) {
+        //   hls.currentLevel = hls.levels.length - 1;
+        // }
+        if (hls.levels && hls.levels.length > 0) {
+          const highestLevel = hls.levels.length - 1;
+          hls.nextLevel = highestLevel;
+          hls.currentLevel = highestLevel;
+        }
+
         // Jump to live edge so late joiners don't see buffered start-of-stream segments
         if (hls.liveSyncPosition != null) {
           videoRef.current.currentTime = hls.liveSyncPosition;
@@ -149,24 +163,68 @@ export default function LiveRoom() {
         }
       });
 
+      // hls.on(Hls.Events.ERROR, (event, data) => {
+      //   if (data.fatal) {
+      //     console.error('[LiveRoom:Video] HLS fatal error:', data.type, data.details);
+      //     if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+      //       // Exponential backoff — handles manifestParsingError when stream isn't ready yet
+      //       const delay = Math.min(1000 * Math.pow(2, retryCountRef.current), 8000);
+      //       retryCountRef.current += 1;
+      //       console.log(`[LiveRoom:Video] Retrying in ${delay}ms (attempt ${retryCountRef.current})`);
+      //       setTimeout(() => { if (hlsRef.current) hlsRef.current.startLoad(); }, delay);
+      //     } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+      //       hls.recoverMediaError();
+      //     } else {
+      //       hls.destroy();
+      //       hlsRef.current = null;
+      //     }
+      //   } else {
+      //     console.warn('[LiveRoom:Video] HLS non-fatal:', data.details);
+      //   }
+      // });
+
       hls.on(Hls.Events.ERROR, (event, data) => {
-        if (data.fatal) {
-          console.error('[LiveRoom:Video] HLS fatal error:', data.type, data.details);
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-            // Exponential backoff — handles manifestParsingError when stream isn't ready yet
-            const delay = Math.min(1000 * Math.pow(2, retryCountRef.current), 8000);
-            retryCountRef.current += 1;
-            console.log(`[LiveRoom:Video] Retrying in ${delay}ms (attempt ${retryCountRef.current})`);
-            setTimeout(() => { if (hlsRef.current) hlsRef.current.startLoad(); }, delay);
-          } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-            hls.recoverMediaError();
+          if (data.fatal) {
+            console.error('[LiveRoom:Video] HLS fatal error:', data.type, data.details);
+
+            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+
+              // Cloudflare sometimes returns manifestParsingError
+              // when OBS stream just started and manifest isn't ready
+              if (data.details === "manifestParsingError") {
+                console.log("[LiveRoom:Video] Manifest not ready yet — retrying in 2s");
+                setTimeout(() => {
+                  if (hlsRef.current) hlsRef.current.startLoad();
+                }, 2000);
+                return;
+              }
+
+              // Exponential backoff retry
+              const delay = Math.min(1000 * Math.pow(2, retryCountRef.current), 8000);
+              retryCountRef.current += 1;
+
+              console.log(`[LiveRoom:Video] Retrying in ${delay}ms (attempt ${retryCountRef.current})`);
+
+              setTimeout(() => {
+                if (hlsRef.current) hlsRef.current.startLoad();
+              }, delay);
+
+            } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+
+              console.warn("[LiveRoom:Video] Media error — attempting recovery");
+              hls.recoverMediaError();
+
+            } else {
+
+              console.error("[LiveRoom:Video] Fatal unrecoverable error — destroying player");
+              hls.destroy();
+              hlsRef.current = null;
+
+            }
+
           } else {
-            hls.destroy();
-            hlsRef.current = null;
+            console.warn('[LiveRoom:Video] HLS non-fatal:', data.details);
           }
-        } else {
-          console.warn('[LiveRoom:Video] HLS non-fatal:', data.details);
-        }
       });
 
       hlsRef.current = hls;
@@ -191,9 +249,13 @@ export default function LiveRoom() {
     if (!joined || !id) return;
     console.log('[LiveRoom:Socket] Creating socket connection to', SOCKET_URL);
 
+    // const socket = io(SOCKET_URL, {
+    //   withCredentials: true,
+    //   transports: ['websocket', 'polling'],
+    // });
     const socket = io(SOCKET_URL, {
       withCredentials: true,
-      transports: ['websocket', 'polling'],
+      transports: ['websocket'],
     });
 
     socketRef.current = socket;
