@@ -23,7 +23,7 @@ export const register = createAsyncThunk(
       
       console.log('Registration payload:', payload);
       
-      const response = await apiClient.post(`/register`, payload);
+      const response = await authClient.post(`/register`, payload);
       console.log("Response:", response);
       return response.data;
     } catch (error) {
@@ -41,7 +41,7 @@ export const login = createAsyncThunk(
   async ({ email, password }, { rejectWithValue }) => {
     try {
       console.log('Attempting login for:', email);
-      const response = await apiClient.post(`/login`, {
+      const response = await authClient.post(`/login`, {
         email,
         password
       });
@@ -61,7 +61,7 @@ export const verifyOtp = createAsyncThunk(
   async ({ email, otp }, { rejectWithValue }) => {
     try {
       console.log('Verifying OTP for email:', email);
-      const response = await apiClient.post(`/verify-otp`, {
+      const response = await authClient.post(`/verify-otp`, {
         email,
         otp
       });
@@ -80,7 +80,7 @@ export const resendOtp = createAsyncThunk(
   'auth/resendOtp',
   async ({ email }, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/resend-otp`, {
+      const response = await authClient.post(`/resend-otp`, {
         email
       });
 
@@ -176,9 +176,9 @@ export const initializeAuth = createAsyncThunk(
   async (_, { dispatch, rejectWithValue }) => {
     try {
       // Try to refresh token silently to check if user is authenticated
-      // Use apiClient which has withCredentials: true configured globally
+      // Use authClient which is configured for /api/v1/user/auth endpoints
       console.log("====================")
-      const response = await apiClient.post(`/refresh-token`, {});
+      const response = await authClient.post(`/refresh-token`, {});
       console.log("response for refresh-api", response)
       return response.data;
     } catch (error) {
@@ -195,7 +195,7 @@ export const forgotPassword = createAsyncThunk(
   'auth/forgotPassword',
   async ({ email }, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/forgot-password`, {
+      const response = await authClient.post(`/forgot-password`, {
         email
       });
 
@@ -212,7 +212,7 @@ export const resetPasswordThunk = createAsyncThunk(
   'auth/resetPassword',
   async ({ token, password, confirmPassword }, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/reset-password`, {
+      const response = await authClient.post(`/reset-password`, {
         token,
         password,
         confirmPassword
@@ -231,7 +231,7 @@ export const verifyResetToken = createAsyncThunk(
   'auth/verifyResetToken',
   async ({ token }, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/verify-reset-token`, {
+      const response = await authClient.post(`/verify-reset-token`, {
         token
       });
 
@@ -457,11 +457,15 @@ const authSlice = createSlice({
         state.registerError = null;
         state.registerSuccess = false;
       })
-      .addCase(register.fulfilled, (state) => {
+      .addCase(register.fulfilled, (state, action) => {
         state.registerLoading = false;
         state.registerSuccess = true;
-        state.otpSent = true; // Set OTP sent flag for verify page
         state.registerError = null;
+        // FIXED: Directly set authenticated state since OTP is now skipped
+        // Cookies are automatically set by the backend, so just update Redux state
+        state.isAuthenticated = true;
+        state.user = action.payload.data.user;
+        state.otpSent = false; // No longer needed, but keep for compatibility
       })
       .addCase(register.rejected, (state, action) => {
         state.registerLoading = false;
@@ -475,10 +479,14 @@ const authSlice = createSlice({
         state.loginError = null;
         state.otpSent = false;
       })
-      .addCase(login.fulfilled, (state) => {
+      .addCase(login.fulfilled, (state, action) => {
         state.loginLoading = false;
-        state.otpSent = true;
         state.loginError = null;
+        // FIXED: Directly set authenticated state since OTP is now skipped
+        // Cookies are automatically set by the backend, so just update Redux state
+        state.isAuthenticated = true;
+        state.user = action.payload.data.user;
+        state.otpSent = false; // No longer needed, but keep for compatibility
       })
       .addCase(login.rejected, (state, action) => {
         state.loginLoading = false;

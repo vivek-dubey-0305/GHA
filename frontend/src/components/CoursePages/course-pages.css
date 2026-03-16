@@ -1,0 +1,97 @@
+/* ─────────────────────────────────────────
+   COURSE PAGES — SHARED CSS
+   Import in both CourseListing and CourseDetail
+───────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Space+Mono:wght@400;700&display=swap');
+
+:root {
+  --cp-black: #0a0a0a;
+  --cp-deep: #111;
+  --cp-surface: #181818;
+  --cp-card: #141414;
+  --cp-yellow: #f5c518;
+  --cp-yellow-dim: #c9a010;
+  --cp-yellow-glow: rgba(245, 197, 24, 0.13);
+  --cp-white: #f4f3ee;
+  --cp-grey: #888;
+  --cp-grey-mid: #555;
+  --cp-border: rgba(245, 197, 24, 0.16);
+  --cp-border-dim: rgba(255, 255, 255, 0.06);
+  --cp-sidebar: 260px;
+}
+
+/* ── CUSTOM CURSOR ── */
+.cp-cursor {
+  position: fixed;
+  width: 10px;
+  height: 10px;
+  background: var(--cp-yellow);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9999;
+  transform: translate(-50%, -50%);
+  mix-blend-mode: difference;
+  transition: width 0.15s, height 0.15s;
+}
+.cp-cursor-ring {
+  position: fixed;
+  width: 34px;
+  height: 34px;
+  border: 1.5px solid var(--cp-yellow);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9998;
+  transform: translate(-50%, -50%);
+  opacity: 0.45;
+  transition: width 0.2s, height 0.2s;
+}
+
+/* ── NOISE OVERLAY ── */
+.cp-noise {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9990;
+  opacity: 0.022;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='512' height='512' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px;
+}
+
+/* ── PARTICLE CANVAS ── */
+.cp-canvas {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.55;
+}
+
+/* ── SCROLL BAR ── */
+.cp-page::-webkit-scrollbar { width: 4px; height: 4px; }
+.cp-page::-webkit-scrollbar-track { background: var(--cp-deep); }
+.cp-page::-webkit-scrollbar-thumb { background: var(--cp-yellow-dim); border-radius: 2px; }
+
+/* ── REVEAL ANIMATION ── */
+.cp-reveal {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.cp-reveal.cp-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── FADE IN UP ── */
+@keyframes cpFadeInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes cpFadeInRight {
+  from { opacity: 0; transform: translateX(40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes cpBgDrift {
+  from { transform: translate(-50%, -50%) scale(1); }
+  to { transform: translate(-50%, -52%) scale(1.03); }
+}

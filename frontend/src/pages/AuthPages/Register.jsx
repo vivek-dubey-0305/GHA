@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, Link } from 'react-router-dom';
-import { register, selectRegisterLoading, selectRegisterError, selectRegisterSuccess } from '../../redux/slices/auth.slice';
+import { register, selectRegisterLoading, selectRegisterError, selectIsAuthenticated } from '../../redux/slices/auth.slice';
 import { Card, Button, Input, SuccessToast, ErrorToast } from '../../components/ui';
 import { validateEmail, validatePassword, getPasswordStrengthMessage } from '../../utils/auth.utils';
 
@@ -19,25 +19,44 @@ const Register = () => {
   const [errors, setErrors] = useState({});
   const [passwordStrength, setPasswordStrength] = useState('');
   const [toastState, setToastState] = useState({ visible: false, type: 'success', message: '' });
+  const [isRegisterAttempted, setIsRegisterAttempted] = useState(false);
 
   const registerLoading = useSelector(selectRegisterLoading);
   const registerError = useSelector(selectRegisterError);
-  const registerSuccess = useSelector(selectRegisterSuccess);
+  const isAuthenticated = useSelector(selectIsAuthenticated);
 
+  // COMMENTED OUT: OTP verification flow - temporarily using direct authentication via cookies
   // Redirect to verify OTP page on successful registration
+  // useEffect(() => {
+  //   if (registerSuccess) {
+  //     setToastState({
+  //       visible: true,
+  //       type: 'success',
+  //       message: 'Registration successful! OTP sent to your email.'
+  //     });
+  //     // Redirect to verify page after 2 seconds
+  //     setTimeout(() => {
+  //       navigate('/verify', { state: { email: formData.email } });
+  //     }, 2000);
+  //   }
+  // }, [registerSuccess, navigate, formData.email]);
+
+  // TEMPORARY: Navigate to dashboard after successful registration (cookies are set automatically)
+  // Only navigate if a registration was attempted, it completed, and authentication succeeded
   useEffect(() => {
-    if (registerSuccess) {
+    if (isRegisterAttempted && registerLoading === false && registerError === null && isAuthenticated) {
       setToastState({
         visible: true,
         type: 'success',
-        message: 'Registration successful! OTP sent to your email.'
+        message: 'Welcome to your dashboard!'
       });
-      // Redirect to verify page after 2 seconds
-      setTimeout(() => {
-        navigate('/verify', { state: { email: formData.email } });
-      }, 2000);
+      // Small delay to ensure cookies are set and toast is visible
+      const timer = setTimeout(() => {
+        navigate('/dashboard');
+      }, 500);
+      return () => clearTimeout(timer);
     }
-  }, [registerSuccess, navigate, formData.email]);
+  }, [isRegisterAttempted, registerLoading, registerError, isAuthenticated, navigate]);
 
   // Show error toast
   useEffect(() => {
@@ -130,6 +149,7 @@ const Register = () => {
       phone: formData.phone
     });
 
+    setIsRegisterAttempted(true);
     dispatch(register({
       firstName: formData.firstName,
       lastName: formData.lastName,
