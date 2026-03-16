@@ -1,36 +1,38 @@
 import { RouterProvider } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { initializeAuth, selectInitializingAuth, selectIsAuthenticated } from './redux/slices/auth.slice';
+import { initializeAuth, selectInitializingAuth } from './redux/slices/auth.slice';
+import GHALoader from './components/GHALoader';
 import router from './router/router';
+import ErrorBoundary from './components/ErrorBoundary';
 
-const LoadingScreen = () => (
-  <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-black via-gray-900 to-gray-800">
-    <div className="flex flex-col items-center gap-4">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
-      <p className="text-white text-lg">Initializing...</p>
-    </div>
-  </div>
-);
+// Global error handler - catches unhandled promise rejections
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('Unhandled rejection:', event.reason);
+  event.preventDefault();
+});
 
 const App = () => {
   const dispatch = useDispatch();
   const initializingAuth = useSelector(selectInitializingAuth);
-  console.log("Initializing Auth : ", initializingAuth);
-  const isAuthenticated = useSelector(selectIsAuthenticated);
-  console.log("Isauthneticated, ", isAuthenticated)
 
   useEffect(() => {
     // Initialize authentication state on app load
     dispatch(initializeAuth());
   }, [dispatch]);
 
-  // Show loading screen while initializing
+  // Show GHA loader while initializing
   if (initializingAuth) {
-    return <LoadingScreen />;
+    return <GHALoader />;
   }
 
-  return <RouterProvider router={router} />;
+  return (
+    <div className="bg-[#080808] text-[#f5f5f0] overflow-x-hidden">
+      <ErrorBoundary>
+        <RouterProvider router={router} />
+      </ErrorBoundary>
+    </div>
+  );
 };
 
 export default App;

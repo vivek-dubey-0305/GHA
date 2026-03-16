@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, Link } from 'react-router-dom';
-import { login, selectLoginLoading, selectLoginError, selectOtpSent } from '../../redux/slices/auth.slice'
+import { login, selectLoginLoading, selectLoginError, selectIsAuthenticated } from '../../redux/slices/auth.slice'
 import { Card, Button, Input, SuccessToast, ErrorToast } from '../../components/ui';
 import { validateEmail } from '../../utils/auth.utils';
 
@@ -11,17 +11,19 @@ const Login = () => {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState({});
   const [toastState, setToastState] = useState({ visible: false, type: 'success', message: '' });
+  const [isLoginAttempted, setIsLoginAttempted] = useState(false);
 
   const loginLoading = useSelector(selectLoginLoading);
   const loginError = useSelector(selectLoginError);
-  const otpSent = useSelector(selectOtpSent);
+  const isAuthenticated = useSelector(selectIsAuthenticated);
 
+  // COMMENTED OUT: OTP verification flow - temporarily using direct authentication via cookies
   // Redirect to verify page when OTP is sent
-  useEffect(() => {
-    if (otpSent) {
-      navigate('/verify', { state: { email: formData.email } });
-    }
-  }, [otpSent, navigate, formData.email]);
+  // useEffect(() => {
+  //   if (otpSent) {
+  //     navigate('/verify', { state: { email: formData.email } });
+  //   }
+  // }, [otpSent, navigate, formData.email]);
 
   // Show error toast
   useEffect(() => {
@@ -37,6 +39,18 @@ const Login = () => {
       return () => clearTimeout(timer);
     }
   }, [loginError]);
+
+  // TEMPORARY: Navigate to dashboard after successful login (cookies are set automatically)
+  // Only navigate if a login was attempted, it completed, and there's no error
+  useEffect(() => {
+    if (isLoginAttempted && loginLoading === false && loginError === null && isAuthenticated) {
+      // Small delay to ensure cookies are set
+      const timer = setTimeout(() => {
+        navigate('/dashboard');
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoginAttempted, loginLoading, loginError, isAuthenticated, navigate]);
 
   const validateForm = () => {
     const newErrors = {};
@@ -79,6 +93,7 @@ const Login = () => {
       return;
     }
 
+    setIsLoginAttempted(true);
     dispatch(login({
       email: formData.email,
       password: formData.password
@@ -164,7 +179,7 @@ const Login = () => {
 
           {/* Info Text */}
           <p className="text-center text-xs text-gray-600 mt-2">
-            OTP will be sent to your registered email address
+            You will be directly redirected to your dashboard upon successful login
           </p>
         </form>
       </Card>

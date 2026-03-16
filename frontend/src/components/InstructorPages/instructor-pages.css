@@ -1,0 +1,101 @@
+/* ─────────────────────────────────────────
+   INSTRUCTOR PAGES — SHARED CSS
+   Import in both InstructorListing and InstructorDetail
+───────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Space+Mono:wght@400;700&display=swap');
+
+:root {
+  --ip-black:   #0a0a0a;
+  --ip-deep:    #111;
+  --ip-surface: #181818;
+  --ip-card:    #141414;
+  --ip-yellow:  #f5c518;
+  --ip-ydim:    #c9a010;
+  --ip-yglow:   rgba(245, 197, 24, 0.13);
+  --ip-white:   #f4f3ee;
+  --ip-grey:    #888;
+  --ip-gmid:    #555;
+  --ip-border:  rgba(245, 197, 24, 0.18);
+  --ip-bdim:    rgba(255, 255, 255, 0.06);
+  --ip-sidebar: 268px;
+}
+
+/* ── CUSTOM CURSOR ── */
+.ip-cursor {
+  position: fixed;
+  width: 10px; height: 10px;
+  background: var(--ip-yellow);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9999;
+  transform: translate(-50%, -50%);
+  mix-blend-mode: difference;
+  transition: width .15s, height .15s;
+}
+.ip-cursor-ring {
+  position: fixed;
+  width: 34px; height: 34px;
+  border: 1.5px solid var(--ip-yellow);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9998;
+  transform: translate(-50%, -50%);
+  opacity: .45;
+  transition: width .2s, height .2s, border-radius .2s;
+}
+
+/* ── NOISE OVERLAY ── */
+.ip-noise {
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 9990; opacity: .022;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='512' height='512' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px;
+}
+
+/* ── PARTICLE CANVAS ── */
+.ip-canvas {
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 0; opacity: .5;
+}
+
+/* ── REVEAL ── */
+.ip-reveal {
+  opacity: 0;
+  transform: translateY(32px);
+  transition: opacity .7s, transform .7s;
+}
+.ip-reveal.ip-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── KEYFRAMES ── */
+@keyframes ipFadeInUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes ipFadeInRight {
+  from { opacity: 0; transform: translateX(32px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes ipBgDrift {
+  from { transform: translate(-50%,-50%) scale(1); }
+  to   { transform: translate(-50%,-52%) scale(1.04); }
+}
+@keyframes ipCardFadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes ipChipPop {
+  from { opacity: 0; transform: scale(.85); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes ipRipple {
+  0%,100% { transform: scale(1); opacity: .4; }
+  50%     { transform: scale(1.5); opacity: 0; }
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--ip-deep); }
+::-webkit-scrollbar-thumb { background: var(--ip-ydim); border-radius: 2px; }

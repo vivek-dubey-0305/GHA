@@ -45,15 +45,20 @@ export const registerUser = asyncHandler(async (req, res) => {
             password,
             phone: phone ? phone.trim() : null,
             isActive: true,
-            isEmailVerified: false,
+            // TEMPORARY: Mark email as verified to skip OTP (nodemailer not working in production)
+            isEmailVerified: true,
         });
 
-        await generateAndSendOtp(user, `${firstName} ${lastName}`, "verify");
+        // Save user to database first
+        await user.save();
 
-        return successResponse(res, 201, "Registration successful. Please verify your email with the OTP sent.", {
-            email: user.email,
-            message: "Check your email for the 6-digit OTP",
-            otpExpiresIn: "10 minutes",
+        // COMMENTED OUT: OTP verification temporarily disabled (nodemailer issues)
+        // await generateAndSendOtp(user, `${firstName} ${lastName}`, "verify");
+
+        // TEMPORARY: Issue tokens and set cookies directly instead of OTP
+        return issueTokensAndRespond(user, "user", req, res, getUserData, {
+            setEmailVerified: true,
+            nameForEmail: `${firstName} ${lastName}`,
         });
     } catch (e) {
         logger.error(`User registration error: ${e.message}`);
@@ -70,7 +75,8 @@ export const loginUser = asyncHandler(async (req, res) => {
     const user = await User.findOne({ email: email.toLowerCase() }).select("+password");
     if (!user) return errorResponse(res, 401, "Invalid email or password");
     if (!user.isActive) return errorResponse(res, 403, "User account is inactive");
-    if (!user.isEmailVerified) return errorResponse(res, 403, "Please verify your email before logging in");
+    // COMMENTED OUT: Email verification check temporarily disabled (OTP/nodemailer not working)
+    // if (!user.isEmailVerified) return errorResponse(res, 403, "Please verify your email before logging in");
 
     if (user.isLocked) {
         const wait = Math.ceil((user.lockUntil - Date.now()) / 60_000);
@@ -83,19 +89,20 @@ export const loginUser = asyncHandler(async (req, res) => {
         return errorResponse(res, 401, "Invalid email or password");
     }
 
-    try {
-        await generateAndSendOtp(user, `${user.firstName} ${user.lastName}`, "login");
-    } catch {
-        user.verificationCode = null;
-        user.verificationCodeExpires = null;
-        await user.save({ validateBeforeSave: false });
-        return errorResponse(res, 500, "Failed to send OTP email. Please try again later.");
-    }
+    // COMMENTED OUT: OTP generation temporarily disabled (nodemailer not working in production)
+    // try {
+    //     await generateAndSendOtp(user, `${user.firstName} ${user.lastName}`, "login");
+    // } catch {
+    //     user.verificationCode = null;
+    //     user.verificationCodeExpires = null;
+    //     await user.save({ validateBeforeSave: false });
+    //     return errorResponse(res, 500, "Failed to send OTP email. Please try again later.");
+    // }
 
-    return successResponse(res, 200, "OTP sent to email. Verify to login.", {
-        email: user.email,
-        message: "Check your email for the 6-digit OTP",
-        otpExpiresIn: "10 minutes",
+    // TEMPORARY: Issue tokens and set cookies directly instead of OTP
+    return issueTokensAndRespond(user, "user", req, res, getUserData, {
+        setEmailVerified: true,
+        nameForEmail: `${user.firstName} ${user.lastName}`,
     });
 });
 

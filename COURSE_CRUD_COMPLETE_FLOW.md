@@ -740,3 +740,11 @@ export const changePassword = asyncHandler(async (req, res) => {
         return errorResponse(res, e.message === "Current password is incorrect" ? 401 : 400, e.message);
     }
 });
+
+
+
+..user.auth.controller.js *backend
+*frontend/  
+login.jsx
+register.jsx
+auth.slice.js
