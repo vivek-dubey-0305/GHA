@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { CATEGORY_MAP } from "../utils/categories.utils.js";
 
 const courseSchema = new mongoose.Schema({
     // Basic Course Information
@@ -31,15 +32,22 @@ const courseSchema = new mongoose.Schema({
     },
 
     // Course Metadata
-    category: {
+        category: {
         type: String,
         required: [true, "Course category is required"],
-        trim: true,
-        enum: [
-            "programming", "design", "business", "marketing", "data-science",
-            "photography", "music", "language", "health", "fitness", "other"
-        ]
-    },
+        enum: Object.keys(CATEGORY_MAP)
+        },
+
+        subCategory: {
+        type: String,
+        required: [true, "Course subcategory is required"],
+        validate: {
+            validator: function(value) {
+            return CATEGORY_MAP[this.category]?.includes(value);
+            },
+            message: "Invalid subcategory for selected category"
+        }
+        },
     level: {
         type: String,
         required: [true, "Course level is required"],
@@ -200,6 +208,27 @@ const courseSchema = new mongoose.Schema({
         type: Boolean,
         default: true
     },
+    isInternshipEligible: {
+        type: Boolean,
+        default: false
+    },
+    projectBased: {
+        type: Boolean,
+        default: false
+    },
+    projects: [{
+        title: {
+            type: String,
+            trim: true,
+            maxlength: 200
+        },
+        description: {
+            type: String,
+            trim: true,
+            maxlength: 700
+        }
+    }],
+
 
     // Certificates (references to Certificate model)
     // When certificateEnabled is true, certificates are created and linked here

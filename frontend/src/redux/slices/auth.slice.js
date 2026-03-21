@@ -97,7 +97,7 @@ export const getProfile = createAsyncThunk(
   'auth/getProfile',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiClient.get(`/profile`);
+      const response = await apiClient.get(`/user/profile`);
 
       return response.data.data; // The user data
     } catch (error) {
@@ -112,7 +112,7 @@ export const uploadProfilePicture = createAsyncThunk(
   'auth/uploadProfilePicture',
   async (formData, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/upload-profile-picture`, formData, {
+      const response = await apiClient.post(`/user/upload-profile-picture`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -131,7 +131,7 @@ export const logout = createAsyncThunk(
   'auth/logout',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/logout`, {});
+      const response = await apiClient.post(`/user/logout`, {});
 
       return response.data;
     } catch (error) {
@@ -146,7 +146,7 @@ export const logout = createAsyncThunk(
 //   'auth/refreshToken',
 //   async (_, { rejectWithValue }) => {
 //     try {
-//       const response = await apiClient.post(`/refresh-token`, {});
+//       const response = await apiClient.post(`/user/refresh-token`, {});
 
 //       return response.data;
 //     } catch (error) {
@@ -248,7 +248,7 @@ export const getUserSessions = createAsyncThunk(
   'auth/getUserSessions',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiClient.get(`/sessions`);
+      const response = await apiClient.get(`/user/sessions`);
       return response.data.data; // The sessions data
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Failed to get sessions';
@@ -262,7 +262,7 @@ export const logoutSession = createAsyncThunk(
   'auth/logoutSession',
   async ({ sessionId }, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/logout-session`, {
+      const response = await apiClient.post(`/user/logout-session`, {
         sessionId
       });
       return response.data;
@@ -278,7 +278,7 @@ export const logoutAllSessions = createAsyncThunk(
   'auth/logoutAllSessions',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/logout-all-sessions`, {});
+      const response = await apiClient.post(`/user/logout-all-sessions`, {});
       return response.data;
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Failed to logout all sessions';
@@ -292,7 +292,7 @@ export const changePassword = createAsyncThunk(
   'auth/changePassword',
   async ({ currentPassword, newPassword, confirmPassword }, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/change-password`, {
+      const response = await apiClient.post(`/user/change-password`, {
         currentPassword,
         newPassword,
         confirmPassword

@@ -6,7 +6,10 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "seed:courses": "node seeds/comprehensive-courses-seed.js",
+    "seed:courses:cleanup": "node seeds/comprehensive-courses-seed.js --cleanup",
+    "seed:courses:cleanup-only": "node seeds/comprehensive-courses-seed.js --cleanup-only"
   },
   "keywords": [],
   "author": "",

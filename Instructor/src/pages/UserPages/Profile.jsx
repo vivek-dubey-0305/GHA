@@ -1,311 +1,531 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
-  User, Camera, RefreshCw, AlertTriangle, Save,
-  Mail, Phone, MapPin, Briefcase, BookOpen, Calendar,
+  AlertTriangle,
+  Award,
+  BookOpen,
+  Briefcase,
+  CheckCircle2,
+  Clock3,
+  GraduationCap,
+  Link2,
+  Settings2,
+  SlidersHorizontal,
+  Sparkles,
+  Star,
+  User,
+  Wrench
 } from 'lucide-react';
 import { InstructorLayout } from '../../components/layout/InstructorLayout';
 import {
-  getProfile, uploadProfilePicture,
-  selectInstructor,
-  selectUploadProfilePictureLoading,
-} from '../../redux/slices/auth.slice';
+  deleteMyProfilePicture,
+  getMyProfile,
+  selectDeleteProfilePictureLoading,
+  selectInstructorProfile,
+  updateMyProfile
+} from '../../redux/slices/instructor.slice';
+import { selectInstructor } from '../../redux/slices/auth.slice';
 import { useProtectedRoute, useTokenRefreshOnActivity } from '../../hooks/useProtectedRoute';
-import apiClient from '../../utils/api.utils';
+import { ProfileTabs, ProfileStats } from '../../components/profile/ProfileTabs';
+import { ProfileHeader } from '../../components/profile/ProfileHeader';
+import { BasicInfoSection } from '../../components/profile/sections/BasicInfoSection';
+import { BioSpecializationSection } from '../../components/profile/sections/BioSpecializationSection';
+import { SkillsSection } from '../../components/profile/sections/SkillsSection';
+import { AchievementsSection } from '../../components/profile/sections/AchievementsSection';
+import { ExperienceSection } from '../../components/profile/sections/ExperienceSection';
+import { QualificationsSection } from '../../components/profile/sections/QualificationsSection';
+import { SocialSection } from '../../components/profile/sections/SocialSection';
+import { AvailabilitySection } from '../../components/profile/sections/AvailabilitySection';
+import { PreferencesSection } from '../../components/profile/sections/PreferencesSection';
+import { RatingSection } from '../../components/profile/sections/RatingSection';
+
+const TABS = [
+  { key: 'basic', label: 'Basic Info', icon: User },
+  { key: 'bio', label: 'Bio & Specializations', icon: BookOpen },
+  { key: 'skills', label: 'Skills', icon: Wrench },
+  { key: 'achievements', label: 'Achievements', icon: Award },
+  { key: 'experience', label: 'Experience', icon: Briefcase },
+  { key: 'qualifications', label: 'Education', icon: GraduationCap },
+  { key: 'social', label: 'Social Links', icon: Link2 },
+  { key: 'availability', label: 'Availability', icon: Clock3 },
+  { key: 'preferences', label: 'Preferences', icon: Settings2 },
+  { key: 'rating', label: 'Reviews', icon: Star }
+];
+
+const EMPTY_DRAFT = {
+  firstName: '',
+  lastName: '',
+  email: '',
+  phone: '',
+  dateOfBirth: '',
+  gender: '',
+  address: { street: '', city: '', state: '', postalCode: '', country: '' },
+  professionalTitle: '',
+  shortBio: '',
+  bio: '',
+  yearsOfExperience: 0,
+  bannerColor: '#111111',
+  specializations: [],
+  skills: [],
+  tagsInput: '',
+  workExperience: [],
+  qualifications: [],
+  achievements: [],
+  socialLinks: { linkedin: '', github: '', twitter: '', website: '', youtube: '' },
+  teachingLanguagesInput: 'English',
+  backgroundType: null,
+  availability: {
+    isAvailableForMentorship: false,
+    isAvailableForLive: false,
+    weeklyAvailableHours: 0,
+    bookingMessage: ''
+  },
+  preferences: {
+    emailNotifications: true,
+    classReminders: true,
+    studentUpdates: true,
+    promotionalEmails: true,
+    language: 'en',
+    timezone: 'UTC'
+  }
+};
+
+const toNumberOrNull = (value) => {
+  if (value === '' || value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const normalizeStringArray = (value) => {
+  return String(value || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+};
+
+const mapProfileToDraft = (profile) => {
+  if (!profile) return EMPTY_DRAFT;
+
+  return {
+    ...EMPTY_DRAFT,
+    firstName: profile.firstName || '',
+    lastName: profile.lastName || '',
+    email: profile.email || '',
+    phone: profile.phone || '',
+    dateOfBirth: profile.dateOfBirth ? new Date(profile.dateOfBirth).toISOString().slice(0, 10) : '',
+    gender: profile.gender || '',
+    address: {
+      street: profile.address?.street || '',
+      city: profile.address?.city || '',
+      state: profile.address?.state || '',
+      postalCode: profile.address?.postalCode || '',
+      country: profile.address?.country || ''
+    },
+    professionalTitle: profile.professionalTitle || '',
+    shortBio: profile.shortBio || '',
+    bio: profile.bio || '',
+    yearsOfExperience: profile.yearsOfExperience ?? 0,
+    bannerColor: profile.bannerColor || '#111111',
+    specializations: profile.specializations || [],
+    skills: profile.skills || [],
+    tagsInput: (profile.tags || []).join(', '),
+    workExperience: profile.workExperience || [],
+    qualifications: profile.qualifications || [],
+    achievements: profile.achievements || [],
+    socialLinks: {
+      linkedin: profile.socialLinks?.linkedin || '',
+      github: profile.socialLinks?.github || '',
+      twitter: profile.socialLinks?.twitter || '',
+      website: profile.socialLinks?.website || '',
+      youtube: profile.socialLinks?.youtube || ''
+    },
+    teachingLanguagesInput: (profile.teachingLanguages || ['English']).join(', '),
+    backgroundType: profile.backgroundType || null,
+    availability: {
+      isAvailableForMentorship: Boolean(profile.availability?.isAvailableForMentorship),
+      isAvailableForLive: Boolean(profile.availability?.isAvailableForLive),
+      weeklyAvailableHours: profile.availability?.weeklyAvailableHours ?? 0,
+      bookingMessage: profile.availability?.bookingMessage || ''
+    },
+    preferences: {
+      emailNotifications: profile.preferences?.emailNotifications ?? true,
+      classReminders: profile.preferences?.classReminders ?? true,
+      studentUpdates: profile.preferences?.studentUpdates ?? true,
+      promotionalEmails: profile.preferences?.promotionalEmails ?? true,
+      language: profile.preferences?.language || 'en',
+      timezone: profile.preferences?.timezone || 'UTC'
+    }
+  };
+};
+
+const buildPayloadFromDraft = (draft) => {
+  const specializations = (draft.specializations || [])
+    .filter((item) => item.area && item.category)
+    .map((item) => ({
+      area: item.area,
+      category: item.category,
+      description: item.description || '',
+      icon: item.icon || 'Sparkles',
+      isPrimary: Boolean(item.isPrimary)
+    }));
+
+  const skills = (draft.skills || [])
+    .filter((item) => item.name)
+    .map((item) => ({
+      name: item.name,
+      proficiency: Math.max(1, Math.min(100, Number(item.proficiency) || 1)),
+      category: item.category || 'other',
+      displayOrder: Number(item.displayOrder) || 0
+    }));
+
+  const workExperience = (draft.workExperience || [])
+    .filter((item) => item.company && item.role && Number(item.startYear))
+    .map((item) => ({
+      company: item.company,
+      role: item.role,
+      companyType: item.companyType || 'corporate',
+      startMonth: toNumberOrNull(item.startMonth),
+      startYear: Number(item.startYear),
+      endMonth: toNumberOrNull(item.endMonth),
+      endYear: toNumberOrNull(item.endYear),
+      isCurrent: Boolean(item.isCurrent),
+      description: item.description || '',
+      techStack: Array.isArray(item.techStack) ? item.techStack : [],
+      location: item.location || ''
+    }));
+
+  const qualifications = (draft.qualifications || [])
+    .filter((item) => item.title && item.institution)
+    .map((item) => ({
+      entryType: item.entryType || 'degree',
+      title: item.title,
+      institution: item.institution,
+      fieldOfStudy: item.fieldOfStudy || '',
+      startYear: toNumberOrNull(item.startYear),
+      endYear: toNumberOrNull(item.endYear),
+      isOngoing: Boolean(item.isOngoing),
+      description: item.description || '',
+      credentialId: item.credentialId || '',
+      credentialUrl: item.credentialUrl || '',
+      icon: item.icon || 'GraduationCap'
+    }));
+
+  const achievements = (draft.achievements || [])
+    .filter((item) => item.title)
+    .map((item) => ({
+      icon: item.icon || 'Trophy',
+      title: item.title,
+      description: item.description || '',
+      year: toNumberOrNull(item.year),
+      category: item.category || 'award',
+      url: item.url || ''
+    }));
+
+  return {
+    firstName: draft.firstName,
+    lastName: draft.lastName,
+    phone: draft.phone,
+    dateOfBirth: draft.dateOfBirth || null,
+    gender: draft.gender || null,
+    address: {
+      street: draft.address.street || '',
+      city: draft.address.city || '',
+      state: draft.address.state || '',
+      postalCode: draft.address.postalCode || '',
+      country: draft.address.country || ''
+    },
+    professionalTitle: draft.professionalTitle,
+    shortBio: draft.shortBio,
+    bio: draft.bio,
+    yearsOfExperience: Math.max(0, Number(draft.yearsOfExperience) || 0),
+    bannerColor: draft.bannerColor || '#111111',
+    specializations,
+    skills,
+    tags: normalizeStringArray(draft.tagsInput).map((tag) => tag.toLowerCase()),
+    workExperience,
+    qualifications,
+    achievements,
+    socialLinks: {
+      linkedin: draft.socialLinks.linkedin || '',
+      github: draft.socialLinks.github || '',
+      twitter: draft.socialLinks.twitter || '',
+      website: draft.socialLinks.website || '',
+      youtube: draft.socialLinks.youtube || ''
+    },
+    teachingLanguages: normalizeStringArray(draft.teachingLanguagesInput),
+    backgroundType: draft.backgroundType || null,
+    availability: {
+      isAvailableForMentorship: Boolean(draft.availability.isAvailableForMentorship),
+      isAvailableForLive: Boolean(draft.availability.isAvailableForLive),
+      weeklyAvailableHours: Math.max(0, Number(draft.availability.weeklyAvailableHours) || 0),
+      bookingMessage: draft.availability.bookingMessage || ''
+    },
+    preferences: {
+      emailNotifications: Boolean(draft.preferences.emailNotifications),
+      classReminders: Boolean(draft.preferences.classReminders),
+      studentUpdates: Boolean(draft.preferences.studentUpdates),
+      promotionalEmails: Boolean(draft.preferences.promotionalEmails),
+      language: draft.preferences.language || 'en',
+      timezone: draft.preferences.timezone || 'UTC'
+    }
+  };
+};
 
 export default function Profile() {
   const dispatch = useDispatch();
-  const instructor = useSelector(selectInstructor);
-  const uploadLoading = useSelector(selectUploadProfilePictureLoading);
+  const authInstructor = useSelector(selectInstructor);
+  const profile = useSelector(selectInstructorProfile);
+  const deletingProfilePicture = useSelector(selectDeleteProfilePictureLoading);
 
-  const [editing, setEditing] = useState(false);
+  const [activeTab, setActiveTab] = useState('basic');
+  const [draft, setDraft] = useState(EMPTY_DRAFT);
+  const [saveError, setSaveError] = useState('');
+  const [saveSuccess, setSaveSuccess] = useState('');
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState(null);
-  const [form, setForm] = useState({});
-  const fileRef = useRef(null);
+  const [profileImageFile, setProfileImageFile] = useState(null);
+  const [profileImagePreview, setProfileImagePreview] = useState('');
+  const profileInputRef = useRef(null);
 
   useProtectedRoute();
   useTokenRefreshOnActivity();
 
-  useEffect(() => {
-    if (!instructor) dispatch(getProfile());
-  }, [dispatch, instructor]);
+  const resolvedProfile = profile || authInstructor;
+  const previewUrl = useMemo(() => {
+    return profileImagePreview || resolvedProfile?.profilePicture?.secure_url || '';
+  }, [profileImagePreview, resolvedProfile?.profilePicture?.secure_url]);
 
   useEffect(() => {
-    if (instructor) {
-      setForm({
-        firstName: instructor.firstName || '',
-        lastName: instructor.lastName || '',
-        phone: instructor.phone || '',
-        bio: instructor.bio || '',
-        gender: instructor.gender || '',
-        yearsOfExperience: instructor.yearsOfExperience || 0,
-        'address.street': instructor.address?.street || '',
-        'address.city': instructor.address?.city || '',
-        'address.state': instructor.address?.state || '',
-        'address.postalCode': instructor.address?.postalCode || '',
-        'address.country': instructor.address?.country || '',
-      });
+    if (!profile) {
+      dispatch(getMyProfile());
     }
-  }, [instructor]);
+  }, [dispatch, profile]);
 
-  const handleChange = (field, value) => {
-    setForm(prev => ({ ...prev, [field]: value }));
+  useEffect(() => {
+    if (!resolvedProfile) return;
+    setDraft(mapProfileToDraft(resolvedProfile));
+    setSaveError('');
+  }, [resolvedProfile]);
+
+  useEffect(() => {
+    return () => {
+      if (profileImagePreview && profileImagePreview.startsWith('blob:')) {
+        URL.revokeObjectURL(profileImagePreview);
+      }
+    };
+  }, [profileImagePreview]);
+
+  const updateField = (path, value) => {
+    setDraft((prev) => {
+      const keys = path.split('.');
+      const next = { ...prev };
+      let cursor = next;
+
+      for (let index = 0; index < keys.length - 1; index += 1) {
+        const key = keys[index];
+        cursor[key] = { ...cursor[key] };
+        cursor = cursor[key];
+      }
+
+      cursor[keys[keys.length - 1]] = value;
+      return next;
+    });
   };
 
-  const handleSave = async () => {
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const formData = new FormData();
-      formData.append('firstName', form.firstName);
-      formData.append('lastName', form.lastName);
-      formData.append('phone', form.phone);
-      formData.append('bio', form.bio);
-      formData.append('gender', form.gender);
-      formData.append('yearsOfExperience', form.yearsOfExperience);
-      formData.append('address[street]', form['address.street']);
-      formData.append('address[city]', form['address.city']);
-      formData.append('address[state]', form['address.state']);
-      formData.append('address[postalCode]', form['address.postalCode']);
-      formData.append('address[country]', form['address.country']);
+  const addArrayItem = (key, item) => {
+    setDraft((prev) => ({ ...prev, [key]: [...(prev[key] || []), item] }));
+  };
 
-      await apiClient.put('/instructor/profile', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      await dispatch(getProfile()).unwrap();
-      setEditing(false);
-    } catch (err) {
-      setSaveError(err.response?.data?.message || err.message || 'Failed to update profile');
+  const removeArrayItem = (key, index) => {
+    setDraft((prev) => ({
+      ...prev,
+      [key]: (prev[key] || []).filter((_, currentIndex) => currentIndex !== index)
+    }));
+  };
+
+  const updateArrayItem = (key, index, field, value) => {
+    setDraft((prev) => ({
+      ...prev,
+      [key]: (prev[key] || []).map((item, currentIndex) =>
+        currentIndex === index ? { ...item, [field]: value } : item
+      )
+    }));
+  };
+
+  const onSelectProfileImage = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (profileImagePreview && profileImagePreview.startsWith('blob:')) {
+      URL.revokeObjectURL(profileImagePreview);
+    }
+
+    setProfileImageFile(file);
+    setProfileImagePreview(URL.createObjectURL(file));
+  };
+
+  const onRemoveProfileImage = async () => {
+    setSaveError('');
+    setSaveSuccess('');
+    try {
+      await dispatch(deleteMyProfilePicture()).unwrap();
+      await dispatch(getMyProfile()).unwrap();
+      setProfileImageFile(null);
+      setProfileImagePreview('');
+      setSaveSuccess('Profile photo removed successfully.');
+    } catch (error) {
+      setSaveError(error || 'Failed to remove profile photo.');
+    }
+  };
+
+  const handleSaveAll = async () => {
+    setSaving(true);
+    setSaveError('');
+    setSaveSuccess('');
+
+    try {
+      if (profileImageFile) {
+        const imageData = new FormData();
+        imageData.append('profilePicture', profileImageFile);
+        await dispatch(updateMyProfile(imageData)).unwrap();
+      }
+
+      const payload = buildPayloadFromDraft(draft);
+      await dispatch(updateMyProfile(payload)).unwrap();
+      await dispatch(getMyProfile()).unwrap();
+
+      setProfileImageFile(null);
+      setSaveSuccess('All profile updates saved successfully.');
+    } catch (error) {
+      setSaveError(error || 'Failed to save profile changes.');
     } finally {
       setSaving(false);
     }
   };
 
-  const handlePictureUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const formData = new FormData();
-    formData.append('profilePicture', file);
-    dispatch(uploadProfilePicture(formData)).then(() => dispatch(getProfile()));
-  };
-
-  if (!instructor) {
+  if (!resolvedProfile) {
     return (
       <InstructorLayout>
-        <div className="p-6 lg:p-8">
-          <div className="space-y-6">
-            <div className="bg-[#111] border border-gray-800 rounded-xl p-8 animate-pulse h-[200px]" />
-            <div className="bg-[#111] border border-gray-800 rounded-xl p-8 animate-pulse h-[300px]" />
-          </div>
+        <div className="p-6 lg:p-8 space-y-4">
+          <div className="bg-[#111] border border-gray-800 rounded-xl h-24 animate-pulse" />
+          <div className="bg-[#111] border border-gray-800 rounded-xl h-16 animate-pulse" />
+          <div className="bg-[#111] border border-gray-800 rounded-xl h-80 animate-pulse" />
         </div>
       </InstructorLayout>
     );
   }
 
-  const profilePicUrl = instructor.profilePicture?.secure_url;
-
   return (
     <InstructorLayout>
-      <div className="p-6 lg:p-8 space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <div className="flex items-center gap-3 mb-1">
-              <User className="w-7 h-7 text-white" />
-              <h1 className="text-2xl lg:text-3xl font-bold text-white">Profile</h1>
+            <div className="flex items-center gap-2 text-white mb-1">
+              <SlidersHorizontal className="w-5 h-5" />
+              <h1 className="text-xl sm:text-2xl font-bold">Instructor Profile</h1>
             </div>
-            <p className="text-gray-500">Manage your instructor profile</p>
+            <p className="text-gray-500 text-sm">Manage your public instructor profile, credentials, and portfolio.</p>
           </div>
-          {!editing ? (
-            <button
-              onClick={() => setEditing(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
-            >
-              Edit Profile
-            </button>
-          ) : (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => { setEditing(false); setSaveError(null); }}
-                className="flex items-center gap-2 px-4 py-2 bg-[#111] border border-gray-800 text-gray-300 hover:text-white rounded-lg text-sm font-medium transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors disabled:opacity-50"
-              >
-                <Save className="w-4 h-4" /> {saving ? 'Saving...' : 'Save Changes'}
-              </button>
-            </div>
-          )}
+          <button
+            type="button"
+            onClick={handleSaveAll}
+            disabled={saving}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white text-black rounded-lg text-sm font-semibold hover:bg-gray-200 transition-colors disabled:opacity-60"
+          >
+            {saving ? 'Saving All Changes...' : 'Save Changes'}
+          </button>
         </div>
 
-        {saveError && (
-          <div className="bg-[#111] border border-gray-700 rounded-lg p-3 text-gray-300 text-sm flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 flex-shrink-0" /> {saveError}
+        {saveError ? (
+          <div className="bg-[#111] border border-red-900/80 rounded-lg p-3 text-red-200 text-sm flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            {saveError}
           </div>
-        )}
+        ) : null}
 
-        {/* Profile Picture + Basic Info Card */}
-        <div className="bg-[#111] border border-gray-800 rounded-xl p-6">
-          <div className="flex flex-col sm:flex-row items-center gap-6">
-            <div className="relative group">
-              {profilePicUrl ? (
-                <img src={profilePicUrl} alt="Profile" className="w-24 h-24 rounded-full object-cover border-2 border-gray-700" />
-              ) : (
-                <div className="w-24 h-24 rounded-full bg-white/10 flex items-center justify-center text-white text-3xl font-bold border-2 border-gray-700">
-                  {instructor.firstName?.[0]?.toUpperCase() || '?'}
-                </div>
-              )}
-              <button
-                onClick={() => fileRef.current?.click()}
-                disabled={uploadLoading}
-                className="absolute bottom-0 right-0 p-2 bg-white text-black rounded-full hover:bg-gray-200 transition-colors shadow-lg"
-              >
-                <Camera className="w-3.5 h-3.5" />
-              </button>
-              <input ref={fileRef} type="file" accept="image/*" onChange={handlePictureUpload} className="hidden" />
-            </div>
-            <div className="text-center sm:text-left">
-              <h2 className="text-xl font-bold text-white">{instructor.firstName} {instructor.lastName}</h2>
-              <p className="text-gray-500 text-sm flex items-center gap-1.5 justify-center sm:justify-start mt-1">
-                <Mail className="w-3.5 h-3.5" /> {instructor.email}
-              </p>
-              {instructor.phone && (
-                <p className="text-gray-500 text-sm flex items-center gap-1.5 justify-center sm:justify-start mt-1">
-                  <Phone className="w-3.5 h-3.5" /> {instructor.phone}
-                </p>
-              )}
-              <div className="flex items-center gap-3 mt-2 text-xs text-gray-600 justify-center sm:justify-start">
-                {instructor.specialization?.length > 0 && (
-                  <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" /> {instructor.specialization.join(', ')}</span>
-                )}
-                {instructor.yearsOfExperience > 0 && (
-                  <span className="flex items-center gap-1"><Briefcase className="w-3 h-3" /> {instructor.yearsOfExperience}y exp</span>
-                )}
-              </div>
-            </div>
+        {saveSuccess ? (
+          <div className="bg-[#111] border border-gray-700 rounded-lg p-3 text-gray-200 text-sm flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            {saveSuccess}
           </div>
+        ) : null}
+
+        <ProfileHeader
+          profile={resolvedProfile}
+          profilePreviewUrl={previewUrl}
+          onProfileImageSelect={onSelectProfileImage}
+          onRemoveProfileImage={onRemoveProfileImage}
+          deletingProfileImage={deletingProfilePicture}
+          profileInputRef={profileInputRef}
+        />
+
+        <ProfileTabs tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />
+        <ProfileStats profile={resolvedProfile} />
+
+        {activeTab === 'basic' ? <BasicInfoSection draft={draft} updateField={updateField} /> : null}
+        {activeTab === 'bio' ? (
+          <BioSpecializationSection
+            draft={draft}
+            updateField={updateField}
+            addArrayItem={addArrayItem}
+            removeArrayItem={removeArrayItem}
+            updateArrayItem={updateArrayItem}
+          />
+        ) : null}
+        {activeTab === 'skills' ? (
+          <SkillsSection
+            draft={draft}
+            addArrayItem={addArrayItem}
+            removeArrayItem={removeArrayItem}
+            updateArrayItem={updateArrayItem}
+          />
+        ) : null}
+        {activeTab === 'achievements' ? (
+          <AchievementsSection
+            draft={draft}
+            addArrayItem={addArrayItem}
+            removeArrayItem={removeArrayItem}
+            updateArrayItem={updateArrayItem}
+          />
+        ) : null}
+        {activeTab === 'experience' ? (
+          <ExperienceSection
+            draft={draft}
+            updateField={updateField}
+            addArrayItem={addArrayItem}
+            removeArrayItem={removeArrayItem}
+            updateArrayItem={updateArrayItem}
+          />
+        ) : null}
+        {activeTab === 'qualifications' ? (
+          <QualificationsSection
+            draft={draft}
+            addArrayItem={addArrayItem}
+            removeArrayItem={removeArrayItem}
+            updateArrayItem={updateArrayItem}
+          />
+        ) : null}
+        {activeTab === 'social' ? <SocialSection draft={draft} updateField={updateField} /> : null}
+        {activeTab === 'availability' ? <AvailabilitySection draft={draft} updateField={updateField} /> : null}
+        {activeTab === 'preferences' ? <PreferencesSection draft={draft} updateField={updateField} /> : null}
+        {activeTab === 'rating' ? <RatingSection profile={resolvedProfile} /> : null}
+
+        <div className="flex justify-end pt-2">
+          <button
+            type="button"
+            onClick={handleSaveAll}
+            disabled={saving}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white text-black rounded-lg text-sm font-semibold hover:bg-gray-200 transition-colors disabled:opacity-60"
+          >
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
         </div>
 
-        {/* Details */}
-        <div className="bg-[#111] border border-gray-800 rounded-xl p-6 space-y-5">
-          <h3 className="text-white font-semibold text-sm">Personal Information</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="First Name" value={form.firstName} field="firstName" editing={editing} onChange={handleChange} />
-            <Field label="Last Name" value={form.lastName} field="lastName" editing={editing} onChange={handleChange} />
-            <Field label="Phone" value={form.phone} field="phone" editing={editing} onChange={handleChange} />
-            <SelectField
-              label="Gender"
-              value={form.gender}
-              field="gender"
-              editing={editing}
-              onChange={handleChange}
-              options={['', 'Male', 'Female', 'Other', 'Prefer not to say']}
-            />
-            <Field label="Years of Experience" value={form.yearsOfExperience} field="yearsOfExperience" editing={editing} onChange={handleChange} type="number" />
-          </div>
-
-          <div>
-            <label className="block text-xs text-gray-500 mb-1.5">Bio</label>
-            {editing ? (
-              <textarea
-                value={form.bio}
-                onChange={(e) => handleChange('bio', e.target.value)}
-                maxLength={500}
-                rows={3}
-                className="w-full bg-[#0a0a0a] border border-gray-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-gray-600 resize-none"
-              />
-            ) : (
-              <p className="text-gray-300 text-sm">{instructor.bio || 'No bio added'}</p>
-            )}
-          </div>
-        </div>
-
-        {/* Address */}
-        <div className="bg-[#111] border border-gray-800 rounded-xl p-6 space-y-5">
-          <h3 className="text-white font-semibold text-sm flex items-center gap-2"><MapPin className="w-4 h-4" /> Address</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Street" value={form['address.street']} field="address.street" editing={editing} onChange={handleChange} />
-            <Field label="City" value={form['address.city']} field="address.city" editing={editing} onChange={handleChange} />
-            <Field label="State" value={form['address.state']} field="address.state" editing={editing} onChange={handleChange} />
-            <Field label="Postal Code" value={form['address.postalCode']} field="address.postalCode" editing={editing} onChange={handleChange} />
-            <Field label="Country" value={form['address.country']} field="address.country" editing={editing} onChange={handleChange} />
-          </div>
-        </div>
-
-        {/* Qualifications (read-only) */}
-        {instructor.qualifications?.length > 0 && (
-          <div className="bg-[#111] border border-gray-800 rounded-xl p-6 space-y-4">
-            <h3 className="text-white font-semibold text-sm flex items-center gap-2"><Calendar className="w-4 h-4" /> Qualifications</h3>
-            <div className="space-y-3">
-              {instructor.qualifications.map((q, i) => (
-                <div key={i} className="bg-[#0a0a0a] border border-gray-800 rounded-lg p-4">
-                  <p className="text-white text-sm font-medium">{q.degree}</p>
-                  <p className="text-gray-500 text-xs mt-1">{q.institution}{q.yearOfCompletion ? ` · ${q.yearOfCompletion}` : ''}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Account Info (read-only) */}
-        <div className="bg-[#111] border border-gray-800 rounded-xl p-6 space-y-3">
-          <h3 className="text-white font-semibold text-sm">Account</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-            <div>
-              <span className="text-gray-500 text-xs">Status</span>
-              <p className="text-white capitalize">{instructor.status || 'active'}</p>
-            </div>
-            <div>
-              <span className="text-gray-500 text-xs">Joined</span>
-              <p className="text-white">{instructor.createdAt ? new Date(instructor.createdAt).toLocaleDateString() : '—'}</p>
-            </div>
-          </div>
-        </div>
+        {profileImageFile ? (
+          <p className="text-xs text-gray-500">
+            Selected image: {profileImageFile.name}. Click Save Changes to upload to Cloudflare/R2 and persist profile.
+          </p>
+        ) : null}
       </div>
     </InstructorLayout>
-  );
-}
-
-function Field({ label, value, field, editing, onChange, type = 'text' }) {
-  return (
-    <div>
-      <label className="block text-xs text-gray-500 mb-1.5">{label}</label>
-      {editing ? (
-        <input
-          type={type}
-          value={value || ''}
-          onChange={(e) => onChange(field, e.target.value)}
-          className="w-full bg-[#0a0a0a] border border-gray-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-gray-600"
-        />
-      ) : (
-        <p className="text-gray-300 text-sm">{value || '—'}</p>
-      )}
-    </div>
-  );
-}
-
-function SelectField({ label, value, field, editing, onChange, options }) {
-  return (
-    <div>
-      <label className="block text-xs text-gray-500 mb-1.5">{label}</label>
-      {editing ? (
-        <select
-          value={value || ''}
-          onChange={(e) => onChange(field, e.target.value)}
-          className="w-full bg-[#0a0a0a] border border-gray-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-gray-600"
-        >
-          {options.map(opt => (
-            <option key={opt} value={opt}>{opt || 'Select...'}</option>
-          ))}
-        </select>
-      ) : (
-        <p className="text-gray-300 text-sm">{value || '—'}</p>
-      )}
-    </div>
   );
 }

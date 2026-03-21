@@ -89,12 +89,12 @@ export const deleteMyProfilePicture = async (Model, req) => {
 };
 
 /**
- * Update preferences for user
+ * Update preferences for user (Student)
  * @param {Model} Model - The mongoose model (User)
  * @param {Object} req - Express request object
  * @returns {Object} - Updated preferences
  */
-export const updatePreferences = async (Model, req) => {
+export const updateUserPreferences = async (Model, req) => {
     const { emailNotifications, smsNotifications, courseUpdates, promotionalEmails, language } = req.body;
 
     const updateFields = {};
@@ -106,4 +106,16 @@ export const updatePreferences = async (Model, req) => {
 
     const profile = await Model.findByIdAndUpdate(req.user.id, { $set: updateFields }, { new: true });
     return profile?.preferences;
+};
+
+/**
+ * Update preferences for instructor
+ * DEPRECATED: Use instructor.profile.service.js updateInstructorPreferences instead
+ * Kept for backward compatibility
+ * @param {Model} Model - The mongoose model (Instructor)
+ * @param {Object} req - Express request object
+ * @returns {Object} - Updated preferences
+ */
+export const updatePreferences = async (Model, req) => {
+    return updateUserPreferences(Model, req);
 };
