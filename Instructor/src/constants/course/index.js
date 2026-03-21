@@ -1,4 +1,6 @@
 export { CATEGORIES } from './CATEGORIES.js';
+export { CATEGORY_MAP } from './CATEGORY_MAP.js';
+export { getSubCategoriesByCategory, formatCategoryLabel } from './CATEGORIES.js';
 export { LEVELS } from './LEVELS.js';
 export { CURRENCIES } from './CURRENCIES.js';
 export { LESSON_TYPES } from './LESSON_TYPES.js';

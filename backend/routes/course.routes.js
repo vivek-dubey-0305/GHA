@@ -5,6 +5,8 @@ import {
     getCourseReviews,
     getFullCourse,
     createFullCourse,
+    createCourseDraft,
+    updateCourseDraft,
     updateFullCourse,
     deleteFullCourse,
     togglePublishCourse,
@@ -23,6 +25,8 @@ router.get("/:id/reviews", getCourseReviews);
 // ===== Instructor Routes (Protected) =====
 router.get("/:id/full", authenticateInstructor, getFullCourse);
 router.post("/full", authenticateInstructor, courseMediaUpload.any(), createFullCourse);
+router.post("/draft", authenticateInstructor, courseMediaUpload.any(), createCourseDraft);
+router.put("/:id/draft", authenticateInstructor, courseMediaUpload.any(), updateCourseDraft);
 router.put("/:id/full", authenticateInstructor, courseMediaUpload.any(), updateFullCourse);
 router.delete("/:id/full", authenticateInstructor, deleteFullCourse);
 router.patch("/:id/publish", authenticateInstructor, togglePublishCourse);

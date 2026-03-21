@@ -31,6 +31,17 @@ select option {
   color: #e5e5e5;
 }
 
+/* Custom profile numeric field uses its own stepper buttons */
+.profile-number-input::-webkit-outer-spin-button,
+.profile-number-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.profile-number-input {
+  -moz-appearance: textfield;
+}
+
 /* Line clamp utility */
 .line-clamp-1 {
   display: -webkit-box;

@@ -10,7 +10,25 @@ import { Submission } from "../models/submission.model.js";
 import { asyncHandler } from "../middlewares/async.middleware.js";
 import { errorResponse, successResponse } from "../utils/response.utils.js";
 import { getPagination, createPaginationResponse } from "../utils/pagination.utils.js";
-import { getMyProfile as getProfile, updateMyProfile as updateProfile, deleteMyProfilePicture as deleteProfilePicture } from "../services/profile.service.js";
+import {
+    getInstructorProfile,
+    updateInstructorProfile,
+    updateInstructorProfessionalInfo,
+    addSpecialization,
+    updateSpecialization,
+    removeSpecialization,
+    addSkill,
+    removeSkill,
+    addWorkExperience,
+    removeWorkExperience,
+    addQualification,
+    removeQualification,
+    addAchievement,
+    removeAchievement,
+    updateInstructorPreferences,
+    deleteInstructorProfilePicture,
+    deleteInstructorBannerImage
+} from "../services/instructor.profile.service.js";
 
 /**
  * Instructor Self-Management Controller
@@ -23,7 +41,7 @@ import { getMyProfile as getProfile, updateMyProfile as updateProfile, deleteMyP
 // @desc    Get own profile
 // @access  Private (Instructor)
 export const getMyProfile = asyncHandler(async (req, res) => {
-    const instructor = await getProfile(Instructor, req);
+    const instructor = await getInstructorProfile(Instructor, req.instructor.id);
     if (!instructor) return errorResponse(res, 404, "Instructor not found");
 
     successResponse(res, 200, "Profile retrieved successfully", instructor);
@@ -33,18 +51,12 @@ export const getMyProfile = asyncHandler(async (req, res) => {
 // @desc    Update own profile (with optional profile picture via form-data)
 // @access  Private (Instructor)
 export const updateMyProfile = asyncHandler(async (req, res) => {
-    const restrictedFields = [
-        "password", "email", "isEmailVerified", "isPhoneVerified", "isActive",
-        "isSuspended", "suspensionReason", "suspendedAt", "isDocumentsVerified",
-        "isKYCVerified", "sessions", "loginAttempts", "lockUntil",
-        "verificationCode", "verificationCodeExpires", "isOtpVerified",
-        "otpAttempts", "otpLastSentAt", "passwordChangedAt",
-        "passwordResetToken", "passwordResetExpires", "deletedAt",
-        "deletionReason", "createdBy", "updatedBy", "createdAt", "updatedAt",
-        "earnings", "paymentHistory", "rating", "bankDetails"
-    ];
-
-    const instructor = await updateProfile(Instructor, req, restrictedFields, "Instructor");
+    const instructor = await updateInstructorProfile(
+        Instructor,
+        req.instructor.id,
+        req.body,
+        req.file
+    );
 
     if (!instructor) return errorResponse(res, 404, "Instructor not found");
 
@@ -56,7 +68,7 @@ export const updateMyProfile = asyncHandler(async (req, res) => {
 // @access  Private (Instructor)
 export const deleteMyProfilePicture = asyncHandler(async (req, res) => {
     try {
-        const result = await deleteProfilePicture(Instructor, req);
+        const result = await deleteInstructorProfilePicture(Instructor, req.instructor.id);
         successResponse(res, 200, result.message);
     } catch (error) {
         return errorResponse(res, 404, error.message);
@@ -69,22 +81,155 @@ export const deleteMyProfilePicture = asyncHandler(async (req, res) => {
 // @desc    Update instructor preferences
 // @access  Private (Instructor)
 export const updatePreferences = asyncHandler(async (req, res) => {
-    const { emailNotifications, classReminders, studentUpdates, language, timezone } = req.body;
+    const preferences = await updateInstructorPreferences(Instructor, req.instructor.id, req.body);
+    
+    if (!preferences) return errorResponse(res, 404, "Instructor not found");
 
-    const updateFields = {};
-    if (emailNotifications !== undefined) updateFields["preferences.emailNotifications"] = emailNotifications;
-    if (classReminders !== undefined) updateFields["preferences.classReminders"] = classReminders;
-    if (studentUpdates !== undefined) updateFields["preferences.studentUpdates"] = studentUpdates;
-    if (language) updateFields["preferences.language"] = language;
-    if (timezone) updateFields["preferences.timezone"] = timezone;
+    successResponse(res, 200, "Preferences updated successfully", preferences);
+});
 
-    const instructor = await Instructor.findByIdAndUpdate(
-        req.instructor.id, { $set: updateFields }, { new: true }
+// ========================= PROFESSIONAL PROFILE =========================
+
+// @route   PUT /api/v1/instructor/professional-info
+// @desc    Update professional info (title, bio, specializations, skills, etc)
+// @access  Private (Instructor)
+export const updateProfessionalInfo = asyncHandler(async (req, res) => {
+    const instructor = await updateInstructorProfessionalInfo(
+        Instructor,
+        req.instructor.id,
+        req.body
     );
 
     if (!instructor) return errorResponse(res, 404, "Instructor not found");
 
-    successResponse(res, 200, "Preferences updated successfully", instructor.preferences);
+    successResponse(res, 200, "Professional information updated successfully", instructor);
+});
+
+// ========================= SPECIALIZATIONS =========================
+
+// @route   POST /api/v1/instructor/specializations
+// @desc    Add a specialization
+// @access  Private (Instructor)
+export const addSpecializationHandler = asyncHandler(async (req, res) => {
+    const instructor = await addSpecialization(Instructor, req.instructor.id, req.body);
+    if (!instructor) return errorResponse(res, 404, "Instructor not found");
+    successResponse(res, 201, "Specialization added successfully", instructor.specializations);
+});
+
+// @route   PUT /api/v1/instructor/specializations/:id
+// @desc    Update a specialization
+// @access  Private (Instructor)
+export const updateSpecializationHandler = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const instructor = await updateSpecialization(Instructor, req.instructor.id, id, req.body);
+    if (!instructor) return errorResponse(res, 404, "Instructor not found");
+    successResponse(res, 200, "Specialization updated successfully", instructor.specializations);
+});
+
+// @route   DELETE /api/v1/instructor/specializations/:id
+// @desc    Remove a specialization
+// @access  Private (Instructor)
+export const removeSpecializationHandler = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const instructor = await removeSpecialization(Instructor, req.instructor.id, id);
+    if (!instructor) return errorResponse(res, 404, "Instructor not found");
+    successResponse(res, 200, "Specialization removed successfully", instructor.specializations);
+});
+
+// ========================= SKILLS =========================
+
+// @route   POST /api/v1/instructor/skills
+// @desc    Add a skill
+// @access  Private (Instructor)
+export const addSkillHandler = asyncHandler(async (req, res) => {
+    const instructor = await addSkill(Instructor, req.instructor.id, req.body);
+    if (!instructor) return errorResponse(res, 404, "Instructor not found");
+    successResponse(res, 201, "Skill added successfully", instructor.skills);
+});
+
+// @route   DELETE /api/v1/instructor/skills/:id
+// @desc    Remove a skill
+// @access  Private (Instructor)
+export const removeSkillHandler = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const instructor = await removeSkill(Instructor, req.instructor.id, id);
+    if (!instructor) return errorResponse(res, 404, "Instructor not found");
+    successResponse(res, 200, "Skill removed successfully", instructor.skills);
+});
+
+// ========================= WORK EXPERIENCE =========================
+
+// @route   POST /api/v1/instructor/work-experience
+// @desc    Add work experience
+// @access  Private (Instructor)
+export const addWorkExperienceHandler = asyncHandler(async (req, res) => {
+    const instructor = await addWorkExperience(Instructor, req.instructor.id, req.body);
+    if (!instructor) return errorResponse(res, 404, "Instructor not found");
+    successResponse(res, 201, "Work experience added successfully", instructor.workExperience);
+});
+
+// @route   DELETE /api/v1/instructor/work-experience/:id
+// @desc    Remove work experience
+// @access  Private (Instructor)
+export const removeWorkExperienceHandler = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const instructor = await removeWorkExperience(Instructor, req.instructor.id, id);
+    if (!instructor) return errorResponse(res, 404, "Instructor not found");
+    successResponse(res, 200, "Work experience removed successfully", instructor.workExperience);
+});
+
+// ========================= QUALIFICATIONS =========================
+
+// @route   POST /api/v1/instructor/qualifications
+// @desc    Add a qualification (degree, certification, bootcamp, etc)
+// @access  Private (Instructor)
+export const addQualificationHandler = asyncHandler(async (req, res) => {
+    const instructor = await addQualification(Instructor, req.instructor.id, req.body);
+    if (!instructor) return errorResponse(res, 404, "Instructor not found");
+    successResponse(res, 201, "Qualification added successfully", instructor.qualifications);
+});
+
+// @route   DELETE /api/v1/instructor/qualifications/:id
+// @desc    Remove a qualification
+// @access  Private (Instructor)
+export const removeQualificationHandler = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const instructor = await removeQualification(Instructor, req.instructor.id, id);
+    if (!instructor) return errorResponse(res, 404, "Instructor not found");
+    successResponse(res, 200, "Qualification removed successfully", instructor.qualifications);
+});
+
+// ========================= ACHIEVEMENTS =========================
+
+// @route   POST /api/v1/instructor/achievements
+// @desc    Add an achievement (award, speaking, publication, etc)
+// @access  Private (Instructor)
+export const addAchievementHandler = asyncHandler(async (req, res) => {
+    const instructor = await addAchievement(Instructor, req.instructor.id, req.body);
+    if (!instructor) return errorResponse(res, 404, "Instructor not found");
+    successResponse(res, 201, "Achievement added successfully", instructor.achievements);
+});
+
+// @route   DELETE /api/v1/instructor/achievements/:id
+// @desc    Remove an achievement
+// @access  Private (Instructor)
+export const removeAchievementHandler = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const instructor = await removeAchievement(Instructor, req.instructor.id, id);
+    if (!instructor) return errorResponse(res, 404, "Instructor not found");
+    successResponse(res, 200, "Achievement removed successfully", instructor.achievements);
+});
+
+// @route   DELETE /api/v1/instructor/banner-image
+// @desc    Delete banner image
+// @access  Private (Instructor)
+export const deleteMyBannerImage = asyncHandler(async (req, res) => {
+    try {
+        const result = await deleteInstructorBannerImage(Instructor, req.instructor.id);
+        successResponse(res, 200, result.message);
+    } catch (error) {
+        return errorResponse(res, 404, error.message);
+    }
 });
 
 // ========================= DASHBOARD =========================

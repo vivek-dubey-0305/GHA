@@ -1,6 +1,16 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import apiClient from '../../utils/api.utils';
 
+const extractApiError = (error, fallbackMessage) => {
+  const apiData = error?.response?.data;
+  if (typeof apiData?.message === 'string' && apiData.message.trim()) return apiData.message;
+  if (typeof apiData?.error === 'string' && apiData.error.trim()) return apiData.error;
+  if (Array.isArray(apiData?.errors) && apiData.errors.length > 0) {
+    return apiData.errors.map(err => String(err)).join(', ');
+  }
+  return fallbackMessage;
+};
+
 // Get instructor's courses
 export const getMyCourses = createAsyncThunk(
   'course/getMyCourses',
@@ -39,7 +49,37 @@ export const createFullCourse = createAsyncThunk(
       });
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to create course');
+      return rejectWithValue(extractApiError(error, 'Failed to create course'));
+    }
+  }
+);
+
+// Create a new draft course (no strict validation)
+export const createCourseDraft = createAsyncThunk(
+  'course/createCourseDraft',
+  async (formData, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.post('/courses/draft', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(extractApiError(error, 'Failed to save draft'));
+    }
+  }
+);
+
+// Update existing draft course (no strict validation)
+export const updateCourseDraft = createAsyncThunk(
+  'course/updateCourseDraft',
+  async ({ courseId, formData }, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.put(`/courses/${courseId}/draft`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(extractApiError(error, 'Failed to save draft'));
     }
   }
 );
@@ -94,7 +134,7 @@ export const updateFullCourse = createAsyncThunk(
       });
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to update course');
+      return rejectWithValue(extractApiError(error, 'Failed to update course'));
     }
   }
 );

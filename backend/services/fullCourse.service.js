@@ -26,6 +26,17 @@ import {
 } from "./bunny.service.js";
 import logger from "../configs/logger.config.js";
 
+const DRAFT_THUMBNAIL_PLACEHOLDER = {
+    public_id: "course_draft_placeholder",
+    secure_url: "https://placehold.co/1280x720/png"
+};
+
+const findFile = (files = [], ...fieldNames) =>
+    files.find((file) => fieldNames.includes(file.fieldname));
+
+const findFilesByPrefixes = (files = [], prefixes = []) =>
+    files.filter((file) => prefixes.some((prefix) => file.fieldname.startsWith(prefix)));
+
 /**
  * Full Course Service
  * Centralized logic for full course CRUD operations.
@@ -87,6 +98,105 @@ const recalculateCourseTotals = async (courseId) => {
 };
 
 /**
+ * Validate whether a course is ready to be published.
+ * Returns a list of validation errors; empty array means publish-ready.
+ */
+const validateCoursePublishReadiness = async (courseId) => {
+    const validationErrors = [];
+
+    const course = await Course.findById(courseId).lean();
+    if (!course) return ["Course not found"];
+
+    if (!course.title || course.title.trim().length < 3) {
+        validationErrors.push("Course title must be at least 3 characters");
+    }
+    if (!course.description || course.description.trim().length < 10) {
+        validationErrors.push("Course description must be at least 10 characters");
+    }
+    if (!course.category) {
+        validationErrors.push("Course category is required");
+    }
+    if (!course.subCategory) {
+        validationErrors.push("Course subcategory is required");
+    }
+    if (!course.thumbnail?.secure_url) {
+        validationErrors.push("Course thumbnail is required");
+    }
+    if (course.thumbnail?.public_id === DRAFT_THUMBNAIL_PLACEHOLDER.public_id) {
+        validationErrors.push("Draft placeholder thumbnail is not allowed for published courses");
+    }
+
+    if (course.projectBased) {
+        const validProjects = (course.projects || []).filter(
+            (project) => project?.title?.trim() && project?.description?.trim()
+        );
+        if (validProjects.length === 0) {
+            validationErrors.push("At least one valid project is required when projectBased is enabled");
+        }
+    }
+
+    const modules = await Module.find({ course: courseId }).select("_id title").lean();
+    if (modules.length === 0) {
+        validationErrors.push("Course must have at least one module");
+        return validationErrors;
+    }
+
+    const moduleIds = modules.map((moduleDoc) => moduleDoc._id);
+    const lessons = await Lesson.find({ course: courseId, module: { $in: moduleIds } })
+        .select("_id module type title content videoPackageId assignmentId liveClassId materialId")
+        .lean();
+
+    if (lessons.length === 0) {
+        validationErrors.push("Course must have at least one lesson");
+        return validationErrors;
+    }
+
+    const lessonsByModule = new Map();
+    for (const lesson of lessons) {
+        const key = lesson.module?.toString();
+        const count = lessonsByModule.get(key) || 0;
+        lessonsByModule.set(key, count + 1);
+    }
+
+    for (const moduleDoc of modules) {
+        const key = moduleDoc._id.toString();
+        if (!lessonsByModule.get(key)) {
+            validationErrors.push(`Module "${moduleDoc.title || key}" must contain at least one lesson`);
+        }
+    }
+
+    for (const lesson of lessons) {
+        const lessonLabel = lesson.title || lesson._id?.toString() || "lesson";
+
+        if (!lesson.type) {
+            validationErrors.push(`Lesson "${lessonLabel}" is missing lesson type`);
+            continue;
+        }
+
+        if (lesson.type === "video" && !lesson.videoPackageId) {
+            validationErrors.push(`Video lesson "${lessonLabel}" must have a video package`);
+        }
+        if (lesson.type === "assignment" && !lesson.assignmentId) {
+            validationErrors.push(`Assignment lesson "${lessonLabel}" must have an assignment`);
+        }
+        if (lesson.type === "live" && !lesson.liveClassId) {
+            validationErrors.push(`Live lesson "${lessonLabel}" must have a live class setup`);
+        }
+        if (lesson.type === "material" && !lesson.materialId) {
+            validationErrors.push(`Material lesson "${lessonLabel}" must have material content`);
+        }
+        if (lesson.type === "article") {
+            const article = lesson.content?.articleContent || "";
+            if (article.trim().length < 10) {
+                validationErrors.push(`Article lesson "${lessonLabel}" must have at least 10 characters of content`);
+            }
+        }
+    }
+
+    return validationErrors;
+};
+
+/**
  * Create type-specific linked model for a lesson (video, assignment, live, material, article)
  */
 const createLinkedModel = async ({
@@ -109,7 +219,11 @@ const createLinkedModel = async ({
             const vpVideos = lesInfo.videoPackage.videos || [];
             const processedVideos = [];
             for (let vi = 0; vi < vpVideos.length; vi++) {
-                const vidFile = files?.find(f => f.fieldname === `module_${mi}_lesson_${li}_video_${vi}`);
+                const vidFile = findFile(
+                    files,
+                    `module_${mi}_lesson_${li}_video_${vi}`,
+                    `video.${mi}.${li}.${vi}`
+                );
                 const videoEntry = { ...vpVideos[vi], videoId: new mongoose.Types.ObjectId() };
 
                 if (vidFile) {
@@ -122,7 +236,11 @@ const createLinkedModel = async ({
                     videoEntry.thumbnail = vidResult.thumbnail || getVideoThumbnail(vidResult.bunnyVideoId || vidResult.public_id);
                 }
 
-                const vidThumbFile = files?.find(f => f.fieldname === `module_${mi}_lesson_${li}_video_${vi}_thumb`);
+                const vidThumbFile = findFile(
+                    files,
+                    `module_${mi}_lesson_${li}_video_${vi}_thumb`,
+                    `video.${mi}.${li}.${vi}.thumb`
+                );
                 if (vidThumbFile) {
                     const thumbResult = await uploadLessonThumbnail(vidThumbFile.buffer, courseName, moduleName, lessonName);
                     videoEntry.thumbnail = thumbResult.secure_url;
@@ -152,13 +270,20 @@ const createLinkedModel = async ({
                 createdBy: instructorId,
             };
 
-            const asgThumbFile = files?.find(f => f.fieldname === `module_${mi}_lesson_${li}_assignment_thumb`);
+            const asgThumbFile = findFile(
+                files,
+                `module_${mi}_lesson_${li}_assignment_thumb`,
+                `assignment.${mi}.${li}.thumb`
+            );
             if (asgThumbFile) {
                 const result = await uploadAssignmentThumbnail(asgThumbFile.buffer, courseName, lesInfo.assignment.title || lessonName);
                 asgData.thumbnail = { public_id: result.public_id, secure_url: result.secure_url };
             }
 
-            const asgFiles = files?.filter(f => f.fieldname.startsWith(`module_${mi}_lesson_${li}_assignment_file_`)) || [];
+            const asgFiles = findFilesByPrefixes(files, [
+                `module_${mi}_lesson_${li}_assignment_file_`,
+                `assignment.${mi}.${li}.file.`
+            ]);
             if (asgFiles.length > 0) {
                 const requiredFiles = asgData.requiredFiles || [];
                 for (let fi = 0; fi < asgFiles.length; fi++) {
@@ -227,7 +352,11 @@ const createLinkedModel = async ({
                 createdBy: instructorId,
             };
 
-            const matFile = files?.find(f => f.fieldname === `module_${mi}_lesson_${li}_material_file`);
+            const matFile = findFile(
+                files,
+                `module_${mi}_lesson_${li}_material_file`,
+                `material.${mi}.${li}.0`
+            );
             if (matFile) {
                 const rType = matFile.mimetype?.startsWith("video") ? "video" : matFile.mimetype?.startsWith("image") ? "image" : "raw";
                 const result = await uploadMaterialFile(matFile.buffer, courseName, moduleName, lessonName, matFile.originalname, rType);
@@ -283,7 +412,11 @@ const createModulesAndLessons = async ({
         } else {
             // Module thumbnail
             let modThumbnail = null;
-            const modThumbFile = files?.find(f => f.fieldname === `module_${mi}_thumbnail`);
+            const modThumbFile = findFile(
+                files,
+                `module_${mi}_thumbnail`,
+                `module.${mi}.thumbnail`
+            );
             if (modThumbFile) {
                 try {
                     const result = await uploadModuleThumbnail(modThumbFile.buffer, courseName, moduleName);
@@ -340,7 +473,11 @@ const createModulesAndLessons = async ({
 
             // Lesson thumbnail
             let lesThumbnail = null;
-            const lesThumbFile = files?.find(f => f.fieldname === `module_${mi}_lesson_${li}_thumbnail`);
+            const lesThumbFile = findFile(
+                files,
+                `module_${mi}_lesson_${li}_thumbnail`,
+                `lesson.${mi}.${li}.thumbnail`
+            );
             if (lesThumbFile) {
                 try {
                     const result = await uploadLessonThumbnail(lesThumbFile.buffer, courseName, moduleName, lessonName);
@@ -611,7 +748,7 @@ export const createFullCourseService = async ({ data, files, instructorId }) => 
 
     // ── 1. COURSE THUMBNAIL ──
     let thumbnail = null;
-    const thumbFile = files?.find(f => f.fieldname === "thumbnail");
+    const thumbFile = findFile(files, "thumbnail", "course.thumbnail");
     if (thumbFile) {
         try {
             const result = await uploadCourseThumbnail(thumbFile.buffer, courseName);
@@ -624,7 +761,7 @@ export const createFullCourseService = async ({ data, files, instructorId }) => 
 
     // ── 2. TRAILER VIDEO ──
     let trailerVideo = data.trailerVideo || undefined;
-    const trailerFile = files?.find(f => f.fieldname === "trailerVideo");
+    const trailerFile = findFile(files, "trailerVideo", "course.trailerVideo");
     if (trailerFile) {
         try {
             const result = await uploadCourseTrailer(trailerFile.buffer, courseName);
@@ -652,6 +789,7 @@ export const createFullCourseService = async ({ data, files, instructorId }) => 
             description: data.description || course.description,
             shortDescription: data.shortDescription || course.shortDescription,
             category: data.category || course.category,
+            subCategory: data.subCategory || course.subCategory,
             level: data.level || course.level,
             language: data.language || course.language,
             price: Number(data.price) ?? course.price,
@@ -662,6 +800,9 @@ export const createFullCourseService = async ({ data, files, instructorId }) => 
             status: data.status || course.status,
             certificateEnabled: data.certificateEnabled ?? course.certificateEnabled,
             allowPreview: data.allowPreview ?? course.allowPreview,
+            isInternshipEligible: data.isInternshipEligible ?? course.isInternshipEligible,
+            projectBased: data.projectBased ?? course.projectBased,
+            projects: data.projects || course.projects,
             maxStudents: data.maxStudents ? Number(data.maxStudents) : course.maxStudents,
             learningOutcomes: data.learningOutcomes || course.learningOutcomes,
             prerequisites: data.prerequisites || course.prerequisites,
@@ -693,6 +834,7 @@ export const createFullCourseService = async ({ data, files, instructorId }) => 
             shortDescription: data.shortDescription,
             instructor: instructorId,
             category: data.category,
+            subCategory: data.subCategory,
             level: data.level,
             language: data.language || "English",
             price: Number(data.price) || 0,
@@ -703,6 +845,9 @@ export const createFullCourseService = async ({ data, files, instructorId }) => 
             status: data.status || "draft",
             certificateEnabled: data.certificateEnabled ?? true,
             allowPreview: data.allowPreview ?? true,
+            isInternshipEligible: data.isInternshipEligible || false,
+            projectBased: data.projectBased || false,
+            projects: data.projects || [],
             maxStudents: data.maxStudents ? Number(data.maxStudents) : undefined,
             learningOutcomes: data.learningOutcomes || [],
             prerequisites: data.prerequisites || [],
@@ -738,7 +883,7 @@ export const createFullCourseService = async ({ data, files, instructorId }) => 
                 skills: data.certificate.skills || [],
             };
 
-            const certFile = files?.find(f => f.fieldname === "certificateImage");
+            const certFile = findFile(files, "certificateImage", "certificate.0");
             if (certFile) {
                 const certResult = await uploadCertificateImage(certFile.buffer, courseName);
                 certData.certificateUrl = certResult.secure_url;
@@ -797,7 +942,7 @@ export const saveDraftCourseService = async ({ courseId, data, files }) => {
     const instructorId = course.instructor;
 
     // Handle thumbnail update
-    const thumbnailFile = files?.find(f => f.fieldname === "thumbnail");
+    const thumbnailFile = findFile(files, "thumbnail", "course.thumbnail");
     if (thumbnailFile) {
         try {
             const oldPublicId = course.thumbnail?.public_id || null;
@@ -809,7 +954,7 @@ export const saveDraftCourseService = async ({ courseId, data, files }) => {
     }
 
     // Handle trailer video
-    const trailerFile = files?.find(f => f.fieldname === "trailerVideo");
+    const trailerFile = findFile(files, "trailerVideo", "course.trailerVideo");
     if (trailerFile) {
         try {
             const result = await uploadCourseTrailer(trailerFile.buffer, courseName);
@@ -822,7 +967,7 @@ export const saveDraftCourseService = async ({ courseId, data, files }) => {
     courseFields.status = "draft";
     courseFields.isPublished = false;
 
-    course = await Course.findByIdAndUpdate(courseId, courseFields, { new: true, runValidators: true });
+    course = await Course.findByIdAndUpdate(courseId, courseFields, { new: true, runValidators: false });
 
     // Sync modules if provided
     if (modulesData && Array.isArray(modulesData)) {
@@ -847,6 +992,77 @@ export const saveDraftCourseService = async ({ courseId, data, files }) => {
 };
 
 /**
+ * Create a new draft course without strict validation to allow partial progress saves.
+ * @param {Object} options
+ * @param {Object} options.data - Parsed course data
+ * @param {Array} options.files - Uploaded files
+ * @param {string} options.instructorId - Authenticated instructor ID
+ * @returns {Object} { course }
+ */
+export const createDraftCourseService = async ({ data = {}, files, instructorId }) => {
+    const instructor = await Instructor.findById(instructorId);
+    if (!instructor) throw new Error("Instructor not found");
+
+    const { modules: modulesData, ...courseFields } = data || {};
+    const courseName = (courseFields.title || `draft_${Date.now()}`).replace(/\s+/g, "_");
+
+    let thumbnail = courseFields.thumbnail || DRAFT_THUMBNAIL_PLACEHOLDER;
+    const thumbnailFile = findFile(files, "thumbnail", "course.thumbnail");
+    if (thumbnailFile) {
+        try {
+            const result = await uploadCourseThumbnail(thumbnailFile.buffer, courseName);
+            thumbnail = { public_id: result.public_id, secure_url: result.secure_url };
+        } catch (error) {
+            logger.error(`Draft thumbnail upload failed: ${error.message}`);
+        }
+    }
+
+    let trailerVideo = courseFields.trailerVideo || undefined;
+    const trailerFile = findFile(files, "trailerVideo", "course.trailerVideo");
+    if (trailerFile) {
+        try {
+            const result = await uploadCourseTrailer(trailerFile.buffer, courseName);
+            trailerVideo = result.secure_url;
+        } catch (error) {
+            logger.error(`Draft trailer upload failed: ${error.message}`);
+        }
+    }
+
+    const draftCourse = new Course({
+        ...courseFields,
+        instructor: instructorId,
+        thumbnail,
+        trailerVideo,
+        status: "draft",
+        isPublished: false,
+        createdBy: instructorId,
+        updatedBy: instructorId,
+    });
+
+    await draftCourse.save({ validateBeforeSave: false });
+
+    if (modulesData && Array.isArray(modulesData)) {
+        const errors = [];
+        await createModulesAndLessons({
+            modulesData,
+            course: draftCourse,
+            instructorId,
+            courseName,
+            files,
+            errors,
+        });
+        await recalculateCourseTotals(draftCourse._id);
+    }
+
+    await Instructor.findByIdAndUpdate(instructorId, {
+        $addToSet: { courses: draftCourse._id },
+    });
+
+    const course = await populateFullCourse(Course.findById(draftCourse._id));
+    return { course };
+};
+
+/**
  * Update full course structure (course, modules, lessons with media handling)
  * @param {Object} options
  * @param {string} options.courseId
@@ -859,10 +1075,77 @@ export const updateFullCourseService = async ({ courseId, updateData, files }) =
     if (!course) throw new Error("Course not found");
 
     const errors = [];
+    let requestedStatus;
+    const instructorId = course.instructor;
+
+    const createLessonInModule = async ({ moduleDoc, moduleData, lessonData, mIdx, lIdx }) => {
+        const moduleName = (moduleData.title || moduleDoc.title || `Module_${mIdx + 1}`).replace(/\s+/g, "_");
+        const lessonName = (lessonData.title || `Lesson_${lIdx + 1}`).replace(/\s+/g, "_");
+        const lessonType = lessonData.type || "video";
+
+        let lessonThumbnail = null;
+        const lessonThumbFile = files?.find(f => f.fieldname === `lesson.${mIdx}.${lIdx}.thumbnail`);
+        if (lessonThumbFile) {
+            try {
+                const result = await updateImage(
+                    null,
+                    lessonThumbFile.buffer,
+                    uploadLessonThumbnail,
+                    course.title,
+                    moduleData.title || moduleDoc.title,
+                    lessonData.title || lessonName
+                );
+                lessonThumbnail = { public_id: result.public_id, secure_url: result.secure_url };
+            } catch (error) {
+                logger.error(`Lesson thumbnail upload failed: ${error.message}`);
+                errors.push(`Lesson thumbnail: ${error.message}`);
+            }
+        }
+
+        const lessonDoc = {
+            title: lessonData.title,
+            description: lessonData.description,
+            course: course._id,
+            module: moduleDoc._id,
+            order: lessonData.order || lIdx + 1,
+            type: lessonType,
+            isFree: lessonData.isFree || false,
+            thumbnail: lessonThumbnail,
+            content: {},
+            createdBy: instructorId,
+            updatedBy: instructorId,
+        };
+
+        await createLinkedModel({
+            lessonType,
+            lesInfo: lessonData,
+            lessonDoc,
+            targetLesson: null,
+            instructorId,
+            courseId: course._id,
+            moduleId: moduleDoc._id,
+            courseName: (course.title || "course").replace(/\s+/g, "_"),
+            moduleName,
+            lessonName,
+            mi: mIdx,
+            li: lIdx,
+            files,
+            errors,
+        });
+
+        const createdLesson = await Lesson.create(lessonDoc);
+        await Module.findByIdAndUpdate(moduleDoc._id, {
+            $addToSet: { lessons: createdLesson._id },
+            $inc: { totalLessons: 1 }
+        });
+
+        return createdLesson;
+    };
 
     // ── UPDATE COURSE-LEVEL DATA ──
     if (updateData.course) {
         const courseUpdate = updateData.course;
+        requestedStatus = Object.prototype.hasOwnProperty.call(courseUpdate, "status") ? courseUpdate.status : undefined;
 
         // Handle thumbnail
         const courseThumbnailFile = files?.find(f => f.fieldname === "course.thumbnail");
@@ -895,10 +1178,28 @@ export const updateFullCourseService = async ({ courseId, updateData, files }) =
         }
 
         // Prevent direct update of computed fields
-        const restrictedFields = ["modules", "totalModules", "totalLessons", "totalDuration", "certificates"];
+        const restrictedFields = [
+            "modules",
+            "totalModules",
+            "totalLessons",
+            "totalDuration",
+            "certificates",
+            "isPublished",
+            "publishedAt",
+            "status"
+        ];
         restrictedFields.forEach(field => delete courseUpdate[field]);
 
         Object.assign(course, courseUpdate);
+
+        if (requestedStatus && requestedStatus !== "published") {
+            course.status = requestedStatus;
+            course.isPublished = false;
+            if (requestedStatus !== "archived") {
+                course.publishedAt = undefined;
+            }
+        }
+
         await course.save({ validateBeforeSave: false });
     }
 
@@ -906,14 +1207,48 @@ export const updateFullCourseService = async ({ courseId, updateData, files }) =
     if (updateData.modules && Array.isArray(updateData.modules)) {
         for (let mIdx = 0; mIdx < updateData.modules.length; mIdx++) {
             const moduleData = updateData.modules[mIdx];
-            if (!moduleData.id) continue;
+            let module;
+            let isNewModule = false;
 
-            const module = await Module.findById(moduleData.id);
-            if (!module) { errors.push(`Module ${moduleData.id} not found`); continue; }
+            if (moduleData.id) {
+                module = await Module.findById(moduleData.id);
+                if (!module) { errors.push(`Module ${moduleData.id} not found`); continue; }
+            } else {
+                isNewModule = true;
+                let moduleThumbnail = null;
+                const modThumbFile = files?.find(f => f.fieldname === `module.${mIdx}.thumbnail`);
+                if (modThumbFile) {
+                    try {
+                        const result = await updateImage(
+                            null,
+                            modThumbFile.buffer,
+                            uploadModuleThumbnail,
+                            course.title,
+                            moduleData.title || `Module_${mIdx + 1}`
+                        );
+                        moduleThumbnail = { public_id: result.public_id, secure_url: result.secure_url };
+                    } catch (error) {
+                        logger.error(`Module thumbnail upload failed: ${error.message}`);
+                        errors.push(`Module thumbnail: ${error.message}`);
+                    }
+                }
+
+                module = await Module.create({
+                    title: moduleData.title || `Module ${mIdx + 1}`,
+                    description: moduleData.description || "",
+                    course: course._id,
+                    order: moduleData.order || mIdx + 1,
+                    objectives: moduleData.objectives || [],
+                    isPublished: moduleData.isPublished || false,
+                    thumbnail: moduleThumbnail,
+                    createdBy: instructorId,
+                    updatedBy: instructorId,
+                });
+            }
 
             // Module thumbnail
             const modThumbFile = files?.find(f => f.fieldname === `module.${mIdx}.thumbnail`);
-            if (modThumbFile) {
+            if (modThumbFile && !isNewModule) {
                 const oldPublicId = module.thumbnail?.public_id || null;
                 try {
                     const result = await updateImage(oldPublicId, modThumbFile.buffer, uploadModuleThumbnail, course.title, moduleData.title || module.title);
@@ -936,7 +1271,15 @@ export const updateFullCourseService = async ({ courseId, updateData, files }) =
             if (moduleData.lessons && Array.isArray(moduleData.lessons)) {
                 for (let lIdx = 0; lIdx < moduleData.lessons.length; lIdx++) {
                     const lessonData = moduleData.lessons[lIdx];
-                    if (!lessonData.id) continue;
+                    if (!lessonData.id) {
+                        try {
+                            await createLessonInModule({ moduleDoc: module, moduleData, lessonData, mIdx, lIdx });
+                        } catch (error) {
+                            logger.error(`Lesson create failed: ${error.message}`);
+                            errors.push(`Lesson create failed: ${error.message}`);
+                        }
+                        continue;
+                    }
 
                     const lesson = await Lesson.findById(lessonData.id);
                     if (!lesson) { errors.push(`Lesson ${lessonData.id} not found`); continue; }
@@ -957,6 +1300,7 @@ export const updateFullCourseService = async ({ courseId, updateData, files }) =
                     if (lessonData.title) lesson.title = lessonData.title;
                     if (lessonData.description !== undefined) lesson.description = lessonData.description;
                     if (lessonData.order) lesson.order = lessonData.order;
+                    if (lessonData.type) lesson.type = lessonData.type;
                     if (lessonData.isFree !== undefined) lesson.isFree = lessonData.isFree;
 
                     await lesson.save({ validateBeforeSave: false });
@@ -1086,6 +1430,22 @@ export const updateFullCourseService = async ({ courseId, updateData, files }) =
 
             await cert.save({ validateBeforeSave: false });
         }
+    }
+
+    await recalculateCourseTotals(courseId);
+
+    if (requestedStatus === "published") {
+        const publishValidationErrors = await validateCoursePublishReadiness(courseId);
+        if (publishValidationErrors.length > 0) {
+            throw new Error(`Course is not ready to publish: ${publishValidationErrors.join(" | ")}`);
+        }
+
+        course.status = "published";
+        course.isPublished = true;
+        if (!course.publishedAt) {
+            course.publishedAt = new Date();
+        }
+        await course.save();
     }
 
     const updatedCourse = await Course.findById(courseId);

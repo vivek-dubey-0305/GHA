@@ -256,5 +256,13 @@
     "699023406596f5fd14d6818a",
     "699023406596f5fd14d6818f",
     "699023406596f5fd14d68192"
-  ]
+  ],
+  "newInstructorIds": [
+    "69b96a24aa75a8a714acfa63",
+    "69b96a24aa75a8a714acfa70",
+    "69b96a46122829b473812682"
+  ],
+  "newInstructor1": "69b96a24aa75a8a714acfa63",
+  "newInstructor2": "69b96a24aa75a8a714acfa70",
+  "newInstructor3": "69b96a46122829b473812682"
 }

@@ -16,6 +16,8 @@ import {
     getFullCourseService,
     deleteFullCourseService,
     updateFullCourseService,
+    createDraftCourseService,
+    saveDraftCourseService,
 } from "../services/fullCourse.service.js";
 
 /**
@@ -179,6 +181,64 @@ export const createFullCourse = asyncHandler(async (req, res) => {
     }
 });
 
+// @route   POST /api/v1/courses/draft
+// @desc    Create draft course without strict validation
+// @access  Private (Instructor)
+export const createCourseDraft = asyncHandler(async (req, res) => {
+    let data;
+    try {
+        data = typeof req.body.data === "string" ? JSON.parse(req.body.data) : req.body.data || req.body;
+    } catch (e) {
+        return errorResponse(res, 400, "Invalid JSON payload in 'data' field");
+    }
+
+    const instructorId = req.instructor?.id || data.instructor;
+    if (!instructorId) return errorResponse(res, 400, "Instructor is required");
+
+    try {
+        const { course } = await createDraftCourseService({
+            data: { ...data, instructor: instructorId },
+            files: req.files,
+            instructorId,
+        });
+
+        successResponse(res, 201, "Draft course saved successfully", course);
+    } catch (e) {
+        return errorResponse(res, 400, e.message);
+    }
+});
+
+// @route   PUT /api/v1/courses/:id/draft
+// @desc    Update existing draft course without strict validation
+// @access  Private (Instructor)
+export const updateCourseDraft = asyncHandler(async (req, res) => {
+    const courseDoc = await Course.findById(req.params.id);
+    if (!courseDoc) return errorResponse(res, 404, "Course not found");
+
+    if (req.instructor && courseDoc.instructor.toString() !== req.instructor.id) {
+        return errorResponse(res, 403, "You can only update your own draft courses");
+    }
+
+    let data;
+    try {
+        data = typeof req.body.data === "string" ? JSON.parse(req.body.data) : req.body.data || req.body;
+    } catch (e) {
+        return errorResponse(res, 400, "Invalid JSON payload in 'data' field");
+    }
+
+    try {
+        const { course } = await saveDraftCourseService({
+            courseId: req.params.id,
+            data,
+            files: req.files,
+        });
+
+        successResponse(res, 200, "Draft course saved successfully", course);
+    } catch (e) {
+        return errorResponse(res, e.message === "Course not found" ? 404 : 400, e.message);
+    }
+});
+
 // @route   PUT /api/v1/courses/:id/full
 // @desc    Update full course with modules/lessons (instructor - owner only)
 export const updateFullCourse = asyncHandler(async (req, res) => {
@@ -205,7 +265,7 @@ export const updateFullCourse = asyncHandler(async (req, res) => {
             course, errors: errors.length > 0 ? errors : undefined
         });
     } catch (e) {
-        return errorResponse(res, e.message === "Course not found" ? 404 : 500, e.message);
+        return errorResponse(res, e.message === "Course not found" ? 404 : 400, e.message);
     }
 });
 

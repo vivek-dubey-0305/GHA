@@ -6,18 +6,30 @@ import {
   AlertCircle, Plus, Trash2, GripVertical, ChevronDown, ChevronUp, ChevronRight,
   X, Upload, CheckCircle, Radio, File, RefreshCw, Loader2, ArrowLeft,
 } from 'lucide-react';
+import { DragDropContext, Draggable } from '@hello-pangea/dnd';
 import { InstructorLayout } from '../../components/layout/InstructorLayout';
+import { StrictModeDroppable } from '../../components/ui/StrictModeDroppable';
 import {
   getFullCourse, updateFullCourse, deleteFullCourse,
+  updateCourseDraft,
   selectCurrentCourse, selectCurrentCourseLoading, selectCurrentCourseError,
-  selectUpdateCourseLoading, selectUpdateCourseError, selectUpdateCourseSuccess,
+  selectUpdateCourseLoading, selectUpdateCourseError,
   selectDeleteCourseLoading,
-  resetUpdateCourseState, clearUpdateCourseError, resetCurrentCourse,
+  clearUpdateCourseError, resetCurrentCourse,
 } from '../../redux/slices/course.slice';
 import { useProtectedRoute, useTokenRefreshOnActivity } from '../../hooks/useProtectedRoute';
-import { CATEGORIES, LEVELS, CURRENCIES, LESSON_TYPES, MATERIAL_TYPES, SUBMISSION_TYPES } from '../../constants/course/index';
 import {
-  uid, formatDuration, calculateModuleDuration, calculateCourseDuration,
+  CATEGORIES,
+  CATEGORY_MAP,
+  getSubCategoriesByCategory,
+  LEVELS,
+  CURRENCIES,
+  LESSON_TYPES,
+  MATERIAL_TYPES,
+  SUBMISSION_TYPES,
+} from '../../constants/course/index';
+import {
+  uid, formatDuration, calculateModuleDuration,
   createEmptyLesson, createEmptyModule, isValidVideoFile, isValidImageFile,
 } from '../../utils/course.utils';
 
@@ -25,6 +37,17 @@ import {
 const inputCls = 'w-full px-3 py-2 bg-[#0a0a0a] border border-gray-800 rounded-lg text-white text-sm placeholder:text-gray-600 focus:outline-none focus:border-gray-600 transition-colors';
 const selectCls = inputCls;
 const textareaCls = `${inputCls} resize-none`;
+
+const getFilePreviewKind = (fileName = '', mimeType = '', fileUrl = '') => {
+  const type = (mimeType || '').toLowerCase();
+  const name = (fileName || fileUrl || '').toLowerCase();
+  if (type.startsWith('image/')) return 'image';
+  if (type.startsWith('video/')) return 'video';
+  if (name.match(/\.(png|jpe?g|gif|webp|svg)(\?|$)/)) return 'image';
+  if (name.match(/\.(mp4|webm|ogg|mov|avi|mkv)(\?|$)/)) return 'video';
+  if (type === 'application/pdf' || name.endsWith('.pdf')) return 'pdf';
+  return 'other';
+};
 
 const TABS = [
   { key: 'basic', label: 'Basic Info', icon: FileText },
@@ -36,6 +59,9 @@ const TABS = [
   { key: 'certificates', label: 'Certificates', icon: Award },
   { key: 'settings', label: 'Settings', icon: AlertCircle },
 ];
+
+const DEFAULT_CATEGORY = CATEGORIES[0]?.value || '';
+const DEFAULT_SUBCATEGORY = CATEGORY_MAP[DEFAULT_CATEGORY]?.[0] || '';
 
 // ─── helpers ──────────────────────────────────────────────────────
 const hydrateModules = (rawModules = []) =>
@@ -107,15 +133,26 @@ const hydrateCertificates = (certArray = []) =>
 
 const buildUpdateFormData = (courseData, modules, certificates, thumbnailFile, trailerFile) => {
   const fd = new FormData();
+  const normalizedProjects = (courseData.projects || [])
+    .map((project) => ({
+      title: (project?.title || '').trim(),
+      description: (project?.description || '').trim(),
+    }))
+    .filter((project) => project.title && project.description);
+
   const coursePayload = {
     title: courseData.title, shortDescription: courseData.shortDescription || '',
     description: courseData.description || '', category: courseData.category,
+    subCategory: courseData.subCategory || undefined,
     level: courseData.level, language: courseData.language || 'English',
     price: Number(courseData.price) || 0, currency: courseData.currency || 'INR',
     discountPrice: courseData.discountPrice ? Number(courseData.discountPrice) : undefined,
     discountValidUntil: courseData.discountValidUntil || undefined,
     isFree: courseData.isFree, status: courseData.status,
     certificateEnabled: courseData.certificateEnabled, allowPreview: courseData.allowPreview,
+    isInternshipEligible: Boolean(courseData.isInternshipEligible),
+    projectBased: Boolean(courseData.projectBased),
+    projects: courseData.projectBased ? normalizedProjects : [],
     maxStudents: courseData.maxStudents ? Number(courseData.maxStudents) : undefined,
     learningOutcomes: courseData.learningOutcomes || [], prerequisites: courseData.prerequisites || [],
     targetAudience: courseData.targetAudience || [], tags: courseData.tags || [],
@@ -201,6 +238,67 @@ function DynamicList({ items, onChange, placeholder, label }) {
   );
 }
 
+function ProjectsBuilder({ projects, onChange }) {
+  const addProject = () => onChange([...(projects || []), { title: '', description: '', _uid: uid() }]);
+  const removeProject = (idx) => onChange((projects || []).filter((_, index) => index !== idx));
+  const updateProject = (idx, field, value) => {
+    const copy = [...(projects || [])];
+    copy[idx] = { ...copy[idx], [field]: value };
+    onChange(copy);
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <label className="text-gray-300 text-sm font-medium">Projects</label>
+        <button
+          type="button"
+          onClick={addProject}
+          className="flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs font-medium bg-blue-500/10 px-2.5 py-1.5 rounded-md"
+        >
+          <Plus className="w-3 h-3" /> Add Project
+        </button>
+      </div>
+
+      {(projects || []).length === 0 && (
+        <p className="text-gray-600 text-xs italic">No projects yet. Click Add Project to create one.</p>
+      )}
+
+      {(projects || []).map((project, idx) => (
+        <div key={project._uid || idx} className="p-3 bg-[#0d0d0d] rounded-lg border border-gray-800 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-gray-400 text-xs font-medium">Project {idx + 1}</span>
+            <button type="button" onClick={() => removeProject(idx)} className="text-red-400 hover:text-red-300 p-1">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <div>
+            <label className="text-gray-400 text-xs mb-1 block">Project Title</label>
+            <input
+              value={project.title || ''}
+              onChange={(e) => updateProject(idx, 'title', e.target.value)}
+              className={inputCls}
+              maxLength={200}
+              placeholder="Enter project title"
+            />
+          </div>
+          <div>
+            <label className="text-gray-400 text-xs mb-1 block">Project Description</label>
+            <textarea
+              value={project.description || ''}
+              onChange={(e) => updateProject(idx, 'description', e.target.value)}
+              className={textareaCls}
+              rows={3}
+              maxLength={700}
+              placeholder="Describe this project"
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── TagsInput ────────────────────────────────────────────────────
 function TagsInput({ tags, onChange }) {
   const [input, setInput] = useState('');
@@ -225,9 +323,8 @@ function TagsInput({ tags, onChange }) {
 }
 
 // ─── LessonItem ───────────────────────────────────────────────────
-function LessonItem({ lesson, lessonIdx, onUpdate, onRemove }) {
+function LessonItem({ lesson, lessonIdx, onUpdate, onRemove, dragHandleProps }) {
   const [collapsed, setCollapsed] = useState(false);
-  const thumbnailInputRef = useRef(null);
 
   const updateField = (field, value) => onUpdate({ ...lesson, [field]: value });
   const updateVideoPackage = (field, value) => onUpdate({ ...lesson, videoPackage: { ...lesson.videoPackage, [field]: value } });
@@ -245,6 +342,9 @@ function LessonItem({ lesson, lessonIdx, onUpdate, onRemove }) {
   return (
     <div className="bg-[#111] border border-gray-800 rounded-lg overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2.5 bg-[#161616]">
+        <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing text-gray-500 hover:text-gray-300 p-0.5">
+          <GripVertical className="w-4 h-4" />
+        </div>
         <LIcon className="w-4 h-4 text-gray-400" />
         <span className="text-gray-200 text-sm font-medium flex-1 truncate">{lesson.title || `Lesson ${lessonIdx + 1}`}</span>
         <span className="text-[10px] bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded capitalize">{lesson.type}</span>
@@ -298,11 +398,55 @@ function LessonItem({ lesson, lessonIdx, onUpdate, onRemove }) {
                     <div><label className="text-gray-500 text-[10px] mb-0.5 block">Video File</label>
                       <label className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs px-3 py-1.5 rounded cursor-pointer transition-colors w-fit">
                         <Upload className="w-3 h-3" /> {video.videoFile ? video.videoFile.name : (video.url ? 'Replace video' : 'Choose file')}
-                        <input type="file" accept="video/*" onChange={e => { const f = e.target.files?.[0]; if (f && isValidVideoFile(f)) updateVideo(vi, 'videoFile', f); }} className="hidden" />
+                        <input
+                          type="file"
+                          accept="video/*"
+                          onChange={e => {
+                            const f = e.target.files?.[0];
+                            if (f && isValidVideoFile(f)) {
+                              updateVideo(vi, 'videoFile', f);
+                              updateVideo(vi, 'videoPreviewUrl', URL.createObjectURL(f));
+                            }
+                          }}
+                          className="hidden"
+                        />
                       </label>
                       {video.videoFile && <CheckCircle className="w-3.5 h-3.5 text-green-500 inline ml-2" />}
                       {video.url && !video.videoFile && <span className="text-gray-600 text-[10px] ml-2">Current: uploaded on CDN</span>}
                     </div>
+
+                    {(video.videoPreviewUrl || video.url) && (
+                      <div>
+                        <label className="text-gray-500 text-[10px] mb-1 block">Video Preview</label>
+                        <video controls className="w-full rounded-md border border-gray-800 bg-black" src={video.videoPreviewUrl || video.url} />
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="text-gray-500 text-[10px] mb-0.5 block">Video Thumbnail</label>
+                      <label className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs px-3 py-1.5 rounded cursor-pointer transition-colors w-fit">
+                        <Upload className="w-3 h-3" /> {video.thumbnailFile ? video.thumbnailFile.name : 'Choose image'}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={e => {
+                            const f = e.target.files?.[0];
+                            if (f && isValidImageFile(f)) {
+                              updateVideo(vi, 'thumbnailFile', f);
+                              updateVideo(vi, 'thumbnailPreviewUrl', URL.createObjectURL(f));
+                            }
+                          }}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+
+                    {(video.thumbnailPreviewUrl || video.thumbnail) && (
+                      <div>
+                        <label className="text-gray-500 text-[10px] mb-1 block">Thumbnail Preview</label>
+                        <img src={video.thumbnailPreviewUrl || video.thumbnail} alt="Video thumbnail preview" className="w-full h-28 object-cover rounded-md border border-gray-800" />
+                      </div>
+                    )}
                   </div>
                 ))}
                 <button type="button" onClick={addVideo} className="flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs font-medium bg-blue-500/10 px-2.5 py-1.5 rounded-md w-full justify-center"><Plus className="w-3 h-3" /> Add Video</button>
@@ -375,10 +519,46 @@ function LessonItem({ lesson, lessonIdx, onUpdate, onRemove }) {
                 <label className="text-gray-400 text-xs mb-1 block">Upload File</label>
                 <label className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs px-3 py-1.5 rounded cursor-pointer transition-colors w-fit">
                   <Upload className="w-3 h-3" /> {lesson.material?.materialFile ? lesson.material.materialFile.name : (lesson.material?.fileUrl ? 'Replace file' : 'Choose file')}
-                  <input type="file" onChange={e => { const f = e.target.files?.[0]; if (f) onUpdate({ ...lesson, material: { ...lesson.material, materialFile: f, fileName: f.name } }); }} className="hidden" />
+                  <input
+                    type="file"
+                    onChange={e => {
+                      const f = e.target.files?.[0];
+                      if (f) {
+                        onUpdate({
+                          ...lesson,
+                          material: {
+                            ...lesson.material,
+                            materialFile: f,
+                            fileName: f.name,
+                            materialPreviewUrl: URL.createObjectURL(f),
+                            mimeType: f.type,
+                          }
+                        });
+                      }
+                    }}
+                    className="hidden"
+                  />
                 </label>
                 {lesson.material?.materialFile && <div className="flex items-center gap-2 mt-1"><CheckCircle className="w-3 h-3 text-green-500" /><span className="text-green-400 text-[10px]">{lesson.material.materialFile.name}</span></div>}
               </div>
+
+              {(lesson.material?.materialPreviewUrl || lesson.material?.fileUrl) && (
+                <div>
+                  <label className="text-gray-400 text-xs mb-1 block">Material Preview</label>
+                  {getFilePreviewKind(lesson.material.fileName, lesson.material.mimeType) === 'image' && (
+                    <img src={lesson.material.materialPreviewUrl || lesson.material.fileUrl} alt="Material preview" className="w-full max-h-48 object-contain rounded-md border border-gray-800 bg-black" />
+                  )}
+                  {getFilePreviewKind(lesson.material.fileName, lesson.material.mimeType) === 'video' && (
+                    <video controls src={lesson.material.materialPreviewUrl || lesson.material.fileUrl} className="w-full rounded-md border border-gray-800 bg-black" />
+                  )}
+                  {getFilePreviewKind(lesson.material.fileName, lesson.material.mimeType) === 'pdf' && (
+                    <iframe title="Material PDF preview" src={lesson.material.materialPreviewUrl || lesson.material.fileUrl} className="w-full h-64 rounded-md border border-gray-800 bg-black" />
+                  )}
+                  {getFilePreviewKind(lesson.material.fileName, lesson.material.mimeType) === 'other' && (
+                    <p className="text-gray-500 text-xs">Preview is unavailable for this file type.</p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -396,7 +576,7 @@ function LessonItem({ lesson, lessonIdx, onUpdate, onRemove }) {
 }
 
 // ─── ModuleItem ───────────────────────────────────────────────────
-function ModuleItem({ module, moduleIdx, onUpdate, onRemove, totalModules }) {
+function ModuleItem({ module, moduleIdx, onUpdate, onRemove, totalModules, dragHandleProps }) {
   const thumbnailInputRef = useRef(null);
 
   const updateField = useCallback((field, value) => { onUpdate({ ...module, [field]: value }); }, [module, onUpdate]);
@@ -404,12 +584,22 @@ function ModuleItem({ module, moduleIdx, onUpdate, onRemove, totalModules }) {
   const addLesson = () => updateField('lessons', [...module.lessons, createEmptyLesson()]);
   const removeLesson = (idx) => updateField('lessons', module.lessons.filter((_, i) => i !== idx));
   const updateLesson = (idx, lesson) => { const copy = [...module.lessons]; copy[idx] = lesson; updateField('lessons', copy); };
+  const onLessonDragEnd = useCallback((result) => {
+    if (!result.destination) return;
+    const items = Array.from(module.lessons);
+    const [moved] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, moved);
+    updateField('lessons', items);
+  }, [module.lessons, updateField]);
 
   const moduleDuration = calculateModuleDuration(module.lessons);
 
   return (
     <div className="bg-[#141414] border border-gray-800 rounded-xl overflow-hidden">
       <div className="flex items-center gap-3 px-4 py-3 bg-[#181818] border-b border-gray-800">
+        <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing text-gray-500 hover:text-gray-300">
+          <GripVertical className="w-5 h-5" />
+        </div>
         <Layers className="w-5 h-5 text-blue-400" />
         <div className="flex-1 min-w-0">
           <span className="text-white font-semibold text-sm truncate block">{module.title || `Module ${moduleIdx + 1}`}</span>
@@ -450,12 +640,39 @@ function ModuleItem({ module, moduleIdx, onUpdate, onRemove, totalModules }) {
               <h4 className="text-gray-200 text-sm font-semibold flex items-center gap-2"><FileText className="w-4 h-4 text-gray-400" /> Lessons</h4>
               <button type="button" onClick={addLesson} className="flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs font-medium bg-blue-500/10 px-2.5 py-1.5 rounded-md"><Plus className="w-3 h-3" /> Add Lesson</button>
             </div>
-            <div className="space-y-2">
-              {module.lessons.map((lesson, li) => (
-                <LessonItem key={lesson._uid} lesson={lesson} lessonIdx={li} onUpdate={l => updateLesson(li, l)} onRemove={() => removeLesson(li)} />
-              ))}
-              {module.lessons.length === 0 && <div className="text-center py-6 text-gray-600 text-sm border border-dashed border-gray-800 rounded-lg">No lessons yet. Click "Add Lesson" above.</div>}
-            </div>
+            <DragDropContext onDragEnd={onLessonDragEnd} nonce={module.lessons.length}>
+              <StrictModeDroppable droppableId={`lessons-${module._uid}`} type="LESSON">
+                {(provided, snapshot) => (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className={`space-y-2 p-2 rounded-lg ${snapshot.isDraggingOver ? 'bg-blue-500/5 border border-blue-500/30' : ''}`}
+                  >
+                    {module.lessons.map((lesson, li) => (
+                      <Draggable key={lesson._uid} draggableId={lesson._uid} index={li}>
+                        {(provided, snapshot) => (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            className={snapshot.isDragging ? 'opacity-50 shadow-lg' : ''}
+                          >
+                            <LessonItem
+                              lesson={lesson}
+                              lessonIdx={li}
+                              onUpdate={l => updateLesson(li, l)}
+                              onRemove={() => removeLesson(li)}
+                              dragHandleProps={provided.dragHandleProps}
+                            />
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
+                  </div>
+                )}
+              </StrictModeDroppable>
+            </DragDropContext>
+            {module.lessons.length === 0 && <div className="text-center py-6 text-gray-600 text-sm border border-dashed border-gray-800 rounded-lg">No lessons yet. Click "Add Lesson" above.</div>}
           </div>
         </div>
       )}
@@ -474,7 +691,6 @@ export default function EditCourse() {
   const fullCourseError = useSelector(selectCurrentCourseError);
   const updateLoading = useSelector(selectUpdateCourseLoading);
   const updateError = useSelector(selectUpdateCourseError);
-  const updateSuccess = useSelector(selectUpdateCourseSuccess);
   const deleteLoading = useSelector(selectDeleteCourseLoading);
 
   const [activeTab, setActiveTab] = useState('basic');
@@ -488,6 +704,7 @@ export default function EditCourse() {
   const [initialized, setInitialized] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [toast, setToast] = useState(null);
+  const [isSavingCourse, setIsSavingCourse] = useState(false);
 
   useProtectedRoute();
   useTokenRefreshOnActivity();
@@ -507,12 +724,16 @@ export default function EditCourse() {
         const c = fullCourse.course;
         setCourse({
           _id: c._id, title: c.title || '', shortDescription: c.shortDescription || '',
-          description: c.description || '', category: c.category || 'programming',
+          description: c.description || '', category: c.category || DEFAULT_CATEGORY,
+          subCategory: c.subCategory || CATEGORY_MAP[c.category || DEFAULT_CATEGORY]?.[0] || DEFAULT_SUBCATEGORY,
           level: c.level || 'beginner', language: c.language || 'English',
           price: c.price || 0, currency: c.currency || 'INR',
           discountPrice: c.discountPrice || '', discountValidUntil: c.discountValidUntil ? new Date(c.discountValidUntil).toISOString().slice(0, 10) : '',
           isFree: c.isFree || false, status: c.status || 'draft',
           certificateEnabled: c.certificateEnabled ?? true, allowPreview: c.allowPreview ?? true,
+          isInternshipEligible: c.isInternshipEligible ?? false,
+          projectBased: c.projectBased ?? false,
+          projects: (c.projects || []).map((project) => ({ ...project, _uid: uid() })),
           maxStudents: c.maxStudents || '', learningOutcomes: c.learningOutcomes || [],
           prerequisites: c.prerequisites || [], targetAudience: c.targetAudience || [],
           tags: c.tags || [], seoTitle: c.seoTitle || '', seoDescription: c.seoDescription || '',
@@ -527,29 +748,59 @@ export default function EditCourse() {
     }
   }, [fullCourse, initialized]);
 
-  // Handle success
-  useEffect(() => {
-    if (updateSuccess) {
-      showToast('Course updated successfully!');
-      dispatch(resetUpdateCourseState());
-      dispatch(getFullCourse(courseId));
-    }
-  }, [updateSuccess, dispatch, courseId, showToast]);
-
   // Cleanup
   useEffect(() => () => { dispatch(clearUpdateCourseError()); dispatch(resetCurrentCourse()); }, [dispatch]);
 
   const handleCourseChange = useCallback((field, value) => { setCourse(prev => prev ? { ...prev, [field]: value } : prev); }, []);
+  const handleCategoryChange = useCallback((categoryValue) => {
+    const nextSubCategory = CATEGORY_MAP[categoryValue]?.[0] || '';
+    setCourse(prev => prev ? { ...prev, category: categoryValue, subCategory: nextSubCategory } : prev);
+  }, []);
+  const subCategoryOptions = getSubCategoriesByCategory(course?.category);
 
   const addModule = useCallback(() => { setModules(prev => [...prev, { ...createEmptyModule(), collapsed: false }]); }, []);
   const removeModule = useCallback((idx) => setModules(prev => prev.filter((_, i) => i !== idx)), []);
   const updateModule = useCallback((idx, mod) => { setModules(prev => { const copy = [...prev]; copy[idx] = mod; return copy; }); }, []);
+  const onDragEnd = useCallback((result) => {
+    if (!result.destination || result.type !== 'MODULE') return;
+    const items = Array.from(modules);
+    const [moved] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, moved);
+    setModules(items);
+  }, [modules]);
 
   const handleSave = async () => {
+    const fd = buildUpdateFormData(course, modules, certificates, thumbnailFile, trailerFile);
+
+    if (course?.status === 'draft') {
+      setIsSavingCourse(true);
+      const result = await dispatch(updateCourseDraft({ courseId: course._id, formData: fd }));
+      if (result.meta.requestStatus === 'fulfilled') {
+        showToast('Draft saved successfully!');
+        dispatch(getFullCourse(courseId));
+      } else {
+        showToast(result.payload || 'Failed to save draft', 'error');
+      }
+      setIsSavingCourse(false);
+      return;
+    }
+
     if (!course?.title?.trim()) { showToast('Course title is required', 'error'); setActiveTab('basic'); return; }
     if (!course?.description?.trim()) { showToast('Description is required', 'error'); setActiveTab('basic'); return; }
-    const fd = buildUpdateFormData(course, modules, certificates, thumbnailFile, trailerFile);
-    dispatch(updateFullCourse({ courseId: course._id, formData: fd }));
+    if (!course?.category) { showToast('Category is required', 'error'); setActiveTab('basic'); return; }
+    if (!course?.subCategory) { showToast('Subcategory is required', 'error'); setActiveTab('basic'); return; }
+
+    try {
+      setIsSavingCourse(true);
+      await dispatch(updateFullCourse({ courseId: course._id, formData: fd })).unwrap();
+      showToast('Course updated successfully!');
+      dispatch(getFullCourse(courseId));
+    } catch (error) {
+      const errorMessage = typeof error === 'string' ? error : error?.message || 'Failed to update course';
+      showToast(errorMessage, 'error');
+    } finally {
+      setIsSavingCourse(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -623,9 +874,9 @@ export default function EditCourse() {
               <p className="text-xs text-gray-500 mt-0.5 truncate max-w-xs">{course.title}</p>
             </div>
           </div>
-          <button onClick={handleSave} disabled={updateLoading} className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm disabled:opacity-50 transition-colors">
-            {updateLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            {updateLoading ? 'Saving…' : 'Save Changes'}
+          <button onClick={handleSave} disabled={updateLoading || isSavingCourse} className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-sm disabled:opacity-50 transition-colors">
+            {(updateLoading || isSavingCourse) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {(updateLoading || isSavingCourse) ? 'Saving…' : 'Save Changes'}
           </button>
         </div>
 
@@ -671,13 +922,21 @@ export default function EditCourse() {
                 <textarea value={course.description} onChange={e => handleCourseChange('description', e.target.value)} className={textareaCls} rows={5} maxLength={2000} />
                 <p className="text-gray-600 text-xs mt-1">{course.description.length}/2000</p>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="text-gray-300 text-sm font-medium mb-1.5 block">Category</label>
-                  <select value={course.category} onChange={e => handleCourseChange('category', e.target.value)} className={selectCls}>
+                  <select value={course.category} onChange={e => handleCategoryChange(e.target.value)} className={selectCls}>
                     {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </select>
                 </div>
+                <div>
+                  <label className="text-gray-300 text-sm font-medium mb-1.5 block">Subcategory</label>
+                  <select value={course.subCategory || ''} onChange={e => handleCourseChange('subCategory', e.target.value)} className={selectCls}>
+                    {subCategoryOptions.map(sc => <option key={sc.value} value={sc.value}>{sc.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="text-gray-300 text-sm font-medium mb-1.5 block">Level</label>
                   <select value={course.level} onChange={e => handleCourseChange('level', e.target.value)} className={selectCls}>
@@ -725,11 +984,12 @@ export default function EditCourse() {
                 </div>
                 {/* Trailer */}
                 <div className="bg-[#111] border border-gray-800 rounded-xl p-5">
-                  <label className="text-gray-300 text-sm font-medium mb-3 block flex items-center gap-2"><Video className="w-4 h-4" /> Trailer Video</label>
-                  {trailerPreview && !trailerFile ? (
-                    <p className="text-xs text-blue-400 break-all mb-3">Current: {trailerPreview}</p>
-                  ) : trailerFile ? (
-                    <div className="flex items-center gap-2 mb-3"><CheckCircle className="w-4 h-4 text-green-500" /><span className="text-green-400 text-sm">{trailerFile.name}</span></div>
+                  <label className="text-gray-300 text-sm font-medium mb-3 flex items-center gap-2"><Video className="w-4 h-4" /> Trailer Video</label>
+                  {trailerPreview ? (
+                    <div className="space-y-2 mb-3">
+                      <video controls src={trailerPreview} className="w-full rounded-lg border border-gray-800 bg-black aspect-video" />
+                      {trailerFile && <div className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-500" /><span className="text-green-400 text-sm truncate">{trailerFile.name}</span></div>}
+                    </div>
                   ) : (
                     <div className="w-full aspect-video flex items-center justify-center bg-[#0a0a0a] rounded-lg border border-dashed border-gray-700 mb-3"><Video className="w-8 h-8 text-gray-600" /></div>
                   )}
@@ -808,9 +1068,39 @@ export default function EditCourse() {
                 <button type="button" onClick={addModule} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2.5 rounded-lg font-medium transition-colors"><Plus className="w-4 h-4" /> Add Module</button>
               </div>
               <div className="space-y-3">
-                {modules.map((mod, idx) => (
-                  <ModuleItem key={mod._uid} module={mod} moduleIdx={idx} onUpdate={m => updateModule(idx, m)} onRemove={() => removeModule(idx)} totalModules={modules.length} />
-                ))}
+                <DragDropContext onDragEnd={onDragEnd} nonce={modules.length}>
+                  <StrictModeDroppable droppableId="modules" type="MODULE">
+                    {(provided, snapshot) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
+                        className={`space-y-3 p-2 rounded-lg ${snapshot.isDraggingOver ? 'bg-blue-500/5 border border-blue-500/20' : ''}`}
+                      >
+                        {modules.map((mod, idx) => (
+                          <Draggable key={mod._uid} draggableId={mod._uid} index={idx}>
+                            {(provided, snapshot) => (
+                              <div
+                                ref={provided.innerRef}
+                                {...provided.draggableProps}
+                                className={snapshot.isDragging ? 'opacity-80 shadow-xl' : ''}
+                              >
+                                <ModuleItem
+                                  module={mod}
+                                  moduleIdx={idx}
+                                  onUpdate={m => updateModule(idx, m)}
+                                  onRemove={() => removeModule(idx)}
+                                  totalModules={modules.length}
+                                  dragHandleProps={provided.dragHandleProps}
+                                />
+                              </div>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </StrictModeDroppable>
+                </DragDropContext>
               </div>
               {modules.length === 0 && (
                 <div className="text-center py-12 text-gray-600 border border-dashed border-gray-800 rounded-xl"><Layers className="w-10 h-10 mx-auto mb-3 text-gray-700" /><p className="text-sm">No modules yet.</p></div>
@@ -870,7 +1160,30 @@ export default function EditCourse() {
                     <div className="w-9 h-5 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
                   </label>
                 </div>
+                <div className="flex items-center justify-between bg-[#111] border border-gray-800 rounded-lg p-4">
+                  <div><span className="text-gray-200 text-sm font-medium">Internship Eligible</span><p className="text-gray-500 text-xs mt-0.5">Mark this course as eligible for internship opportunities</p></div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" checked={course.isInternshipEligible || false} onChange={e => handleCourseChange('isInternshipEligible', e.target.checked)} className="sr-only peer" />
+                    <div className="w-9 h-5 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
+                  </label>
+                </div>
+                <div className="flex items-center justify-between bg-[#111] border border-gray-800 rounded-lg p-4">
+                  <div><span className="text-gray-200 text-sm font-medium">Project Based</span><p className="text-gray-500 text-xs mt-0.5">Enable this if the course includes practical projects</p></div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" checked={course.projectBased || false} onChange={e => handleCourseChange('projectBased', e.target.checked)} className="sr-only peer" />
+                    <div className="w-9 h-5 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
+                  </label>
+                </div>
               </div>
+
+              {course.projectBased && (
+                <div className="bg-[#111] border border-gray-800 rounded-xl p-5">
+                  <ProjectsBuilder
+                    projects={course.projects || []}
+                    onChange={(projects) => handleCourseChange('projects', projects)}
+                  />
+                </div>
+              )}
 
               {/* Danger Zone */}
               <div className="border-t border-gray-800 pt-5 mt-5">
@@ -899,9 +1212,9 @@ export default function EditCourse() {
           </div>
           <div className="flex items-center gap-2">
             <Link to={`/instructor/courses/${courseId}`} className="px-4 py-2 bg-transparent border border-gray-700 text-gray-300 hover:bg-gray-800 text-sm rounded-lg transition-colors">Cancel</Link>
-            <button onClick={handleSave} disabled={updateLoading} className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg font-semibold disabled:opacity-50 transition-colors">
-              {updateLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              {updateLoading ? 'Saving…' : 'Save Changes'}
+            <button onClick={handleSave} disabled={updateLoading || isSavingCourse} className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg font-semibold disabled:opacity-50 transition-colors">
+              {(updateLoading || isSavingCourse) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {(updateLoading || isSavingCourse) ? 'Saving…' : 'Save Changes'}
             </button>
           </div>
         </div>

@@ -88,40 +88,6 @@ export const resendOtp = createAsyncThunk(
   }
 );
 
-// Get instructor profile
-export const getProfile = createAsyncThunk(
-  'auth/getProfile',
-  async (_, { rejectWithValue }) => {
-    try {
-      const response = await authClient.get(`/profile`);
-
-      return response.data.data; // The instructor data
-    } catch (error) {
-      const message = error.response?.data?.message || error.message || 'Failed to get profile';
-      return rejectWithValue(message);
-    }
-  }
-);
-
-// Upload profile picture
-export const uploadProfilePicture = createAsyncThunk(
-  'auth/uploadProfilePicture',
-  async (formData, { rejectWithValue }) => {
-    try {
-      const response = await authClient.post(`/upload-profile-picture`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-
-      return response.data.data; // The updated instructor data
-    } catch (error) {
-      const message = error.response?.data?.message || error.message || 'Failed to upload profile picture';
-      return rejectWithValue(message);
-    }
-  }
-);
-
 // Logout
 export const logout = createAsyncThunk(
   'auth/logout',
@@ -330,14 +296,6 @@ const initialState = {
   resendOtpLoading: false,
   resendOtpError: null,
 
-  // Profile states
-  profileLoading: false,
-  profileError: null,
-
-  // Upload profile picture states
-  uploadProfilePictureLoading: false,
-  uploadProfilePictureError: null,
-
   // Logout states
   logoutLoading: false,
   logoutError: null,
@@ -397,12 +355,6 @@ const authSlice = createSlice({
     },
     clearResendOtpError: (state) => {
       state.resendOtpError = null;
-    },
-    clearProfileError: (state) => {
-      state.profileError = null;
-    },
-    clearUploadProfilePictureError: (state) => {
-      state.uploadProfilePictureError = null;
     },
     clearLogoutError: (state) => {
       state.logoutError = null;
@@ -530,39 +482,6 @@ const authSlice = createSlice({
       .addCase(resendOtp.rejected, (state, action) => {
         state.resendOtpLoading = false;
         state.resendOtpError = action.payload;
-      })
-
-      // Get Profile
-      .addCase(getProfile.pending, (state) => {
-        state.profileLoading = true;
-        state.profileError = null;
-      })
-      .addCase(getProfile.fulfilled, (state, action) => {
-        state.profileLoading = false;
-        state.isAuthenticated = true;
-        state.instructor = action.payload;
-        state.profileError = null;
-      })
-      .addCase(getProfile.rejected, (state, action) => {
-        state.profileLoading = false;
-        state.isAuthenticated = false;
-        state.instructor = null;
-        state.profileError = action.payload;
-      })
-
-      // Upload Profile Picture
-      .addCase(uploadProfilePicture.pending, (state) => {
-        state.uploadProfilePictureLoading = true;
-        state.uploadProfilePictureError = null;
-      })
-      .addCase(uploadProfilePicture.fulfilled, (state, action) => {
-        state.uploadProfilePictureLoading = false;
-        state.instructor = action.payload;
-        state.uploadProfilePictureError = null;
-      })
-      .addCase(uploadProfilePicture.rejected, (state, action) => {
-        state.uploadProfilePictureLoading = false;
-        state.uploadProfilePictureError = action.payload;
       })
 
       // Logout
@@ -752,8 +671,6 @@ export const {
   clearLoginError,
   clearVerifyOtpError,
   clearResendOtpError,
-  clearProfileError,
-  clearUploadProfilePictureError,
   clearLogoutError,
   clearRefreshTokenError,
   clearForgotPasswordError,
@@ -786,8 +703,6 @@ export const selectVerifyOtpError = (state) => state.auth.verifyOtpError;
 export const selectResendOtpLoading = (state) => state.auth.resendOtpLoading;
 export const selectResendOtpError = (state) => state.auth.resendOtpError;
 export const selectOtpVerified = (state) => state.auth.otpVerified;
-export const selectUploadProfilePictureLoading = (state) => state.auth.uploadProfilePictureLoading;
-export const selectUploadProfilePictureError = (state) => state.auth.uploadProfilePictureError;
 export const selectForgotPasswordLoading = (state) => state.auth.forgotPasswordLoading;
 export const selectForgotPasswordError = (state) => state.auth.forgotPasswordError;
 export const selectForgotPasswordSent = (state) => state.auth.forgotPasswordSent;

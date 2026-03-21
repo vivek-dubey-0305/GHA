@@ -114,6 +114,7 @@ import instructorAuthRouter from "./routes/instructor.auth.routes.js";
 import adminRouter from "./routes/admin.routes.js";
 import userRouter from "./routes/user.routes.js";
 import instructorRouter from "./routes/instructor.routes.js";
+import instructorPublicRouter from "./routes/instructor.public.routes.js";
 import courseRouter from "./routes/course.routes.js";
 import moduleRouter from "./routes/module.routes.js";
 import lessonRouter from "./routes/lesson.routes.js";
@@ -258,6 +259,9 @@ app.use("/api/v1/announcements", announcementRouter);
 app.use("/api/v1/discussions", discussionRouter);
 app.use("/api/v1/notifications", notificationRouter);
 app.use("/api/v1/analytics", analyticsRouter);
+
+// API routes - Public (no authentication required)
+app.use("/api/v1/public/instructors", instructorPublicRouter);
 
 // ================= ERROR HANDLER (LAST) =================
 app.use(errorMiddleware);

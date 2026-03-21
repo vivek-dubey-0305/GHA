@@ -86,7 +86,7 @@ import { store } from '../redux/store/store.js';
 import { refreshToken as refreshTokenAction, manualLogout } from '../redux/slices/auth.slice.js';
 
 const API_AUTH_URL = import.meta.env.VITE_API_BASE_URL_AUTH || 'http://localhost:5000/api/v1/user/auth';
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1/user';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1';
 
 // Primary axios instance (used for normal requests & will keep the response interceptor)
 export const apiClient = axios.create({

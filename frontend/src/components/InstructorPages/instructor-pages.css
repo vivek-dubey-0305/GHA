@@ -60,7 +60,7 @@
 
 /* ── REVEAL ── */
 .ip-reveal {
-  opacity: 0;
+  opacity: 1;
   transform: translateY(32px);
   transition: opacity .7s, transform .7s;
 }
