@@ -1,7 +1,10 @@
+//enrollment.controller.js
 import { Enrollment } from "../models/enrollment.model.js";
 import { Course } from "../models/course.model.js";
 import { Payment } from "../models/payment.model.js";
 import { User } from "../models/user.model.js";
+import { Instructor } from "../models/instructor.model.js";
+import mongoose from "mongoose";
 import { asyncHandler } from "../middlewares/async.middleware.js";
 import { errorResponse, successResponse } from "../utils/response.utils.js";
 import { getPagination, createPaginationResponse } from "../utils/pagination.utils.js";
@@ -45,32 +48,39 @@ export const enrollInCourse = asyncHandler(async (req, res) => {
         return errorResponse(res, 400, "Already enrolled in this course");
     }
 
-    // Create enrollment
-    try {
-        const enrollment = new Enrollment({
-            user: req.user.id,
-            course: courseId,
-            payment: paymentId,
-            totalLessons: course.totalLessons || 0
-        });
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-        await enrollment.save();
+    try {
+        const enrollment = await Enrollment.create([
+            {
+                user: req.user.id,
+                course: courseId,
+                payment: paymentId,
+                totalLessons: course.totalLessons || 0
+            }
+        ], { session });
 
         // Update user's learning progress
         await User.findByIdAndUpdate(req.user.id, {
             $inc: { "learningProgress.totalCoursesEnrolled": 1 }
-        });
+        }, { session });
 
         // Increment course enrollment count
-        await Course.findByIdAndUpdate(courseId, { $inc: { enrolledCount: 1 } });
+        await Course.findByIdAndUpdate(courseId, { $inc: { enrolledCount: 1 } }, { session });
 
         // Update instructor student count
-        await User.findByIdAndUpdate(course.instructor, { $inc: { totalStudentsTeaching: 1 } });
+        await Instructor.findByIdAndUpdate(course.instructor, { $inc: { totalStudentsTeaching: 1 } }, { session });
+
+        await session.commitTransaction();
+        session.endSession();
 
         logger.info(`User ${req.user.id} enrolled in course ${courseId}`);
 
-        successResponse(res, 201, "Enrolled successfully", enrollment);
+        successResponse(res, 201, "Enrolled successfully", enrollment[0]);
     } catch (error) {
+        await session.abortTransaction();
+        session.endSession();
         return errorResponse(res, 400, error.message);
     }
 });

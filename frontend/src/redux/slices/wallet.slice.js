@@ -1,3 +1,4 @@
+// src/redux/slices/wallet.slice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { apiClient } from '../../utils/api.utils.js';
 
@@ -8,7 +9,7 @@ export const getMyWallet = createAsyncThunk(
   'wallet/getMyWallet',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiClient.get('/wallet/me');
+      const response = await apiClient.get('/wallet/user/me');
       return response.data;
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Failed to fetch wallet';
@@ -22,7 +23,7 @@ export const getWalletBalance = createAsyncThunk(
   'wallet/getBalance',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiClient.get('/wallet/balance');
+      const response = await apiClient.get('/wallet/user/balance');
       return response.data;
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Failed to fetch balance';
@@ -44,7 +45,7 @@ export const getWalletTransactions = createAsyncThunk(
       if (startDate) params.append('startDate', startDate);
       if (endDate) params.append('endDate', endDate);
 
-      const response = await apiClient.get(`/wallet/transactions?${params}`);
+      const response = await apiClient.get(`/wallet/user/transactions?${params}`);
       return response.data;
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Failed to fetch transactions';

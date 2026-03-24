@@ -20,7 +20,7 @@ export const getInstructorOverview = asyncHandler(async (req, res) => {
     ]);
 
     const revenueAgg = await Payment.aggregate([
-        { $match: { instructor: req.instructor._id || req.instructor.id, status: "completed" } },
+        { $match: { course: { $in: courseIds }, status: "completed" } },
         { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } }
     ]);
 
@@ -162,8 +162,11 @@ export const getRevenueTrends = asyncHandler(async (req, res) => {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
+    const courses = await Course.find({ instructor: req.instructor.id }).select("_id");
+    const courseIds = courses.map(c => c._id);
+
     const trends = await Payment.aggregate([
-        { $match: { instructor: req.instructor._id || req.instructor.id, status: "completed", createdAt: { $gte: startDate } } },
+        { $match: { course: { $in: courseIds }, status: "completed", createdAt: { $gte: startDate } } },
         {
             $group: {
                 _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },

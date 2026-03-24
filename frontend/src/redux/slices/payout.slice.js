@@ -1,3 +1,4 @@
+// src/redux/slices/payout.slice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { apiClient } from '../../utils/api.utils.js';
 
@@ -16,7 +17,7 @@ export const requestPayout = createAsyncThunk(
         payload.upiId = upiId;
       }
 
-      const response = await apiClient.post('/payouts/request', payload);
+      const response = await apiClient.post('/payouts/user/request', payload);
       return response.data;
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Failed to request payout';
@@ -38,7 +39,7 @@ export const getMyPayouts = createAsyncThunk(
       if (startDate) params.append('startDate', startDate);
       if (endDate) params.append('endDate', endDate);
 
-      const response = await apiClient.get(`/payouts/my?${params}`);
+      const response = await apiClient.get(`/payouts/user/my?${params}`);
       return response.data;
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Failed to fetch payouts';
@@ -52,7 +53,7 @@ export const getMyPayout = createAsyncThunk(
   'payout/getMyPayout',
   async (payoutId, { rejectWithValue }) => {
     try {
-      const response = await apiClient.get(`/payouts/my/${payoutId}`);
+      const response = await apiClient.get(`/payouts/user/my/${payoutId}`);
       return response.data;
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Failed to fetch payout details';
@@ -66,7 +67,7 @@ export const cancelMyPayout = createAsyncThunk(
   'payout/cancelMyPayout',
   async (payoutId, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/payouts/my/${payoutId}/cancel`);
+      const response = await apiClient.post(`/payouts/user/my/${payoutId}/cancel`);
       return response.data;
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Failed to cancel payout';
@@ -80,7 +81,7 @@ export const getMyPayoutStats = createAsyncThunk(
   'payout/getMyPayoutStats',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiClient.get('/payouts/my/stats');
+      const response = await apiClient.get('/payouts/user/my/stats');
       return response.data;
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Failed to fetch payout statistics';

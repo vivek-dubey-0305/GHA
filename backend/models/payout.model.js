@@ -1,3 +1,4 @@
+// models/payout.model.js
 import mongoose from "mongoose";
 
 /**
@@ -285,38 +286,38 @@ payoutSchema.index({ processedBy: 1 });
 /**
  * Mask sensitive payment details after payout is processed
  */
-// payoutSchema.pre("save", function (next) {
-//     // Only mask after payout reaches a terminal state
-//     if (["completed", "failed", "cancelled", "reversed"].includes(this.status)) {
-//         // Mask bank account number
-//         if (this.bankDetails?.accountNumber && !this.bankDetails.accountNumberMasked) {
-//             const accNum = this.bankDetails.accountNumber;
-//             this.bankDetails.accountNumberMasked = accNum.length > 4
-//                 ? "XXXX" + accNum.slice(-4)
-//                 : "XXXX";
-//             this.bankDetails.accountNumber = undefined; // Remove real number
-//         }
+payoutSchema.pre("save", function (next) {
+    // Only mask after payout reaches a terminal state
+    if (["completed", "failed", "cancelled", "reversed"].includes(this.status)) {
+        // Mask bank account number
+        if (this.bankDetails?.accountNumber && !this.bankDetails.accountNumberMasked) {
+            const accNum = this.bankDetails.accountNumber;
+            this.bankDetails.accountNumberMasked = accNum.length > 4
+                ? "XXXX" + accNum.slice(-4)
+                : "XXXX";
+            this.bankDetails.accountNumber = undefined; // Remove real number
+        }
 
-//         // Mask UPI ID
-//         if (this.upiDetails?.upiId && !this.upiDetails.upiIdMasked) {
-//             const upi = this.upiDetails.upiId;
-//             const atIndex = upi.indexOf("@");
-//             if (atIndex > 2) {
-//                 this.upiDetails.upiIdMasked = upi.substring(0, 2) + "***" + upi.substring(atIndex);
-//             } else {
-//                 this.upiDetails.upiIdMasked = "***" + upi.substring(atIndex);
-//             }
-//             this.upiDetails.upiId = undefined; // Remove real UPI
-//         }
-//     }
+        // Mask UPI ID
+        if (this.upiDetails?.upiId && !this.upiDetails.upiIdMasked) {
+            const upi = this.upiDetails.upiId;
+            const atIndex = upi.indexOf("@");
+            if (atIndex > 2) {
+                this.upiDetails.upiIdMasked = upi.substring(0, 2) + "***" + upi.substring(atIndex);
+            } else {
+                this.upiDetails.upiIdMasked = "***" + upi.substring(atIndex);
+            }
+            this.upiDetails.upiId = undefined; // Remove real UPI
+        }
+    }
 
-//     // Auto-calculate net amount
-//     if (this.isModified("amount") || this.isModified("platformFee") || this.isModified("tds")) {
-//         this.netAmount = this.amount - (this.platformFee || 0) - (this.tds || 0);
-//     }
+    // Auto-calculate net amount
+    if (this.isModified("amount") || this.isModified("platformFee") || this.isModified("tds")) {
+        this.netAmount = this.amount - (this.platformFee || 0) - (this.tds || 0);
+    }
 
-//     next();
-// });
+    next();
+});
 
 // ========================= INSTANCE METHODS =========================
 
