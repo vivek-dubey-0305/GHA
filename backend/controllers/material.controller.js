@@ -18,11 +18,39 @@ import logger from "../configs/logger.config.js";
 export const getCourseMaterials = asyncHandler(async (req, res) => {
     const { page, limit, skip } = getPagination(req.query, 20);
 
-    const filter = { course: req.params.courseId, isPublished: true };
+    const course = await Course.findById(req.params.courseId).select("instructor");
+    if (!course) return errorResponse(res, 404, "Course not found");
+
+    const filter = { course: req.params.courseId, status: "published" };
 
     if (req.query.type) filter.type = req.query.type;
     if (req.query.moduleId) filter.module = req.query.moduleId;
     if (req.query.lessonId) filter.lesson = req.query.lessonId;
+
+    // Access rules:
+    // - Public: only materials explicitly public
+    // - Enrolled users: enrolled_students + public
+    // - Instructor owner: all published materials for the course
+    const isInstructorOwner = !!req.instructor && course.instructor?.toString() === req.instructor.id;
+    let isEnrolled = false;
+    if (!isInstructorOwner && req.user?.id) {
+        isEnrolled = await Enrollment.isUserEnrolled(req.user.id, req.params.courseId);
+    }
+
+    if (!isInstructorOwner) {
+        if (isEnrolled) {
+            filter.$or = [
+                { accessLevel: "enrolled_students" },
+                { accessLevel: "public" },
+                { isPublic: true },
+            ];
+        } else {
+            filter.$or = [
+                { accessLevel: "public" },
+                { isPublic: true },
+            ];
+        }
+    }
 
     const total = await Material.countDocuments(filter);
     const materials = await Material.find(filter)
@@ -160,7 +188,7 @@ export const downloadMaterial = asyncHandler(async (req, res) => {
         return errorResponse(res, 403, "You must be enrolled in the course to download materials");
     }
 
-    await material.incrementDownloads();
+    await material.incrementDownload();
 
     successResponse(res, 200, "Download recorded", { fileUrl: material.fileUrl });
 });
@@ -172,7 +200,7 @@ export const viewMaterial = asyncHandler(async (req, res) => {
     const material = await Material.findById(req.params.id);
     if (!material) return errorResponse(res, 404, "Material not found");
 
-    await material.incrementViews();
+    await material.incrementView();
 
     successResponse(res, 200, "View recorded");
 });
@@ -188,7 +216,7 @@ export const searchMaterials = asyncHandler(async (req, res) => {
 
     const filter = {
         $text: { $search: query },
-        isPublished: true
+        status: "published"
     };
 
     if (courseId) filter.course = courseId;

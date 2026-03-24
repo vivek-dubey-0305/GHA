@@ -6,6 +6,142 @@ import { errorResponse, successResponse } from "../utils/response.utils.js";
 import { getPagination, createPaginationResponse } from "../utils/pagination.utils.js";
 import logger from "../configs/logger.config.js";
 
+const parseArrayQuery = (value) => {
+  if (value === undefined || value === null) return [];
+  if (Array.isArray(value)) {
+    return value
+      .flatMap((entry) => String(entry).split(","))
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+  return String(value)
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+};
+
+const minFromArray = (values) => {
+  const nums = values
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value));
+  return nums.length ? Math.min(...nums) : null;
+};
+
+const normalizeSort = (sortKey) => {
+  const sortMap = {
+    popular: { totalStudentsTeaching: -1, "rating.averageRating": -1 },
+    rating: { "rating.averageRating": -1, "rating.totalReviews": -1 },
+    reviews: { "rating.totalReviews": -1 },
+    experience: { yearsOfExperience: -1 },
+    students: { totalStudentsTeaching: -1 },
+    courses: { totalCourses: -1 },
+    newest: { createdAt: -1 }
+  };
+  return sortMap[sortKey] || sortMap.popular;
+};
+
+const buildInstructorPublicFilter = (query) => {
+  const filter = { isActive: true, isSuspended: false };
+  const andConditions = [];
+
+  if (query.search) {
+    const searchRegex = { $regex: String(query.search).trim(), $options: "i" };
+    andConditions.push({
+      $or: [
+        { firstName: searchRegex },
+        { lastName: searchRegex },
+        { professionalTitle: searchRegex },
+        { shortBio: searchRegex },
+        { tags: searchRegex },
+        { "specializations.area": searchRegex },
+        { "specializations.description": searchRegex }
+      ]
+    });
+  }
+
+  const specializationCategories = parseArrayQuery(query.specializationCategory);
+  if (specializationCategories.length > 0) {
+    filter["specializations.category"] = { $in: specializationCategories };
+  }
+
+  if (query.primarySpecialization) {
+    filter["specializations.isPrimary"] = true;
+    if (query.primarySpecialization !== "all") {
+      filter["specializations.category"] = query.primarySpecialization;
+    }
+  }
+
+  const ratingThreshold = minFromArray(parseArrayQuery(query.rating));
+  if (ratingThreshold !== null) {
+    filter["rating.averageRating"] = { $gte: ratingThreshold };
+  }
+
+  const studentsThreshold = minFromArray(parseArrayQuery(query.studentsTaught));
+  if (studentsThreshold !== null) {
+    filter.totalStudentsTeaching = { $gte: studentsThreshold };
+  }
+
+  const courseRanges = parseArrayQuery(query.totalCourses);
+  if (courseRanges.length > 0) {
+    const courseFilters = [];
+    courseRanges.forEach((range) => {
+      if (range === "1-4") courseFilters.push({ totalCourses: { $gte: 1, $lte: 4 } });
+      else if (range === "5-9") courseFilters.push({ totalCourses: { $gte: 5, $lte: 9 } });
+      else if (range === "10+") courseFilters.push({ totalCourses: { $gte: 10 } });
+    });
+    if (courseFilters.length > 0) {
+      andConditions.push({ $or: courseFilters });
+    }
+  }
+
+  if (query.yearsOfExperienceMin || query.yearsOfExperienceMax) {
+    filter.yearsOfExperience = {};
+    if (query.yearsOfExperienceMin) {
+      filter.yearsOfExperience.$gte = Number(query.yearsOfExperienceMin);
+    }
+    if (query.yearsOfExperienceMax) {
+      filter.yearsOfExperience.$lte = Number(query.yearsOfExperienceMax);
+    }
+  }
+
+  const reviewsThreshold = minFromArray(parseArrayQuery(query.reviewsCount));
+  if (reviewsThreshold !== null) {
+    filter["rating.totalReviews"] = { $gte: reviewsThreshold };
+  }
+
+  const backgroundTypes = parseArrayQuery(query.backgroundType);
+  if (backgroundTypes.length > 0) {
+    filter.backgroundType = { $in: backgroundTypes };
+  }
+
+  if (query.isTopInstructor === "true") {
+    filter.isTopInstructor = true;
+  }
+
+  if (query.isVerified === "true") {
+    filter.isDocumentsVerified = true;
+  }
+
+  if (query.availableForMentorship === "true") {
+    filter["availability.isAvailableForMentorship"] = true;
+  }
+
+  if (query.availableForLive === "true") {
+    filter["availability.isAvailableForLive"] = true;
+  }
+
+  const teachingLanguages = parseArrayQuery(query.teachingLanguages);
+  if (teachingLanguages.length > 0) {
+    filter.teachingLanguages = { $in: teachingLanguages };
+  }
+
+  if (andConditions.length > 0) {
+    filter.$and = andConditions;
+  }
+
+  return filter;
+};
+
 /**
  * Instructor Public Controller
  * Handles public instructor listing and details (no authentication required)
@@ -20,162 +156,42 @@ import logger from "../configs/logger.config.js";
 // @access  Public
 export const getAllInstructorsPublic = asyncHandler(async (req, res) => {
   const { page, limit, skip } = getPagination(req.query, 10);
-  
-  // Build filter object
-  const filter = { isActive: true, isSuspended: false };
-
-  // Full-text search (name, professional title, bio, tags, specializations)
-  if (req.query.search) {
-    const searchRegex = { $regex: req.query.search, $options: "i" };
-    filter.$or = [
-      { firstName: searchRegex },
-      { lastName: searchRegex },
-      { professionalTitle: searchRegex },
-      { shortBio: searchRegex },
-      { tags: searchRegex },
-      { "specializations.area": searchRegex },
-      { "specializations.description": searchRegex }
-    ];
-  }
-
-  // Specialization category filter (domain areas: web_development, data_science, etc.)
-  if (req.query.specializationCategory) {
-    const categories = Array.isArray(req.query.specializationCategory) 
-      ? req.query.specializationCategory 
-      : [req.query.specializationCategory];
-    filter["specializations.category"] = { $in: categories };
-  }
-
-  // Primary specialization filter
-  if (req.query.primarySpecialization) {
-    filter["specializations.isPrimary"] = true;
-    if (req.query.primarySpecialization !== "all") {
-      filter["specializations.category"] = req.query.primarySpecialization;
-    }
-  }
-
-  // Rating filter (minimum rating threshold)
-  if (req.query.rating) {
-    const ratings = Array.isArray(req.query.rating) 
-      ? req.query.rating.map(Number) 
-      : [Number(req.query.rating)];
-    const maxRating = Math.min(...ratings);
-    filter["rating.averageRating"] = { $gte: maxRating };
-  }
-
-  // Students taught filter (minimum threshold)
-  if (req.query.studentsTaught) {
-    const thresholds = Array.isArray(req.query.studentsTaught) 
-      ? req.query.studentsTaught.map(Number) 
-      : [Number(req.query.studentsTaught)];
-    const maxThreshold = Math.min(...thresholds);
-    filter.totalStudentsTeaching = { $gte: maxThreshold };
-  }
-
-  // Total courses filter (range)
-  if (req.query.totalCourses) {
-    const ranges = Array.isArray(req.query.totalCourses) 
-      ? req.query.totalCourses 
-      : [req.query.totalCourses];
-    
-    const courseFilters = [];
-    ranges.forEach(range => {
-      if (range === "1-4") courseFilters.push({ totalCourses: { $gte: 1, $lte: 4 } });
-      else if (range === "5-9") courseFilters.push({ totalCourses: { $gte: 5, $lte: 9 } });
-      else if (range === "10+") courseFilters.push({ totalCourses: { $gte: 10 } });
-    });
-    
-    if (courseFilters.length > 0) {
-      filter.$or = filter.$or ? [...filter.$or, ...courseFilters] : courseFilters;
-    }
-  }
-
-  // Years of experience filter (range)
-  if (req.query.yearsOfExperienceMin || req.query.yearsOfExperienceMax) {
-    filter.yearsOfExperience = {};
-    if (req.query.yearsOfExperienceMin) {
-      filter.yearsOfExperience.$gte = Number(req.query.yearsOfExperienceMin);
-    }
-    if (req.query.yearsOfExperienceMax) {
-      filter.yearsOfExperience.$lte = Number(req.query.yearsOfExperienceMax);
-    }
-  }
-
-  // Reviews count filter (minimum threshold)
-  if (req.query.reviewsCount) {
-    const thresholds = Array.isArray(req.query.reviewsCount) 
-      ? req.query.reviewsCount.map(Number) 
-      : [Number(req.query.reviewsCount)];
-    const maxThreshold = Math.min(...thresholds);
-    filter["rating.totalReviews"] = { $gte: maxThreshold };
-  }
-
-  // Background type filter (faang, startup, research, corporate, freelance, academic)
-  if (req.query.backgroundType) {
-    const backgrounds = Array.isArray(req.query.backgroundType) 
-      ? req.query.backgroundType 
-      : [req.query.backgroundType];
-    filter.backgroundType = { $in: backgrounds };
-  }
-
-  // Top instructor filter
-  if (req.query.isTopInstructor === "true") {
-    filter.isTopInstructor = true;
-  }
-
-  // Verified expert filter (documents verified by admin)
-  if (req.query.isVerified === "true") {
-    filter.isDocumentsVerified = true;
-  }
-
-  // Available for mentorship filter
-  if (req.query.availableForMentorship === "true") {
-    filter["availability.isAvailableForMentorship"] = true;
-  }
-
-  // Available for live classes filter
-  if (req.query.availableForLive === "true") {
-    filter["availability.isAvailableForLive"] = true;
-  }
-
-  // Teaching language filter
-  if (req.query.teachingLanguages) {
-    const languages = Array.isArray(req.query.teachingLanguages) 
-      ? req.query.teachingLanguages 
-      : [req.query.teachingLanguages];
-    filter.teachingLanguages = { $in: languages };
-  }
-
-  // Sorting options
-  const sortMap = {
-    popular: { totalStudentsTeaching: -1 },
-    rating: { "rating.averageRating": -1 },
-    reviews: { "rating.totalReviews": -1 },
-    experience: { yearsOfExperience: -1 },
-    students: { totalStudentsTeaching: -1 },
-    newest: { createdAt: -1 }
-  };
-  const sort = sortMap[req.query.sort] || sortMap.popular;
+  const sanitizedLimit = Math.min(limit, 50);
+  const filter = buildInstructorPublicFilter(req.query);
+  const sort = normalizeSort(req.query.sort);
 
   // Execute query
   const total = await Instructor.countDocuments(filter);
   const instructors = await Instructor.find(filter)
     .select(
       "firstName lastName professionalTitle shortBio profilePicture bannerColor " +
-      "specializations skills rating totalStudentsTeaching totalCourses yearsOfExperience " +
-      "backgroundType isTopInstructor isDocumentsVerified availability teachingLanguages"
+      "specializations skills rating totalStudentsTeaching totalCourses totalLiveClasses yearsOfExperience " +
+      "backgroundType isTopInstructor isDocumentsVerified availability teachingLanguages createdAt"
     )
     .sort(sort)
     .skip(skip)
-    .limit(limit)
+    .limit(sanitizedLimit)
     .lean();
 
-  const paginationData = createPaginationResponse(page, limit, total);
+  const paginationData = createPaginationResponse(total, page, sanitizedLimit);
 
   successResponse(res, 200, "Instructors retrieved successfully", {
     instructors,
     pagination: paginationData
   });
+});
+
+// @route   GET /api/v1/public/instructors/search
+// @desc    Search instructors publicly by keyword + optional filters
+// @access  Public
+export const searchInstructorsPublic = asyncHandler(async (req, res) => {
+  const searchTerm = req.query.q || req.query.query || req.query.search;
+  if (!searchTerm || !String(searchTerm).trim()) {
+    return errorResponse(res, 400, "Search query is required");
+  }
+
+  req.query.search = String(searchTerm).trim();
+  return getAllInstructorsPublic(req, res);
 });
 
 // @route   GET /api/v1/public/instructors/:id
@@ -318,7 +334,7 @@ export const getInstructorReviewsPublic = asyncHandler(async (req, res) => {
       .populate("course", "title")
       .lean();
 
-    const paginationData = createPaginationResponse(page, limit, totalReviews);
+    const paginationData = createPaginationResponse(totalReviews, page, limit);
 
     successResponse(res, 200, "Reviews retrieved successfully", {
       reviews: reviews.map(review => ({

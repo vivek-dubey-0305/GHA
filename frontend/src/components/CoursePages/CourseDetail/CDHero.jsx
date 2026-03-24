@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import VideoPlayer from "./VideoPlayer";
 
 /* ── Countdown Timer Hook ── */
 function useCountdown(initialSeconds) {
@@ -17,8 +18,11 @@ function useCountdown(initialSeconds) {
 }
 
 /* ── Enroll Card ── */
-function EnrollCard({ course, cardRef }) {
+function EnrollCard({ course, cardRef, onPreviewClick, hasPreview }) {
   const timer = useCountdown(14 * 3600 + 32 * 60 + 7);
+  const videoDurationLabel = Number(course?.totalDuration || 0) < 60
+    ? `${Number(course?.totalDuration || 0)}m`
+    : `${Math.round(((Number(course?.totalDuration || 0) / 60) * 10)) / 10}h`;
   const discountPct =
     course.price && course.discountPrice
       ? Math.round((1 - course.discountPrice / course.price) * 100)
@@ -65,7 +69,7 @@ function EnrollCard({ course, cardRef }) {
             PREVIEW
           </text>
         </svg>
-        <div className="cd-card-preview-play">
+        <div className="cd-card-preview-play" onClick={hasPreview ? onPreviewClick : undefined} style={{ cursor: hasPreview ? "pointer" : "not-allowed", opacity: hasPreview ? 1 : 0.65 }}>
           <div className="cd-play-icon">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
               <path d="M7 4L16 10L7 16V4Z" fill="#f5c518" />
@@ -97,15 +101,17 @@ function EnrollCard({ course, cardRef }) {
         <button className="cd-enroll-btn">
           <span>Enroll Now — Get Instant Access</span>
         </button>
-        <button className="cd-try-btn">Try Free Preview (3 Lessons)</button>
+        <button className="cd-try-btn" onClick={hasPreview ? onPreviewClick : undefined} disabled={!hasPreview}>
+          Try Free Preview ({course.previewLessons?.length || 0} Lessons)
+        </button>
 
         <div className="cd-card-includes">
           <div className="cd-card-includes-title">This Course Includes</div>
           <div className="cd-include-item">
-            <span className="cd-ico">▶</span> {course.durationHours}h on-demand video
+            <span className="cd-ico">▶</span> {videoDurationLabel} on-demand video
           </div>
           <div className="cd-include-item">
-            <span className="cd-ico">📁</span> 60+ downloadable resources
+            <span className="cd-ico">📁</span> {course.totalMaterials || 0} downloadable resources
           </div>
           <div className="cd-include-item">
             <span className="cd-ico">🔗</span> Full source files included
@@ -137,10 +143,58 @@ function EnrollCard({ course, cardRef }) {
 export default function CDHero({ course, cardRef }) {
   if (!course) return null;
 
+  const [videoPlayerOpen, setVideoPlayerOpen] = useState(false);
+  const [previewVideo, setPreviewVideo] = useState({ url: "", title: "" });
+
   const stars = "★".repeat(Math.round(course.rating || 0));
+  const heroDurationLabel = Number(course?.totalDuration || 0) < 60
+    ? `${Number(course?.totalDuration || 0)}m`
+    : `${Math.round(((Number(course?.totalDuration || 0) / 60) * 10)) / 10}h`;
+
+  const findFirstPreviewVideo = () => {
+    if (course?.trailerVideo) {
+      return { url: course.trailerVideo, title: `${course.title} - Trailer` };
+    }
+
+    const modules = Array.isArray(course?.modules) ? course.modules : [];
+    for (const mod of modules) {
+      const lessons = Array.isArray(mod?.lessons) ? mod.lessons : [];
+      const freeVideo = lessons.find((l) => l?.isFree && l?.type === "video" && l?.videoId?.url);
+      if (freeVideo) {
+        return {
+          url: freeVideo.videoId.url,
+          title: freeVideo.title || "Free Preview",
+        };
+      }
+    }
+
+    return null;
+  };
+
+  const preview = findFirstPreviewVideo();
+  const hasPreview = !!preview?.url;
+
+  const handleOpenPreview = () => {
+    if (!preview?.url) return;
+    setPreviewVideo(preview);
+    setVideoPlayerOpen(true);
+  };
+
+  const handleClosePreview = () => {
+    setVideoPlayerOpen(false);
+    setPreviewVideo({ url: "", title: "" });
+  };
 
   return (
     <div className="cd-detail-hero">
+      <VideoPlayer
+        isOpen={videoPlayerOpen}
+        onClose={handleClosePreview}
+        videoUrl={previewVideo.url}
+        title={previewVideo.title || "Course Preview"}
+        lessonTitle={previewVideo.title || "Course Preview"}
+      />
+
       {/* Animated BG SVG */}
       <svg className="cd-dh-bg-svg" viewBox="0 0 500 500" xmlns="http://www.w3.org/2000/svg">
         <defs>
@@ -198,7 +252,7 @@ export default function CDHero({ course, cardRef }) {
         <div className="cd-dh-meta-row">
           <div className="cd-dh-meta-item">
             <span className="cd-dh-meta-icon">⏱</span>
-            <em>{course.durationHours}h</em> of content
+            <em>{heroDurationLabel}</em> of content
           </div>
           <div className="cd-dh-meta-item">
             <span className="cd-dh-meta-icon">📖</span>
@@ -239,7 +293,7 @@ export default function CDHero({ course, cardRef }) {
       </div>
 
       {/* FLOATING CARD */}
-      <EnrollCard course={course} cardRef={cardRef} />
+      <EnrollCard course={course} cardRef={cardRef} onPreviewClick={handleOpenPreview} hasPreview={hasPreview} />
     </div>
   );
 }

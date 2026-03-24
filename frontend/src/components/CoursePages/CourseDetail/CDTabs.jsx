@@ -11,7 +11,14 @@ const TABS = [
   { id: "reviews", label: "Reviews" },
 ];
 
-export default function CDTabs({ course, modules, instructor }) {
+export default function CDTabs({
+  course,
+  modules,
+  instructor,
+  reviews,
+  ratingStats,
+  loadingReviews,
+}) {
   const [activeTab, setActiveTab] = useState("overview");
 
   return (
@@ -40,7 +47,12 @@ export default function CDTabs({ course, modules, instructor }) {
         <CDInstructor instructor={instructor} />
       </div>
       <div className={`cd-tab-panel${activeTab === "reviews" ? " active" : ""}`}>
-        <CDReviews course={course} />
+        <CDReviews
+          course={course}
+          reviews={reviews}
+          ratingStats={ratingStats}
+          loadingReviews={loadingReviews}
+        />
       </div>
     </section>
   );

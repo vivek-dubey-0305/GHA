@@ -1,37 +1,21 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useSelector } from "react-redux";
+import { apiClient } from "../../../utils/api.utils.js";
 
-const MOCK_REVIEWS = [
-  {
-    name: "PRIYA SHARMA",
-    date: "March 2025",
-    stars: 5,
-    text: "Absolutely incredible. I've taken every course available and this one is in a different league entirely. The teaching style is methodical yet engaging. I implemented the framework at my company and we shipped our product in 6 weeks instead of the planned 6 months.",
-  },
-  {
-    name: "DANIEL FOSTER",
-    date: "February 2025",
-    stars: 5,
-    text: "The depth of content here is unmatched. Every lesson builds on the last with clear, actionable examples. I went from beginner to confidently building production-ready applications. Worth every penny.",
-  },
-  {
-    name: "KENJI TANAKA",
-    date: "January 2025",
-    stars: 5,
-    text: "Best technical course I've ever taken. The instructor explains complex concepts in a way that actually sticks. Already got a new job offer because of the skills I learned here.",
-  },
-];
+function formatReviewDate(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
 
-const RATING_BARS = [
-  { label: "5 ★", pct: 88 },
-  { label: "4 ★", pct: 9 },
-  { label: "3 ★", pct: 2 },
-  { label: "2 ★", pct: 1 },
-  { label: "1 ★", pct: 0.5 },
-];
-
-export default function CDReviews({ course }) {
+export default function CDReviews({ course, reviews = [], ratingStats, loadingReviews = false }) {
   const [animated, setAnimated] = useState(false);
+  const [checkingEligibility, setCheckingEligibility] = useState(false);
   const sectionRef = useRef(null);
+  const navigate = useNavigate();
+  const { isAuthenticated } = useSelector((state) => state.auth);
 
   useEffect(() => {
     if (!sectionRef.current) return;
@@ -50,19 +34,53 @@ export default function CDReviews({ course }) {
 
   if (!course) return null;
 
+  const hasReviews = (reviews?.length || 0) > 0;
+  const totalRatings = Number(ratingStats?.totalReviews || course.totalReviews || 0);
+  const averageRating = totalRatings > 0
+    ? Number(ratingStats?.averageRating ?? course.rating ?? 0)
+    : 0;
+  const distribution = ratingStats?.ratingDistribution || {};
+
+  const ratingBars = [5, 4, 3, 2, 1].map((star) => {
+    const count = Number(distribution?.[star] || 0);
+    const pct = totalRatings > 0 ? Math.round((count / totalRatings) * 100) : 0;
+    return { label: `${star} ★`, pct };
+  });
+
+  const handleFirstReview = async () => {
+    if (!isAuthenticated) {
+      navigate("/login", { state: { from: `/courses/${course._id}` } });
+      return;
+    }
+
+    try {
+      setCheckingEligibility(true);
+      await apiClient.get(`/user/enrollments/${course._id}`);
+      console.log("User is enrolled and can review this course. Open review flow here.");
+    } catch (error) {
+      if (error?.response?.status === 404 || error?.response?.status === 403) {
+        console.log("Please re-enroll in this course before submitting a review.");
+      } else {
+        console.log("Could not verify enrollment. Please try again.");
+      }
+    } finally {
+      setCheckingEligibility(false);
+    }
+  };
+
   return (
     <>
       {/* Summary */}
       <div className="cd-review-summary cp-reveal" ref={sectionRef}>
         <div>
-          <div className="cd-review-big-num">{course.rating || "4.9"}</div>
+          <div className="cd-review-big-num">{averageRating.toFixed(1)}</div>
           <div className="cd-review-stars-lg">★★★★★</div>
           <div className="cd-review-count">
-            {(course.totalReviews || 0).toLocaleString()} ratings
+            {totalRatings.toLocaleString()} ratings
           </div>
         </div>
         <div className="cd-rating-bars">
-          {RATING_BARS.map((bar) => (
+          {ratingBars.map((bar) => (
             <div key={bar.label} className="cd-rating-bar-row">
               <div className="cd-rating-bar-label">{bar.label}</div>
               <div className="cd-rating-bar-track">
@@ -79,18 +97,42 @@ export default function CDReviews({ course }) {
 
       {/* Review cards */}
       <div className="cd-reviews-grid cp-reveal">
-        {MOCK_REVIEWS.map((r, i) => (
-          <div key={i} className="cd-review-item">
+        {loadingReviews ? (
+          <div className="cd-review-item">
+            <div className="cd-review-text">Loading reviews...</div>
+          </div>
+        ) : hasReviews ? (
+          reviews.map((r, i) => (
+            <div key={r._id || i} className="cd-review-item">
+              <div className="cd-review-header">
+                <div>
+                  <div className="cd-reviewer-name">
+                    {(r.user?.firstName || "User").toUpperCase()} {(r.user?.lastName || "").toUpperCase()}
+                  </div>
+                  <div className="cd-review-date">{formatReviewDate(r.createdAt)}</div>
+                </div>
+                <div className="cd-review-stars">{"★".repeat(Number(r.rating || 0))}</div>
+              </div>
+              <div className="cd-review-text">{r.comment || r.title || ""}</div>
+            </div>
+          ))
+        ) : (
+          <div className="cd-review-item">
             <div className="cd-review-header">
               <div>
-                <div className="cd-reviewer-name">{r.name}</div>
-                <div className="cd-review-date">{r.date}</div>
+                <div className="cd-reviewer-name">NO REVIEWS YET</div>
+                <div className="cd-review-date">Be the first learner to share feedback.</div>
               </div>
-              <div className="cd-review-stars">{"★".repeat(r.stars)}</div>
             </div>
-            <div className="cd-review-text">{r.text}</div>
+            <button
+              className="cd-first-review-btn"
+              onClick={handleFirstReview}
+              disabled={checkingEligibility}
+            >
+              {checkingEligibility ? "Checking eligibility..." : "Be The First To Review"}
+            </button>
           </div>
-        ))}
+        )}
       </div>
     </>
   );

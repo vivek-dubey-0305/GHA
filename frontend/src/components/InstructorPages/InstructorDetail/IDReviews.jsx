@@ -1,14 +1,25 @@
 import { useEffect, useRef, useState } from "react";
+import InstructorEmptyState from "../InstructorEmptyState";
 
-const RATING_BARS = [
-  { label: "5 ★", pct: 82 },
-  { label: "4 ★", pct: 13 },
-  { label: "3 ★", pct: 3 },
-  { label: "2 ★", pct: 1 },
-  { label: "1 ★", pct: 1 },
-];
+const toBreakdownBars = (ratingBreakdown, totalReviews) => {
+  const total = Number(totalReviews || 0);
+  const source = ratingBreakdown || {};
 
-export default function IDReviews({ instructor }) {
+  const rows = [
+    { label: "5 ★", count: Number(source?.fivestar || source?.[5] || 0) },
+    { label: "4 ★", count: Number(source?.fourstar || source?.[4] || 0) },
+    { label: "3 ★", count: Number(source?.threestar || source?.[3] || 0) },
+    { label: "2 ★", count: Number(source?.twostar || source?.[2] || 0) },
+    { label: "1 ★", count: Number(source?.onestar || source?.[1] || 0) },
+  ];
+
+  return rows.map((row) => ({
+    ...row,
+    pct: total > 0 ? Math.round((row.count / total) * 100) : 0,
+  }));
+};
+
+export default function IDReviews({ instructor, reviews = [], ratingStats = null, loadingReviews = false, reviewsError = null }) {
   const [animated, setAnimated] = useState(false);
   const ref = useRef(null);
 
@@ -23,18 +34,41 @@ export default function IDReviews({ instructor }) {
 
   if (!instructor) return null;
 
-  const reviews = instructor.reviewItems || [];
+  if (loadingReviews && reviews.length === 0) {
+    return (
+      <InstructorEmptyState
+        title="Loading Reviews"
+        description="Gathering learner feedback and rating insights..."
+        compact
+      />
+    );
+  }
+
+  if (reviewsError) {
+    return (
+      <InstructorEmptyState
+        title="Reviews Unavailable"
+        description={reviewsError}
+        compact
+      />
+    );
+  }
+
+  const reviewItems = instructor.reviewItems || [];
+  const totalReviews = Number(ratingStats?.totalReviews || instructor.reviews || 0);
+  const averageRating = Number(ratingStats?.averageRating || instructor.rating || 0);
+  const bars = toBreakdownBars(ratingStats?.ratingBreakdown || instructor.ratingBreakdown, totalReviews);
 
   return (
     <>
       <div className="id-review-summary ip-reveal" ref={ref}>
         <div>
-          <div className="id-rs-big">{instructor.rating}</div>
+          <div className="id-rs-big">{averageRating.toFixed(2)}</div>
           <div className="id-rs-stars">★★★★★</div>
-          <div className="id-rs-count">{instructor.reviews.toLocaleString()} total reviews</div>
+          <div className="id-rs-count">{totalReviews.toLocaleString()} total reviews</div>
         </div>
         <div className="id-rating-bars">
-          {RATING_BARS.map((bar) => (
+          {bars.map((bar) => (
             <div key={bar.label} className="id-rb-row">
               <span className="id-rb-lbl">{bar.label}</span>
               <div className="id-rb-track">
@@ -47,14 +81,20 @@ export default function IDReviews({ instructor }) {
       </div>
 
       <div className="id-reviews-list">
-        {reviews.map((r, i) => (
+        {reviewItems.length === 0 ? (
+          <InstructorEmptyState
+            title="No Reviews Yet"
+            description="Be the first learner to leave feedback for this instructor."
+            compact
+          />
+        ) : reviewItems.map((r, i) => (
           <div className="id-rev-item" key={i}>
             <div className="id-rev-hd">
               <div>
                 <div className="id-rev-name">{r.name}</div>
                 <div className="id-rev-meta">{r.course} · {r.date}</div>
               </div>
-              <div className="id-rev-stars">{"★".repeat(r.stars)}</div>
+              <div className="id-rev-stars">{"★".repeat(Number(r.stars || 0))}</div>
             </div>
             <div className="id-rev-text">{r.text}</div>
           </div>

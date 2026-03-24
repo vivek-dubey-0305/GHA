@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import InstructorEmptyState from "../InstructorEmptyState";
 
 const BADGE_STYLES = {
   "badge-best":  "background:#f5c518;color:#0a0a0a",
@@ -41,7 +42,13 @@ export default function IDMyCourses({ instructor }) {
       </div>
 
       <div className="id-my-courses-grid">
-        {courses.map((c, i) => (
+        {courses.length === 0 ? (
+          <InstructorEmptyState
+            title="No Published Courses"
+            description="This instructor has not published any public courses yet."
+            compact
+          />
+        ) : courses.map((c, i) => (
           <div
             key={c.id}
             className="id-mc-card"
@@ -52,7 +59,7 @@ export default function IDMyCourses({ instructor }) {
               <img src={c.img} alt={c.title} loading="lazy"/>
               <div className="id-mc-thumb-ov"/>
               <span className="id-mc-level">{c.level}</span>
-              {c.badges.map((b) => (
+              {(c.badges || []).map((b) => (
                 <span key={b.cls} className="id-mc-badge" style={{ ...Object.fromEntries((BADGE_STYLES[b.cls]||"").split(";").filter(Boolean).map(s=>s.split(":"))) }}>
                   {b.label}
                 </span>

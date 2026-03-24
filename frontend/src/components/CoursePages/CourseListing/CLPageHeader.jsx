@@ -1,6 +1,18 @@
 import BgAnimationWrapper from "../../animations/BgAnimationWrapper";
 
-export default function CLPageHeader({ totalCourses, totalStudents, totalInstructors }) {
+const compactLearners = (value) => {
+  const num = Number(value || 0);
+  if (num <= 0) return "0+";
+  if (num >= 1000000) return `${Math.round((num / 1000000) * 10) / 10}M+`;
+  return `${Math.round((num / 1000) * 10) / 10}K+`;
+};
+
+export default function CLPageHeader({
+  totalCourses = 0,
+  totalCategories = 0,
+  totalStudents = 0,
+  totalInternships = 0,
+}) {
   return (
     <div className="cl-page-header">
       {/* Background Animation */}
@@ -26,16 +38,20 @@ export default function CLPageHeader({ totalCourses, totalStudents, totalInstruc
         </div>
         <div className="cl-ph-stats">
           <div className="cl-ph-stat">
-            <em>{totalCourses}+</em> COURSES
+            <span className="cl-ph-stat-num">{Number(totalCourses || 0)}+</span>
+            <span className="cl-ph-stat-label">courses</span>
           </div>
           <div className="cl-ph-stat">
-            <em>{Math.round(totalStudents / 1000)}K+</em> STUDENTS
+            <span className="cl-ph-stat-num">{Number(totalCategories || 0)}</span>
+            <span className="cl-ph-stat-label">categories</span>
           </div>
           <div className="cl-ph-stat">
-            <em>{totalInstructors}+</em> INSTRUCTORS
+            <span className="cl-ph-stat-num">{compactLearners(totalStudents)}</span>
+            <span className="cl-ph-stat-label">learners</span>
           </div>
           <div className="cl-ph-stat">
-            <em>4.8★</em> AVG RATING
+            <span className="cl-ph-stat-num">{Number(totalInternships || 0)}+</span>
+            <span className="cl-ph-stat-label">internships</span>
           </div>
         </div>
       </div>

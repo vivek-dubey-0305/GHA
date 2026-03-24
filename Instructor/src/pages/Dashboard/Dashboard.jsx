@@ -356,7 +356,7 @@ export default function Dashboard() {
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm"><span className="text-gray-400">Courses Created</span><span className="text-white font-medium">{stats?.totalCourses || 0}</span></div>
                     <div className="flex justify-between text-sm"><span className="text-gray-400">Total Reviews</span><span className="text-white font-medium">{stats?.totalReviews || 0}</span></div>
-                    <div className="flex justify-between text-sm"><span className="text-gray-400">Video Packages</span><span className="text-white font-medium">{stats?.videoPackages?.total || 0}</span></div>
+                    <div className="flex justify-between text-sm"><span className="text-gray-400">Videos</span><span className="text-white font-medium">{stats?.videos?.totalVideos || 0}</span></div>
                   </div>
                   <Link to="/instructor/assignments" className="flex items-center gap-1 mt-4 pt-3 border-t border-gray-800 text-gray-400 hover:text-white text-xs font-medium transition-colors">
                     View Assignments <ArrowRight className="w-3 h-3" />

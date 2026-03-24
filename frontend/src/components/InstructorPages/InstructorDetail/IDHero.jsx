@@ -9,12 +9,12 @@ function QuickCard({ instructor }) {
       <div className="id-hc-label">Quick Stats</div>
 
       {[
-        { ico: "👥", key: "Students",     val: fmt(instructor.students) },
-        { ico: "⭐", key: "Rating",       val: instructor.rating },
-        { ico: "📚", key: "Courses",      val: instructor.courses },
-        { ico: "💬", key: "Reviews",      val: fmt(instructor.reviews) },
-        { ico: "📅", key: "Exp.",         val: `${instructor.exp} yrs` },
-        { ico: "🎙", key: "Live Classes", val: instructor.liveClasses },
+        { ico: "👥", key: "Students",     val: fmt(Number(instructor.students || 0)) },
+        { ico: "⭐", key: "Rating",       val: Number(instructor.rating || 0).toFixed(2) },
+        { ico: "📚", key: "Courses",      val: Number(instructor.courses || 0) },
+        { ico: "💬", key: "Reviews",      val: fmt(Number(instructor.reviews || 0)) },
+        { ico: "📅", key: "Exp.",         val: `${Number(instructor.exp || 0)} yrs` },
+        { ico: "🎙", key: "Live Classes", val: Number(instructor.liveClasses || 0) },
       ].map(({ ico, key, val }) => (
         <div className="id-hc-stat-row" key={key}>
           <span className="id-hc-stat-key">
@@ -46,7 +46,7 @@ export default function IDHero({ instructor }) {
     mentor:   { cls: "id-hb-mentor",   label: "🎙 Live Mentor" },
   };
 
-  const [first, ...rest] = instructor.name.split(" ");
+  const [first, ...rest] = String(instructor.name || "Instructor").split(" ");
 
   return (
     <div className="id-hero">

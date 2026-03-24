@@ -1,6 +1,10 @@
 import { Course } from "../models/course.model.js";
 import { Module } from "../models/module.model.js";
 import { Lesson } from "../models/lesson.model.js";
+import { Assignment } from "../models/assignment.model.js";
+import { LiveClass } from "../models/liveclass.model.js";
+import { Material } from "../models/material.model.js";
+import { Video } from "../models/video.model.js";
 import { Instructor } from "../models/instructor.model.js";
 import { Enrollment } from "../models/enrollment.model.js";
 import { Review } from "../models/review.model.js";
@@ -19,6 +23,14 @@ import {
     createDraftCourseService,
     saveDraftCourseService,
 } from "../services/fullCourse.service.js";
+import { generateSignedPlaybackUrl } from "../services/bunny.service.js";
+
+const extractBunnyVideoId = (value) => {
+    if (!value || typeof value !== "string") return null;
+    const guidPattern = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+    const guidMatch = value.match(guidPattern);
+    return guidMatch ? guidMatch[0] : null;
+};
 
 /**
  * Course Controller
@@ -79,15 +91,13 @@ export const getCourseDetails = asyncHandler(async (req, res) => {
         .populate("instructor", "firstName lastName profilePicture bio rating totalStudentsTeaching totalCourses")
         .populate({
             path: "modules",
-            match: { isPublished: true },
             options: { sort: { order: 1 } },
             populate: {
                 path: "lessons",
-                match: { isPublished: true },
                 options: { sort: { order: 1 } },
-                select: "title type isFree order videoPackageId assignmentId liveClassId materialId content",
+                select: "title type isFree order videoId assignmentId liveClassId materialId content",
                 populate: [
-                    { path: "videoPackageId" },
+                    { path: "videoId" },
                     { path: "assignmentId" },
                     { path: "liveClassId" },
                     { path: "materialId" }
@@ -100,7 +110,13 @@ export const getCourseDetails = asyncHandler(async (req, res) => {
         return errorResponse(res, 404, "Course not found");
     }
 
-    successResponse(res, 200, "Course details retrieved successfully", course);
+    const payload = course.toObject();
+    const trailerId = extractBunnyVideoId(payload.trailerVideo);
+    if (trailerId) {
+        payload.trailerVideo = generateSignedPlaybackUrl(trailerId, 14400);
+    }
+
+    successResponse(res, 200, "Course details retrieved successfully", payload);
 });
 
 // @route   GET /api/v1/courses/:id/reviews
@@ -316,6 +332,41 @@ export const togglePublishCourse = asyncHandler(async (req, res) => {
     if (!course.isPublished) {
         if (course.totalModules === 0) return errorResponse(res, 400, "Course must have at least one module to publish");
         if (course.totalLessons === 0) return errorResponse(res, 400, "Course must have at least one lesson to publish");
+
+        // Publish curriculum hierarchy so public course details can render real data.
+        await Module.updateMany({ course: course._id }, { isPublished: true, updatedBy: req.instructor.id });
+        await Lesson.updateMany({ course: course._id }, { isPublished: true, updatedBy: req.instructor.id });
+
+        const lessons = await Lesson.find({ course: course._id }).select("type assignmentId liveClassId materialId videoId");
+        const assignmentIds = lessons.filter(l => l.type === "assignment" && l.assignmentId).map(l => l.assignmentId);
+        const liveClassIds = lessons.filter(l => l.type === "live" && l.liveClassId).map(l => l.liveClassId);
+        const materialIds = lessons.filter(l => l.type === "material" && l.materialId).map(l => l.materialId);
+        const videoIds = lessons.filter(l => l.type === "video" && l.videoId).map(l => l.videoId);
+
+        if (assignmentIds.length) {
+            await Assignment.updateMany(
+                { _id: { $in: assignmentIds } },
+                { status: "published", isPublished: true, updatedBy: req.instructor.id }
+            );
+        }
+        if (liveClassIds.length) {
+            await LiveClass.updateMany(
+                { _id: { $in: liveClassIds } },
+                { isPublished: true, updatedBy: req.instructor.id }
+            );
+        }
+        if (materialIds.length) {
+            await Material.updateMany(
+                { _id: { $in: materialIds } },
+                { status: "published", accessLevel: "public", isPublic: true, updatedBy: req.instructor.id }
+            );
+        }
+        if (videoIds.length) {
+            await Video.updateMany(
+                { _id: { $in: videoIds } },
+                { isPublished: true, isPublic: true, updatedBy: req.instructor.id }
+            );
+        }
 
         course.status = "published";
         course.isPublished = true;

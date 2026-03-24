@@ -114,19 +114,17 @@ function LessonRow({ lesson, index }) {
 }
 
 function getLessonDetails(lesson) {
-  if (lesson.type === 'video' && lesson.videoPackageId) {
-    const vp = lesson.videoPackageId;
+  if (lesson.type === 'video' && lesson.videoId) {
+    const video = lesson.videoId;
     return (
       <div className="space-y-2">
-        <p className="text-gray-400 text-xs">{vp.packageName || 'Video Package'} &middot; {vp.videos?.length || 0} video(s)</p>
-        {vp.videos?.map((v, i) => (
-          <div key={i} className="flex items-center gap-2 bg-white/5 rounded-lg px-3 py-2">
-            <Play className="w-3 h-3 text-gray-500" />
-            <span className="text-gray-300 text-xs flex-1 truncate">{v.title || `Video ${i + 1}`}</span>
-            {v.duration > 0 && <span className="text-gray-600 text-xs">{formatDuration(v.duration)}</span>}
-            {v.thumbnail && <img src={v.thumbnail} alt="" className="w-6 h-6 rounded object-cover" />}
-          </div>
-        ))}
+        <p className="text-gray-400 text-xs">Video lesson</p>
+        <div className="flex items-center gap-2 bg-white/5 rounded-lg px-3 py-2">
+          <Play className="w-3 h-3 text-gray-500" />
+          <span className="text-gray-300 text-xs flex-1 truncate">{video.title || 'Video'}</span>
+          {video.duration > 0 && <span className="text-gray-600 text-xs">{formatDuration(video.duration)}</span>}
+          {video.thumbnail && <img src={video.thumbnail} alt="" className="w-6 h-6 rounded object-cover" />}
+        </div>
       </div>
     );
   }

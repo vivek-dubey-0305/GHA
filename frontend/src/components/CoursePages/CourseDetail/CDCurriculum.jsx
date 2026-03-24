@@ -1,7 +1,59 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { getIconByLessonType, IconPresets } from "../../../utils/iconRenderer";
+import { apiClient } from "../../../utils/api.utils.js";
+import VideoPlayer from "./VideoPlayer";
 
-function ModuleItem({ mod, index, isOpen, onToggle }) {
-  const lessons = mod.lessonDetails || mod.lessons || [];
+function ModuleItem({ 
+  mod, 
+  index, 
+  isOpen, 
+  onToggle, 
+  onPlayVideo
+}) {
+  const lessons = Array.isArray(mod.lessonDetails)
+    ? mod.lessonDetails
+    : Array.isArray(mod.lessons)
+      ? mod.lessons
+      : [];
+
+  const handleLessonClick = async (lesson) => {
+    if (!lesson?.isFree) return;
+
+    if (lesson.type === "video") {
+      const videoUrl = lesson?.videoId?.url;
+      if (videoUrl) onPlayVideo(videoUrl, lesson.title || "Video Preview");
+      return;
+    }
+
+    if (lesson.type === "material") {
+      const materialUrl = lesson?.materialId?.fileUrl;
+      if (materialUrl) {
+        window.open(materialUrl, "_blank", "noopener,noreferrer");
+      }
+      return;
+    }
+
+    if (lesson.type === "article") {
+      const article = lesson?.content?.articleContent;
+      if (article) {
+        const articleWindow = window.open("", "_blank", "noopener,noreferrer");
+        if (articleWindow) {
+          articleWindow.document.write(`<pre style="white-space:pre-wrap;font-family:system-ui;padding:16px;">${article.replace(/</g, "&lt;")}</pre>`);
+          articleWindow.document.close();
+        }
+      }
+    }
+  };
+
+  /**
+   * Format video duration from seconds
+   */
+  const formatDuration = (seconds) => {
+    if (!seconds) return "--:--";
+    const mins = Math.floor(seconds / 60);
+    const secs = String(seconds % 60).padStart(2, "0");
+    return `${mins}:${secs}`;
+  };
 
   return (
     <div className="cd-module">
@@ -22,37 +74,86 @@ function ModuleItem({ mod, index, isOpen, onToggle }) {
 
       <div className={`cd-module-lessons${isOpen ? " open" : ""}`}>
         {lessons.map((lesson, li) => (
-          <div key={lesson._id || li} className="cd-lesson">
-            {lesson.isFree ? (
-              <span className="cd-lesson-free">FREE</span>
-            ) : (
-              <span className="cd-lesson-icon">🔒</span>
-            )}
-            <span className="cd-lesson-name">
-              {lesson.title || `Lesson ${li + 1}`}
-            </span>
-            <span className="cd-lesson-dur">
-              {lesson.duration
-                ? `${Math.floor(lesson.duration / 60)}:${String(lesson.duration % 60).padStart(2, "0")}`
-                : "--:--"}
-            </span>
+          <div
+            key={lesson._id || li}
+            className={`cd-lesson ${lesson.isFree ? "cd-lesson-free-access" : "cd-lesson-locked"}`}
+            onClick={() => handleLessonClick(lesson)}
+            style={{ cursor: lesson.isFree ? "pointer" : "default" }}
+          >
+            {/* Lesson Type Icon */}
+            <div className="cd-lesson-icon-wrapper">
+              {lesson.isFree ? (
+                <span className="cd-lesson-free-badge">
+                  {getIconByLessonType(lesson.type, { size: 14 })}
+                </span>
+              ) : (
+                <span className="cd-lesson-lock-badge">
+                  {IconPresets.lockIcon({ size: 14 })}
+                </span>
+              )}
+            </div>
+
+            {/* Lesson Content */}
+            <div className="cd-lesson-content">
+              <span className="cd-lesson-name">
+                Lesson {li + 1} — {lesson.title || "Untitled"}
+              </span>
+              <span className="cd-lesson-type">
+                {lesson.type === "video"
+                  ? "Video"
+                  : lesson.type === "assignment"
+                    ? "Assignment"
+                    : lesson.type === "live"
+                      ? "🔴 Live Class"
+                      : lesson.type === "article"
+                        ? "Article"
+                        : `Resource${lesson?.materialId?.type ? ` (${lesson.materialId.type})` : ""}`}
+              </span>
+            </div>
+
+            {/* Duration or Action */}
+            <div className="cd-lesson-action">
+              {lesson.type === "video" ? (
+                <span className="cd-lesson-dur">
+                  {lesson.videoId?.duration
+                    ? formatDuration(lesson.videoId.duration)
+                    : "--:--"}
+                </span>
+              ) : lesson.type === "material" ? (
+                <span className="cd-lesson-download">
+                  {IconPresets.downloadIcon({ size: 16 })}
+                </span>
+              ) : null}
+            </div>
           </div>
         ))}
+
         {/* Fallback lessons if none populated */}
         {lessons.length === 0 &&
           Array.from({ length: mod.totalLessons || 3 }).map((_, li) => (
-            <div key={li} className="cd-lesson">
-              {li < 2 ? (
-                <span className="cd-lesson-free">FREE</span>
-              ) : (
-                <span className="cd-lesson-icon">🔒</span>
-              )}
-              <span className="cd-lesson-name">
-                Lesson {li + 1} — {mod.title}
-              </span>
-              <span className="cd-lesson-dur">
-                {Math.floor(20 + Math.random() * 25)}:00
-              </span>
+            <div key={li} className="cd-lesson cd-lesson-fallback">
+              <div className="cd-lesson-icon-wrapper">
+                <span className={`cd-lesson-free-badge ${li < 2 ? "" : "cd-lesson-lock-badge"}`}>
+                  {li < 2 ? (
+                    getIconByLessonType("video", { size: 14 })
+                  ) : (
+                    IconPresets.lockIcon({ size: 14 })
+                  )}
+                </span>
+              </div>
+
+              <div className="cd-lesson-content">
+                <span className="cd-lesson-name">
+                  Lesson {li + 1} — {mod.title}
+                </span>
+                <span className="cd-lesson-type">Video</span>
+              </div>
+
+              <div className="cd-lesson-action">
+                <span className="cd-lesson-dur">
+                  {Math.floor((mod.totalDuration || 30) / (mod.totalLessons || 1))}:00
+                </span>
+              </div>
             </div>
           ))}
       </div>
@@ -62,6 +163,141 @@ function ModuleItem({ mod, index, isOpen, onToggle }) {
 
 export default function CDCurriculum({ course, modules }) {
   const [openIndex, setOpenIndex] = useState(0);
+  const [videoPlayerOpen, setVideoPlayerOpen] = useState(false);
+  const [currentVideo, setCurrentVideo] = useState({ url: "", title: "" });
+  const [totalMaterials, setTotalMaterials] = useState(0);
+
+  const totalModules = Number(course?.totalModules || 0);
+  const totalLessons = Number(course?.totalLessons || 0);
+  const totalDuration = Number(course?.totalDuration || 0);
+  const durationHours = Math.round(((totalDuration / 60) * 10)) / 10;
+  const durationLabel = totalDuration < 60 ? `${totalDuration}m` : `${durationHours}h`;
+
+  const hasRenderableModules = Array.isArray(modules) && modules.some((m) => m && typeof m === "object" && !Array.isArray(m));
+
+  const displayModules = useMemo(() => {
+    if (hasRenderableModules) return modules;
+    if (totalModules <= 0) return [];
+
+    const baseLessons = Math.floor(totalLessons / totalModules);
+    const remainderLessons = totalLessons % totalModules;
+
+    return Array.from({ length: totalModules }, (_, i) => {
+      const moduleLessons = baseLessons + (i < remainderLessons ? 1 : 0);
+      return {
+        _id: `fallback-module-${i + 1}`,
+        title: `Module ${i + 1}`,
+        totalLessons: moduleLessons,
+        totalDuration: totalModules > 0 ? Math.round(totalDuration / totalModules) : 0,
+        lessons: [],
+      };
+    });
+  }, [hasRenderableModules, modules, totalModules, totalLessons, totalDuration]);
+
+  const moduleMaterialCount = useMemo(() => {
+    if (!Array.isArray(displayModules)) return 0;
+    return displayModules.reduce((sum, mod) => {
+      const lessons = Array.isArray(mod?.lessons) ? mod.lessons : Array.isArray(mod?.lessonDetails) ? mod.lessonDetails : [];
+      return sum + lessons.filter((lesson) => lesson?.type === "material" && lesson?.materialId).length;
+    }, 0);
+  }, [displayModules]);
+
+  const resourcesCount = moduleMaterialCount > 0 ? moduleMaterialCount : totalMaterials;
+
+  /**
+   * Fetch materials count for the course
+   */
+  useEffect(() => {
+    const fetchMaterialsCount = async () => {
+      if (!course?._id) return;
+
+      try {
+        const response = await apiClient.get(`/materials/course/${course._id}`);
+        
+        if (response?.data?.data?.materials) {
+          // Count publishable/downloadable materials
+          const materials = response.data.data.materials;
+          const downloadableTypes = [
+            "document",
+            "presentation",
+            "spreadsheet",
+            "pdf",
+            "image",
+            "video",
+            "audio",
+            "code",
+          ];
+
+          const count = materials.filter((m) =>
+            downloadableTypes.includes(m.type?.toLowerCase())
+          ).length;
+
+          setTotalMaterials(count);
+          console.log("-- Materials count fetched:", count);
+        }
+      } catch (error) {
+        console.error("Error fetching materials count:", error);
+        setTotalMaterials(moduleMaterialCount || 0);
+      }
+    };
+
+    if (moduleMaterialCount > 0) return;
+
+    fetchMaterialsCount();
+  }, [course?._id, moduleMaterialCount]);
+
+  /**
+   * Handle video player open
+   */
+  const handlePlayVideo = (videoUrl, videoTitle) => {
+    setCurrentVideo({ url: videoUrl, title: videoTitle });
+    setVideoPlayerOpen(true);
+  };
+
+  /**
+   * Handle video player close
+   */
+  const handleCloseVideo = () => {
+    setVideoPlayerOpen(false);
+    setTimeout(() => {
+      setCurrentVideo({ url: "", title: "" });
+    }, 300);
+  };
+
+  useEffect(() => {
+    console.log("== COURSE CURRICULUM DEBUG #3 ==");
+    console.log("-- courseId:", course?._id);
+    console.log(
+      "-- totals => modules:",
+      totalModules,
+      "lessons:",
+      totalLessons,
+      "duration(min):",
+      totalDuration
+    );
+    console.log(
+      "** apiModules length:",
+      Array.isArray(modules) ? modules.length : 0,
+      "| hasRenderableModules:",
+      hasRenderableModules,
+      "| materials:",
+      totalMaterials
+    );
+    if (!hasRenderableModules && totalModules > 0) {
+      console.log(
+        "## using fallback modules from course totals because populated modules are empty/non-renderable"
+      );
+    }
+    console.log("===============================");
+  }, [
+    course?._id,
+    hasRenderableModules,
+    modules,
+    totalModules,
+    totalLessons,
+    totalDuration,
+    totalMaterials,
+  ]);
 
   if (!course) return null;
 
@@ -69,6 +305,17 @@ export default function CDCurriculum({ course, modules }) {
 
   return (
     <>
+      {/* Video Player Modal */}
+      {typeof window !== "undefined" && (
+        <VideoPlayer
+          isOpen={videoPlayerOpen}
+          onClose={handleCloseVideo}
+          videoUrl={currentVideo.url}
+          title={currentVideo.title}
+          lessonTitle={currentVideo.title}
+        />
+      )}
+
       {/* Stats */}
       <div className="cd-curriculum-stats cp-reveal">
         <div className="cd-curr-stat">
@@ -80,26 +327,35 @@ export default function CDCurriculum({ course, modules }) {
           <div className="cd-curr-stat-label">Lessons</div>
         </div>
         <div className="cd-curr-stat">
-          <div className="cd-curr-stat-num">{course.durationHours}h</div>
+          <div className="cd-curr-stat-num">{durationLabel}</div>
           <div className="cd-curr-stat-label">Video</div>
         </div>
         <div className="cd-curr-stat">
-          <div className="cd-curr-stat-num">60+</div>
+          <div className="cd-curr-stat-num">{resourcesCount || "0"}</div>
           <div className="cd-curr-stat-label">Resources</div>
         </div>
       </div>
 
       {/* Modules accordion */}
       <div id="cd-modulesAccordion">
-        {modules.map((mod, i) => (
-          <ModuleItem
-            key={mod._id || i}
-            mod={mod}
-            index={i}
-            isOpen={openIndex === i}
-            onToggle={() => toggle(i)}
-          />
-        ))}
+        {displayModules.length > 0 ? (
+          displayModules.map((mod, i) => (
+            <ModuleItem
+              key={mod._id || i}
+              mod={mod}
+              index={i}
+              isOpen={openIndex === i}
+              onToggle={() => toggle(i)}
+              onPlayVideo={handlePlayVideo}
+            />
+          ))
+        ) : (
+          <div className="cd-review-item">
+            <div className="cd-review-text">
+              Curriculum will be available soon for this course.
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

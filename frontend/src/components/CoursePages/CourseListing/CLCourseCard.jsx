@@ -27,6 +27,32 @@ export default function CLCourseCard({ course, viewMode, index }) {
   const navigate = useNavigate();
 
   const isList = viewMode === "list";
+  const categoryLabel =
+    typeof course.cat === "string"
+      ? course.cat
+      : typeof course.category === "string"
+        ? course.category
+        : course.category?.title || "General";
+  const subLabel =
+    typeof course.sub === "string"
+      ? course.sub
+      : typeof course.subCategory === "string"
+        ? course.subCategory
+        : typeof course.level === "string"
+          ? course.level
+          : "All Levels";
+  const instructorLabel =
+    typeof course.instructor === "string"
+      ? course.instructor
+      : course.instructor
+        ? `${course.instructor.firstName || ""} ${course.instructor.lastName || ""}`.trim() || "Instructor"
+        : "Instructor";
+  const projectsCount = Array.isArray(course.projects)
+    ? course.projects.length
+    : typeof course.projects === "number"
+      ? course.projects
+      : 0;
+  const ratingValue = Number(course.rating) || 0;
 
   const priceSection =
     course.price === 0 ? (
@@ -86,9 +112,9 @@ export default function CLCourseCard({ course, viewMode, index }) {
       {/* BODY */}
       <div className="cl-card-body">
         <div className="cl-cat">
-          {course.cat || course.category}
+          {categoryLabel}
           <span className="cl-cat-sep">›</span>
-          {course.sub || course.level}
+          {subLabel}
         </div>
         <div className="cl-card-title">{course.title}</div>
         <div className="cl-card-desc">
@@ -105,7 +131,7 @@ export default function CLCourseCard({ course, viewMode, index }) {
             </svg>
           </div>
           <span className="cl-inst-name">
-            {typeof course.instructor === "string" ? course.instructor : "Instructor"}
+            {instructorLabel}
           </span>
         </div>
 
@@ -118,7 +144,7 @@ export default function CLCourseCard({ course, viewMode, index }) {
             ⏱ {course.hours || course.durationHours}h
           </span>
           <span className="cl-meta-chip">
-            {course.projects || 0} projects
+            {projectsCount} projects
           </span>
           {course.internship && (
             <span className="cl-meta-chip yellow">🎓 Internship</span>
@@ -127,8 +153,8 @@ export default function CLCourseCard({ course, viewMode, index }) {
 
         {/* Stars */}
         <div className="cl-stars-row">
-          <Stars rating={course.rating} />
-          <span className="cl-rating-num">{course.rating}</span>
+          <Stars rating={ratingValue} />
+          <span className="cl-rating-num">{ratingValue}</span>
           <span className="cl-review-ct">
             ({(course.reviews || course.totalReviews || 0).toLocaleString()} reviews)
           </span>
@@ -150,6 +176,7 @@ export default function CLCourseCard({ course, viewMode, index }) {
       </div>
 
       <div className="cl-hover-border" />
+      <div className="cl-progress" />
     </div>
   );
 }

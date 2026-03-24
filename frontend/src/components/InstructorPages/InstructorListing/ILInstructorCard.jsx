@@ -10,10 +10,11 @@ const BADGE_MAP = {
 };
 
 function Stars({ rating }) {
-  const full = Math.floor(rating), half = rating % 1 >= 0.5;
+  const safeRating = Number(rating || 0);
+  const full = Math.floor(safeRating), half = safeRating % 1 >= 0.5;
   return (
     <span className="il-stars">
-      {"★".repeat(full)}{half ? "½" : ""}{"☆".repeat(5 - Math.ceil(rating))}
+      {"★".repeat(full)}{half ? "½" : ""}{"☆".repeat(5 - Math.ceil(safeRating))}
     </span>
   );
 }
@@ -66,7 +67,7 @@ function BannerSVG({ instructor, idx }) {
       <rect width="400" height="110" fill={`url(#${pid})`}/>
       {shapes[idx % shapes.length]}
       <text x="380" y="96" textAnchor="end" fontFamily="'Bebas Neue',sans-serif" fontSize="36" fill={c} opacity=".07" letterSpacing="4">
-        {(instructor.specs[0] || "").toUpperCase()}
+        {(instructor.specs?.[0] || "").toUpperCase()}
       </text>
     </svg>
   );
@@ -108,7 +109,7 @@ export default function ILInstructorCard({ instructor, viewMode, index }) {
         <div className="il-title">{instructor.title}</div>
 
         <div className="il-spec-tags">
-          {instructor.specs.map((s) => <span key={s} className="il-spec">{s}</span>)}
+          {(instructor.specs || []).map((s) => <span key={s} className="il-spec">{s}</span>)}
         </div>
 
         <div className="il-bio">{instructor.bio}</div>
@@ -137,7 +138,7 @@ export default function ILInstructorCard({ instructor, viewMode, index }) {
         <div className="il-rating-row">
           <Stars rating={instructor.rating} />
           <span className="il-rating-num">{instructor.rating}</span>
-          <span className="il-reviews">({instructor.reviews.toLocaleString()} reviews)</span>
+          <span className="il-reviews">({Number(instructor.reviews || 0).toLocaleString()} reviews)</span>
         </div>
 
         {/* FOOTER */}

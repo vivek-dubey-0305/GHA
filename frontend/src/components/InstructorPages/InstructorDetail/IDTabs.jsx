@@ -9,7 +9,7 @@ const TABS = [
   { id: "reviews", label: "Reviews" },
 ];
 
-export default function IDTabs({ instructor }) {
+export default function IDTabs({ instructor, reviews, ratingStats, loadingReviews, reviewsError }) {
   const [active, setActive] = useState("about");
 
   return (
@@ -33,7 +33,13 @@ export default function IDTabs({ instructor }) {
         <IDMyCourses instructor={instructor}/>
       </div>
       <div className={`id-tab-panel${active === "reviews" ? " active" : ""}`}>
-        <IDReviews instructor={instructor}/>
+        <IDReviews
+          instructor={instructor}
+          reviews={reviews}
+          ratingStats={ratingStats}
+          loadingReviews={loadingReviews}
+          reviewsError={reviewsError}
+        />
       </div>
     </>
   );

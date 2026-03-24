@@ -1,12 +1,15 @@
 import ILInstructorCard from "./ILInstructorCard";
+import InstructorEmptyState from "../InstructorEmptyState";
 
 export default function ILInstructorGrid({ instructors, viewMode }) {
   if (instructors.length === 0) {
     return (
       <div className={`il-inst-grid${viewMode === "list" ? " list-view" : ""}`}>
-        <div className="il-no-res">
-          No instructors found. <span>Try adjusting filters.</span>
-        </div>
+        <InstructorEmptyState
+          title="No Instructors Found"
+          description="Try adjusting filters or search to discover more instructors."
+          compact
+        />
       </div>
     );
   }

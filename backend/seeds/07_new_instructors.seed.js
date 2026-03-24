@@ -277,7 +277,6 @@ export const seedNewInstructors = async () => {
                 // Ensure arrays are initialized
                 courses: [],
                 liveClasses: [],
-                videoPackages: [],
                 qualifications: instructorData.qualifications || [],
                 sessions: [],
                 // Initialize empty arrays for nested data

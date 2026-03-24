@@ -1,5 +1,12 @@
+import InstructorEmptyState from "../InstructorEmptyState";
+import DynamicLucideIcon from "../DynamicLucideIcon";
+
 export default function IDAbout({ instructor }) {
   if (!instructor) return null;
+
+  const specializations = instructor.specializations || [];
+  const qualifications = instructor.qualifications || [];
+  const timeline = instructor.timeline || [];
 
   return (
     <>
@@ -18,9 +25,17 @@ export default function IDAbout({ instructor }) {
       <div className="id-sec-tag ip-reveal">Expertise</div>
       <div className="id-sec-title ip-reveal">SPECIALIZATIONS</div>
       <div className="id-spec-grid ip-reveal">
-        {(instructor.specializations || []).map((s, i) => (
+        {specializations.length === 0 ? (
+          <InstructorEmptyState
+            title="No Specializations Listed"
+            description="Specialization details will appear here once updated."
+            compact
+          />
+        ) : specializations.map((s, i) => (
           <div className="id-spec-card" key={i}>
-            <div className="id-spec-card-icon">{s.icon}</div>
+            <div className="id-spec-card-icon">
+              <DynamicLucideIcon name={s.icon} size={24} />
+            </div>
             <div className="id-spec-card-title">{s.title}</div>
             <div className="id-spec-card-desc">{s.desc}</div>
           </div>
@@ -31,10 +46,18 @@ export default function IDAbout({ instructor }) {
       <div className="id-sec-tag ip-reveal">Education</div>
       <div className="id-sec-title ip-reveal">QUALIFICATIONS</div>
       <div className="id-qual-grid ip-reveal">
-        {(instructor.qualifications || []).map((q, i) => (
+        {qualifications.length === 0 ? (
+          <InstructorEmptyState
+            title="No Qualifications Added"
+            description="Qualification and certification entries are currently unavailable."
+            compact
+          />
+        ) : qualifications.map((q, i) => (
           <div className="id-qual-item" key={i}>
             <div className="id-qual-accent"/>
-            <div className="id-qual-icon">{q.icon}</div>
+            <div className="id-qual-icon">
+              <DynamicLucideIcon name={q.icon} size={22} />
+            </div>
             <div className="id-qual-year">{q.year}</div>
             <div className="id-qual-title">{q.title}</div>
             <div className="id-qual-inst">{q.inst}</div>
@@ -46,7 +69,13 @@ export default function IDAbout({ instructor }) {
       <div className="id-sec-tag ip-reveal">Career Timeline</div>
       <div className="id-sec-title ip-reveal">PROFESSIONAL EXPERIENCE</div>
       <div className="id-timeline ip-reveal">
-        {(instructor.timeline || []).map((t, i) => (
+        {timeline.length === 0 ? (
+          <InstructorEmptyState
+            title="No Experience Timeline"
+            description="Professional timeline data has not been provided yet."
+            compact
+          />
+        ) : timeline.map((t, i) => (
           <div className="id-tl-item" key={i}>
             <div className="id-tl-dot"/>
             <div className="id-tl-year">{t.year}</div>

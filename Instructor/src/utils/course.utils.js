@@ -12,7 +12,7 @@ export const formatDuration = (seconds) => {
 export const calculateModuleDuration = (lessons) => {
   return lessons.reduce((sum, l) => {
     if (l.type === 'video') {
-      return sum + (l.videoPackage?.videos || []).reduce((vs, v) => vs + (parseInt(v.duration) || 0), 0);
+      return sum + (parseInt(l.video?.duration) || 0);
     }
     if (l.type === 'live') return sum + ((parseInt(l.liveClass?.duration) || 0) * 60);
     return sum;
@@ -28,11 +28,12 @@ export const createEmptyLesson = () => ({
   type: 'video',
   isFree: false,
   content: { articleContent: '' },
-  videoPackage: {
-    packageName: '',
+  video: {
+    title: '',
     description: '',
-    category: 'tutorial',
-    videos: [{ _uid: uid(), title: '', description: '', duration: 0, videoFile: null, thumbnailFile: null }],
+    duration: 0,
+    videoFile: null,
+    thumbnailFile: null,
   },
   assignment: {
     title: '',
