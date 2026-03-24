@@ -4,6 +4,8 @@ import walletReducer from '../slices/wallet.slice.js';
 import payoutReducer from '../slices/payout.slice.js';
 import courseReducer from '../slices/course.slice.js';
 import instructorReducer from '../slices/instructor.slice.js';
+import paymentReducer from '../slices/payment.slice.js';
+import enrollmentReducer from '../slices/enrollment.slice.js';
 
 export const store = configureStore({
   reducer: {
@@ -12,6 +14,8 @@ export const store = configureStore({
     payout: payoutReducer,
     course: courseReducer,
     instructor: instructorReducer,
+    payment: paymentReducer,
+    enrollment: enrollmentReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

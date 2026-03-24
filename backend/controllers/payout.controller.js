@@ -1,3 +1,4 @@
+// controllers/payout.controller.js
 import { Payout } from "../models/payout.model.js";
 import { Wallet } from "../models/wallet.model.js";
 import { asyncHandler } from "../middlewares/async.middleware.js";
@@ -96,7 +97,7 @@ export const requestPayout = asyncHandler(async (req, res) => {
             $match: {
                 owner: wallet.owner,
                 ownerModel,
-                status: { $in: ["pending", "processing", "completed"] },
+                status: { $in: ["processing", "completed"] },
                 createdAt: { $gte: todayStart }
             }
         },

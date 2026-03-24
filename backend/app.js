@@ -180,8 +180,22 @@ app.use(cors({
 
 // ================= PARSERS (BEFORE SECURITY) =================
 app.use(cookieParser());
-app.use(express.json({ limit: "256kb" }));
-app.use(express.urlencoded({ extended: true }));
+const jsonParser = express.json({ limit: "256kb" });
+const urlEncodedParser = express.urlencoded({ extended: true });
+
+app.use((req, res, next) => {
+    if (req.path === "/api/v1/payments/webhook") {
+        return next();
+    }
+    return jsonParser(req, res, next);
+});
+
+app.use((req, res, next) => {
+    if (req.path === "/api/v1/payments/webhook") {
+        return next();
+    }
+    return urlEncodedParser(req, res, next);
+});
 
 // ================= HELMET =================
 app.use(helmet(securityConfig.helmet));

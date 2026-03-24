@@ -1,3 +1,4 @@
+// models/payment.model.js
 import mongoose from "mongoose";
 
 const paymentSchema = new mongoose.Schema({
@@ -176,8 +177,8 @@ paymentSchema.index({ user: 1, status: 1 });
 paymentSchema.index({ course: 1, status: 1 });
 paymentSchema.index({ paymentGatewayId: 1 });
 paymentSchema.index({ gatewayOrderId: 1 });
-// paymentSchema.index({ idempotencyKey: 1 });
-// paymentSchema.index({ transactionId: 1 });
+paymentSchema.index({ idempotencyKey: 1 });
+paymentSchema.index({ transactionId: 1 });
 paymentSchema.index({ status: 1, createdAt: -1 });
 paymentSchema.index({ initiatedAt: -1 });
 paymentSchema.index({ completedAt: -1 });
