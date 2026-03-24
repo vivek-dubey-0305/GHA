@@ -1,14 +1,12 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import Navbar from "../../../../homepagePrevioiscomponents/Navbar";
-import Footer from "../../../../homepagePrevioiscomponents/Footer";
-import Cursor from "../../../../homepagePrevioiscomponents/Cursor";
+import HPNavbar from "../HomePage/HPNavbar";
+import HPFooter from "../HomePage/HPFooter";
 
 export default function PageLayout({ children, title, description }) {
   return (
     <>
-      <Cursor />
-      <Navbar />
+      <HPNavbar />
       
       {/* Hero Section with title */}
       <section 
@@ -95,7 +93,7 @@ export default function PageLayout({ children, title, description }) {
         </div>
       </section>
 
-      <Footer />
+      <HPFooter />
     </>
   );
 }
