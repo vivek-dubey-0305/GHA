@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import InstructorEmptyState from "../InstructorEmptyState";
+import DynamicLucideIcon from "../DynamicLucideIcon";
 
 function SkillsCard({ skills }) {
   const [animated, setAnimated] = useState(false);
@@ -17,7 +19,13 @@ function SkillsCard({ skills }) {
     <div className="id-skills-card ip-reveal" ref={ref}>
       <div className="id-sk-header">💻 Core Skills</div>
       <div className="id-sk-body">
-        {skills.map((s) => (
+        {skills.length === 0 ? (
+          <InstructorEmptyState
+            title="No Skills Added"
+            description="Skill proficiency will appear after profile completion."
+            compact
+          />
+        ) : skills.map((s) => (
           <div className="id-skill-item" key={s.name}>
             <div className="id-skill-label">
               <span className="id-skill-name">{s.name}</span>
@@ -42,9 +50,17 @@ export default function IDRightSidebar({ instructor }) {
       <div className="id-achievement-card ip-reveal">
         <div className="id-ac-header">🏆 Achievements</div>
         <div className="id-ac-body">
-          {(instructor.achievements || []).map((a, i) => (
+          {(instructor.achievements || []).length === 0 ? (
+            <InstructorEmptyState
+              title="No Achievements Yet"
+              description="Achievements and milestones will appear here once available."
+              compact
+            />
+          ) : (instructor.achievements || []).map((a, i) => (
             <div className="id-ach-item" key={i}>
-              <div className="id-ach-icon">{a.icon}</div>
+              <div className="id-ach-icon">
+                <DynamicLucideIcon name={a.icon} size={22} />
+              </div>
               <div>
                 <div className="id-ach-title">{a.title}</div>
                 <div className="id-ach-sub">{a.sub}</div>
@@ -61,7 +77,13 @@ export default function IDRightSidebar({ instructor }) {
       <div className="id-social-card ip-reveal">
         <div className="id-soc-title">Connect</div>
         <div className="id-soc-links">
-          {(instructor.social || []).map((s) => (
+          {(instructor.social || []).length === 0 ? (
+            <InstructorEmptyState
+              title="No Social Links"
+              description="External profiles are not available right now."
+              compact
+            />
+          ) : (instructor.social || []).map((s) => (
             <a key={s.label} href={s.url || "#"} className="id-soc-link">
               <span className="id-soc-link-ico">{s.icon}</span>
               {s.label}

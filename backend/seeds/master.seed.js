@@ -10,7 +10,6 @@ import { seedModules } from "./05_module.seed.js";
 import { seedLessons } from "./06_lesson.seed.js";
 import { seedAssignment } from "./07_assignment.seed.js";
 import { seedLiveClass } from "./08_liveclass.seed.js";
-import { seedVideoPackage } from "./09_videopackage.seed.js";
 import { seedMaterials } from "./10_material.seed.js";
 import { seedPayment } from "./11_payment.seed.js";
 import { seedEnrollment } from "./12_enrollment.seed.js";
@@ -39,16 +38,15 @@ dotenv.config();
  * ║   6. Lessons (45 lessons, 5 per module)                     ║
  * ║   7. Assignments (9 assignments, 1 per module)              ║
  * ║   8. Live Class → linked to Course & Instructor             ║
- * ║   9. Video Package → linked to Course & Instructor          ║
- * ║  10. Materials → linked to Course, Modules, Lessons         ║
- * ║  11. Payments (9 payments - 3 users × 3 courses)            ║
- * ║  12. Enrollments (9 enrollments)                            ║
- * ║  13. Progress (9 progress records)                          ║
- * ║  14. Submissions (9 submissions)                            ║
- * ║  15. Reviews (9 reviews)                                    ║
- * ║  16. Certificates (3 certificates for completed courses)    ║
- * ║  17. Wallets (6 wallets - 3 users + 3 instructors)          ║
- * ║  18. Payouts (4 payouts for instructors)                    ║
+ * ║   9. Materials → linked to Course, Modules, Lessons         ║
+ * ║  10. Payments (9 payments - 3 users × 3 courses)            ║
+ * ║  11. Enrollments (9 enrollments)                            ║
+ * ║  12. Progress (9 progress records)                          ║
+ * ║  13. Submissions (9 submissions)                            ║
+ * ║  14. Reviews (9 reviews)                                    ║
+ * ║  15. Certificates (3 certificates for completed courses)    ║
+ * ║  16. Wallets (6 wallets - 3 users + 3 instructors)          ║
+ * ║  17. Payouts (4 payouts for instructors)                    ║
  * ╚══════════════════════════════════════════════════════════════╝
  */
 
@@ -105,34 +103,31 @@ const runMasterSeed = async () => {
         // ── Step 8: Create Live Class ──
         await seedLiveClass();
 
-        // ── Step 9: Create Video Package ──
-        await seedVideoPackage();
-
-        // ── Step 10: Create Materials ──
+        // ── Step 9: Create Materials ──
         await seedMaterials();
 
-        // ── Step 11: Create Payments (9) ──
+        // ── Step 10: Create Payments (9) ──
         await seedPayment();
 
-        // ── Step 12: Create Enrollments (9) ──
+        // ── Step 11: Create Enrollments (9) ──
         await seedEnrollment();
 
-        // ── Step 13: Create Progress (9) ──
+        // ── Step 12: Create Progress (9) ──
         await seedProgress();
 
-        // ── Step 14: Create Submissions (9) ──
+        // ── Step 13: Create Submissions (9) ──
         await seedSubmission();
 
-        // ── Step 15: Create Reviews (9) ──
+        // ── Step 14: Create Reviews (9) ──
         await seedReview();
 
-        // ── Step 16: Create Certificates (3) ──
+        // ── Step 15: Create Certificates (3) ──
         await seedCertificate();
 
-        // ── Step 17: Create Wallets (6) ──
+        // ── Step 16: Create Wallets (6) ──
         await seedWallet();
 
-        // ── Step 18: Create Payouts (4) ──
+        // ── Step 17: Create Payouts (4) ──
         await seedPayout();
 
         // ── Summary ──

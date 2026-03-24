@@ -21,7 +21,7 @@ import {
     getMyCourses,
     getMyStudents,
     getMyLiveClasses,
-    getMyVideoPackages,
+    getMyVideos,
     getMyMaterials,
     getMyAssignments,
     getPendingSubmissions,
@@ -78,8 +78,8 @@ router.get("/students", getMyStudents);
 // ===== LIVE CLASSES =====
 router.get("/live-classes", getMyLiveClasses);
 
-// ===== VIDEO PACKAGES =====
-router.get("/video-packages", getMyVideoPackages);
+// ===== VIDEOS =====
+router.get("/videos", getMyVideos);
 
 // ===== MATERIALS =====
 router.get("/materials", getMyMaterials);

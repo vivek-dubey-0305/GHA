@@ -82,7 +82,7 @@ export default function PPHero() {
               { n:"200+", label:"Topics Mapped" },
               { n:"100+", label:"Projects" },
             ].map((s) => (
-              <div key={s.label}>
+              <div key={s.label} className="pp-hero-stat">
                 <div className="pp-hero-stat-num">{s.n}</div>
                 <div className="pp-hero-stat-label">{s.label}</div>
               </div>
@@ -137,22 +137,57 @@ export default function PPHero() {
           animation: ppFadeInUp 0.8s 0.2s ease both;
         }
         .pp-hero-stats {
-          display: flex; gap: 44px; flex-wrap: wrap;
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 18px;
           padding-top: 36px; border-top: 1px solid rgba(255,255,255,0.06);
           animation: ppFadeInUp 0.8s 0.35s ease both;
+          max-width: 1240px;
+          width: 100%;
+        }
+        .pp-hero-stat {
+          min-height: 68px;
+          padding: 16px 18px;
+          border: 1px solid rgba(245,197,24,0.18);
+          background: linear-gradient(90deg, rgba(245,197,24,0.09) 0%, rgba(245,197,24,0.02) 45%, rgba(10,10,10,0.78) 100%);
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          text-transform: uppercase;
+          min-width: 0;
         }
         .pp-hero-stat-num {
           font-family: 'Bebas Neue', sans-serif;
-          font-size: 2.6rem; color: #f5c518; line-height: 1;
+          font-size: clamp(1.9rem, 3vw, 2.05rem); color: #f5c518; line-height: 1; font-weight: 700;
+          white-space: nowrap;
+          flex-shrink: 0;
         }
         .pp-hero-stat-label {
-          font-size: 0.72rem; letter-spacing: 2px; color: #888;
-          text-transform: uppercase; margin-top: 4px;
+          font-family: 'Space Mono', monospace;
+          font-size: clamp(0.62rem, 0.85vw, 0.72rem);
+          letter-spacing: 0.34em;
+          color: #888;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          min-width: 0;
+        }
+        @media (max-width: 1180px) {
+          .pp-hero-stats {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            max-width: 860px;
+          }
         }
         @media (max-width: 768px) {
           .pp-hero { padding: 100px 24px 60px; }
           .pp-hero-deco { display: none; }
-          .pp-hero-stats { gap: 28px; }
+          .pp-hero-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; max-width: 100%; }
+          .pp-hero-stat { padding: 14px 14px; min-height: 64px; }
+          .pp-hero-stat-num { font-size: 1.75rem; }
+          .pp-hero-stat-label { font-size: 0.68rem; letter-spacing: 0.22em; }
+        }
+        @media (max-width: 640px) {
+          .pp-hero-stats { grid-template-columns: 1fr; }
         }
       `}</style>
     </>

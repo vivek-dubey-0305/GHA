@@ -9,7 +9,7 @@ import { Assignment } from "../models/assignment.model.js";
 import { Submission } from "../models/submission.model.js";
 import { Certificate } from "../models/certificate.model.js";
 import { LiveClass } from "../models/liveclass.model.js";
-import { VideoPackage } from "../models/videopackage.model.js";
+import { Video } from "../models/video.model.js";
 import { Material } from "../models/material.model.js";
 import { Progress } from "../models/progress.model.js";
 import {
@@ -20,7 +20,7 @@ import {
     updateImage, deleteImage, deleteRawResource
 } from "./r2.service.js";
 import {
-    uploadVideoPackageVideo, uploadCourseTrailer,
+    uploadVideo, uploadCourseTrailer,
     deleteVideo as deleteBunnyVideo, createLiveStream,
     deleteLiveStream, getVideoThumbnail
 } from "./bunny.service.js";
@@ -36,6 +36,71 @@ const findFile = (files = [], ...fieldNames) =>
 
 const findFilesByPrefixes = (files = [], prefixes = []) =>
     files.filter((file) => prefixes.some((prefix) => file.fieldname.startsWith(prefix)));
+
+const extractBunnyVideoId = (value) => {
+    if (!value || typeof value !== "string") return null;
+
+    const guidPattern = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+    const guidMatch = value.match(guidPattern);
+    return guidMatch ? guidMatch[0] : null;
+};
+
+const sameId = (a, b) => {
+    if (!a || !b) return false;
+    return a.toString() === b.toString();
+};
+
+const createMediaRollbackContext = () => ({
+    bunnyVideoIds: new Set(),
+    rawUrls: new Set(),
+    imagePublicIds: new Set(),
+});
+
+const trackUploadedBunnyVideo = (rollbackCtx, videoId) => {
+    if (!rollbackCtx || !videoId) return;
+    rollbackCtx.bunnyVideoIds.add(videoId);
+};
+
+const trackUploadedRawUrl = (rollbackCtx, url) => {
+    if (!rollbackCtx || !url) return;
+    rollbackCtx.rawUrls.add(url);
+};
+
+const trackUploadedImagePublicId = (rollbackCtx, publicId) => {
+    if (!rollbackCtx || !publicId) return;
+    rollbackCtx.imagePublicIds.add(publicId);
+};
+
+const hasVideoRelatedErrors = (errors = []) =>
+    errors.some((err) => /video|trailer|bunny|thumbnail/i.test(String(err || "")));
+
+const rollbackUploadedMedia = async (rollbackCtx) => {
+    if (!rollbackCtx) return;
+
+    for (const videoId of rollbackCtx.bunnyVideoIds) {
+        try {
+            await deleteBunnyVideo(videoId);
+        } catch (err) {
+            logger.warn(`Rollback Bunny video delete failed for ${videoId}: ${err.message}`);
+        }
+    }
+
+    for (const url of rollbackCtx.rawUrls) {
+        try {
+            await deleteRawResource(url);
+        } catch (err) {
+            logger.warn(`Rollback raw resource delete failed for ${url}: ${err.message}`);
+        }
+    }
+
+    for (const publicId of rollbackCtx.imagePublicIds) {
+        try {
+            await deleteImage(publicId);
+        } catch (err) {
+            logger.warn(`Rollback image delete failed for ${publicId}: ${err.message}`);
+        }
+    }
+};
 
 /**
  * Full Course Service
@@ -58,7 +123,7 @@ const populateFullCourse = (query) => {
                 path: "lessons",
                 options: { sort: { order: 1 } },
                 populate: [
-                    { path: "videoPackageId" },
+                    { path: "videoId" },
                     { path: "assignmentId" },
                     { path: "liveClassId" },
                     { path: "materialId" }
@@ -78,9 +143,9 @@ const recalculateCourseTotals = async (courseId) => {
 
     let calcDuration = 0;
     for (const les of allLessons) {
-        if (les.videoPackageId) {
-            const vp = await VideoPackage.findById(les.videoPackageId);
-            if (vp) calcDuration += vp.totalDuration || 0;
+        if (les.videoId) {
+            const video = await Video.findById(les.videoId);
+            if (video) calcDuration += video.duration || 0;
         }
         if (les.liveClassId) {
             const lc = await LiveClass.findById(les.liveClassId);
@@ -143,7 +208,7 @@ const validateCoursePublishReadiness = async (courseId) => {
 
     const moduleIds = modules.map((moduleDoc) => moduleDoc._id);
     const lessons = await Lesson.find({ course: courseId, module: { $in: moduleIds } })
-        .select("_id module type title content videoPackageId assignmentId liveClassId materialId")
+        .select("_id module type title content videoId assignmentId liveClassId materialId")
         .lean();
 
     if (lessons.length === 0) {
@@ -173,8 +238,8 @@ const validateCoursePublishReadiness = async (courseId) => {
             continue;
         }
 
-        if (lesson.type === "video" && !lesson.videoPackageId) {
-            validationErrors.push(`Video lesson "${lessonLabel}" must have a video package`);
+        if (lesson.type === "video" && !lesson.videoId) {
+            validationErrors.push(`Video lesson "${lessonLabel}" must have a video`);
         }
         if (lesson.type === "assignment" && !lesson.assignmentId) {
             validationErrors.push(`Assignment lesson "${lessonLabel}" must have an assignment`);
@@ -203,60 +268,105 @@ const createLinkedModel = async ({
     lessonType, lesInfo, lessonDoc, targetLesson,
     instructorId, courseId, moduleId,
     courseName, moduleName, lessonName,
-    mi, li, files, errors
+    mi, li, files, errors, rollbackCtx
 }) => {
-    // ── VIDEO PACKAGE ──
-    if (lessonType === "video" && lesInfo.videoPackage) {
+    // ── VIDEO ──
+    if (lessonType === "video" && lesInfo.video) {
         try {
-            const vpData = {
-                ...lesInfo.videoPackage,
+            // Find video file
+            const vidFile = findFile(
+                files,
+                `module_${mi}_lesson_${li}_video`,
+                `video.${mi}.${li}.0`
+            );
+
+            if (!vidFile && !lesInfo.video?.bunnyVideoId && !lesInfo.video?.url) {
+                errors.push(`Video file missing for lesson "${lesInfo.title}"`);
+                return;
+            }
+
+            const videoData = {
                 instructor: instructorId,
                 course: courseId,
-                packageName: lesInfo.videoPackage.packageName || lesInfo.title,
+                lesson: targetLesson?._id || lessonDoc._id,
+                title: lesInfo.video.title || lesInfo.title,
+                description: lesInfo.video.description || "",
+                isPublished: true,
+                isPublic: true,
+                status: "uploading",
                 createdBy: instructorId,
+                uploadedAt: new Date(),
             };
 
-            const vpVideos = lesInfo.videoPackage.videos || [];
-            const processedVideos = [];
-            for (let vi = 0; vi < vpVideos.length; vi++) {
-                const vidFile = findFile(
-                    files,
-                    `module_${mi}_lesson_${li}_video_${vi}`,
-                    `video.${mi}.${li}.${vi}`
-                );
-                const videoEntry = { ...vpVideos[vi], videoId: new mongoose.Types.ObjectId() };
-
-                if (vidFile) {
-                    const vidResult = await uploadVideoPackageVideo(vidFile.buffer, courseName, moduleName, lessonName, videoEntry.title || `video_${vi}`);
-                    videoEntry.bunnyVideoId = vidResult.bunnyVideoId || vidResult.public_id;
-                    videoEntry.url = vidResult.secure_url;
-                    videoEntry.duration = vidResult.duration || videoEntry.duration || 0;
-                    videoEntry.fileSize = vidResult.bytes || 0;
-                    videoEntry.status = vidResult.status || "processing";
-                    videoEntry.thumbnail = vidResult.thumbnail || getVideoThumbnail(vidResult.bunnyVideoId || vidResult.public_id);
+            // If video file exists, upload to Bunny
+            if (vidFile) {
+                try {
+                    const vidResult = await uploadVideo(
+                        vidFile.buffer,
+                        courseName,
+                        moduleName,
+                        lessonName,
+                        lesInfo.video.title || `video`
+                    );
+                    videoData.bunnyVideoId = vidResult.bunnyVideoId || vidResult.public_id;
+                    videoData.url = vidResult.secure_url;
+                    videoData.duration = Number(vidResult.duration) || Number(lesInfo.video.duration) || 0;
+                    videoData.fileSize = vidResult.bytes || 0;
+                    videoData.status = videoData.bunnyVideoId ? "available" : (vidResult.status || "processing");
+                    videoData.thumbnail = vidResult.thumbnail || getVideoThumbnail(vidResult.bunnyVideoId || vidResult.public_id);
+                    trackUploadedBunnyVideo(rollbackCtx, videoData.bunnyVideoId);
+                } catch (uploadErr) {
+                    logger.error(`Video upload to Bunny failed: ${uploadErr.message}`);
+                    throw new Error(`Video upload failed for "${lesInfo.title}": ${uploadErr.message}`);
                 }
-
-                const vidThumbFile = findFile(
-                    files,
-                    `module_${mi}_lesson_${li}_video_${vi}_thumb`,
-                    `video.${mi}.${li}.${vi}.thumb`
-                );
-                if (vidThumbFile) {
-                    const thumbResult = await uploadLessonThumbnail(vidThumbFile.buffer, courseName, moduleName, lessonName);
-                    videoEntry.thumbnail = thumbResult.secure_url;
-                }
-                processedVideos.push(videoEntry);
+            } else if (lesInfo.video?.bunnyVideoId) {
+                // Video already exists on Bunny
+                videoData.bunnyVideoId = lesInfo.video.bunnyVideoId;
+                videoData.url = lesInfo.video.url;
+                videoData.duration = lesInfo.video.duration || 0;
+                videoData.thumbnail = lesInfo.video.thumbnail;
+                videoData.status = "available";
             }
-            vpData.videos = processedVideos;
 
-            const vp = await VideoPackage.create(vpData);
-            lessonDoc.videoPackageId = vp._id;
+            // Handle thumbnail upload if provided
+            const vidThumbFile = findFile(
+                files,
+                `module_${mi}_lesson_${li}_video_thumb`,
+                `video.${mi}.${li}.thumb`
+            );
+            if (vidThumbFile) {
+                try {
+                    const thumbResult = await uploadLessonThumbnail(
+                        vidThumbFile.buffer,
+                        courseName,
+                        moduleName,
+                        lessonName
+                    );
+                    videoData.thumbnail = thumbResult.secure_url;
+                    trackUploadedRawUrl(rollbackCtx, thumbResult.secure_url);
+                    trackUploadedImagePublicId(rollbackCtx, thumbResult.public_id);
+                } catch (thumbErr) {
+                    logger.warn(`Video thumbnail upload failed: ${thumbErr.message}`);
+                    throw new Error(`Video thumbnail upload failed for "${lesInfo.title}": ${thumbErr.message}`);
+                }
+            }
+
+            // Create or update Video document
+            let video;
             if (targetLesson) {
-                await Lesson.findByIdAndUpdate(targetLesson._id, { videoPackageId: vp._id });
+                video = await Video.findOneAndUpdate(
+                    { lesson: targetLesson._id },
+                    videoData,
+                    { new: true, upsert: true }
+                );
+            } else {
+                video = await Video.create(videoData);
             }
+
+            lessonDoc.videoId = video._id;
         } catch (e) {
-            logger.error(`VideoPackage creation failed for lesson ${mi}.${li}: ${e.message}`);
-            errors.push(`VideoPackage for "${lesInfo.title}": ${e.message}`);
+            logger.error(`Video creation failed for lesson ${mi}.${li}: ${e.message}`);
+            throw new Error(`Video for "${lesInfo.title}": ${e.message}`);
         }
     }
 
@@ -266,6 +376,7 @@ const createLinkedModel = async ({
             const asgData = {
                 ...lesInfo.assignment,
                 course: courseId,
+                lesson: targetLesson?._id,
                 instructor: instructorId,
                 createdBy: instructorId,
             };
@@ -349,6 +460,10 @@ const createLinkedModel = async ({
                 instructor: instructorId,
                 course: courseId,
                 module: moduleId,
+                lesson: targetLesson?._id,
+                status: "published",
+                isPublic: !!lesInfo.isFree,
+                accessLevel: lesInfo.isFree ? "public" : (lesInfo.material?.accessLevel || "enrolled_students"),
                 createdBy: instructorId,
             };
 
@@ -392,7 +507,7 @@ const createLinkedModel = async ({
 const createModulesAndLessons = async ({
     modulesData, course, instructorId, courseName, files, errors,
     existingModuleMap = new Map(), existingLessonMap = new Map(),
-    existingModuleIds = []
+    existingModuleIds = [], rollbackCtx
 }) => {
     let totalModules = 0;
     let totalLessons = 0;
@@ -463,7 +578,7 @@ const createModulesAndLessons = async ({
                 }
 
                 const needsLinkedModel =
-                    (lessonType === "video" && lesInfo.videoPackage && !existingLesson.videoPackageId) ||
+                    (lessonType === "video" && lesInfo.video && !existingLesson.videoId) ||
                     (lessonType === "assignment" && lesInfo.assignment && !existingLesson.assignmentId) ||
                     (lessonType === "live" && lesInfo.liveClass && !existingLesson.liveClassId) ||
                     (lessonType === "material" && lesInfo.material && !existingLesson.materialId);
@@ -496,6 +611,7 @@ const createModulesAndLessons = async ({
                 order: lesInfo.order || li + 1,
                 type: lessonType,
                 isFree: lesInfo.isFree || false,
+                isPublished: course.status === "published" || course.isPublished,
                 thumbnail: lesThumbnail,
                 content: {},
                 createdBy: instructorId,
@@ -503,12 +619,18 @@ const createModulesAndLessons = async ({
 
             const targetLesson = existingLesson || null;
 
+            // For brand-new lessons, pre-generate _id so linked models (like Video)
+            // can safely reference lesson before Lesson.create runs.
+            if (!targetLesson) {
+                lessonDoc._id = new mongoose.Types.ObjectId();
+            }
+
             // Create linked model (video, assignment, live, material, article)
             await createLinkedModel({
                 lessonType, lesInfo, lessonDoc, targetLesson,
                 instructorId, courseId: course._id, moduleId: moduleDoc._id,
                 courseName, moduleName, lessonName,
-                mi, li, files, errors
+                mi, li, files, errors, rollbackCtx
             });
 
             // Only create a new lesson if one doesn't already exist
@@ -537,23 +659,19 @@ const createModulesAndLessons = async ({
  * Delete all linked models for lessons in a module (used by saveDraftCourse and deleteFullCourse)
  */
 const deleteLessonLinkedModels = async (lesson, errors = []) => {
-    // Video package + Bunny videos
-    if (lesson.videoPackageId) {
+    // Video + Bunny video
+    if (lesson.videoId) {
         try {
-            const vp = await VideoPackage.findById(lesson.videoPackageId);
-            if (vp) {
-                for (const v of vp.videos || []) {
-                    if (v.bunnyVideoId) {
-                        try { await deleteBunnyVideo(v.bunnyVideoId); } catch (e) {
-                            logger.warn(`Bunny video delete failed: ${e.message}`);
-                        }
-                    }
+            const video = await Video.findById(lesson.videoId);
+            if (video?.bunnyVideoId) {
+                try { await deleteBunnyVideo(video.bunnyVideoId); } catch (e) {
+                    logger.warn(`Bunny video delete failed: ${e.message}`);
                 }
-                await VideoPackage.findByIdAndDelete(vp._id);
             }
+            await Video.findByIdAndDelete(lesson.videoId);
         } catch (e) {
-            logger.error(`VideoPackage deletion error: ${e.message}`);
-            errors.push(`VideoPackage: ${e.message}`);
+            logger.error(`Video deletion error: ${e.message}`);
+            errors.push(`Video: ${e.message}`);
         }
     }
 
@@ -705,9 +823,9 @@ export const getFullCourseService = async (courseId) => {
             const lessonObj = lesson.toObject();
             lessonObj.details = {};
 
-            if (lesson.type === "video" && lesson.videoPackageId) {
-                const vp = await VideoPackage.findById(lesson.videoPackageId);
-                if (vp) lessonObj.details.videoPackage = vp.toObject();
+            if (lesson.type === "video" && lesson.videoId) {
+                const video = await Video.findById(lesson.videoId);
+                if (video) lessonObj.details.video = video.toObject();
             } else if (lesson.type === "assignment" && lesson.assignmentId) {
                 const asg = await Assignment.findById(lesson.assignmentId);
                 if (asg) lessonObj.details.assignment = asg.toObject();
@@ -740,11 +858,14 @@ export const getFullCourseService = async (courseId) => {
  * @returns {Object} { course, errors, isResuming }
  */
 export const createFullCourseService = async ({ data, files, instructorId }) => {
-    const instructor = await Instructor.findById(instructorId);
-    if (!instructor) throw new Error("Instructor not found");
+    const rollbackCtx = createMediaRollbackContext();
 
-    const courseName = (data.title || "untitled").replace(/\s+/g, "_");
-    const errors = [];
+    try {
+        const instructor = await Instructor.findById(instructorId);
+        if (!instructor) throw new Error("Instructor not found");
+
+        const courseName = (data.title || "untitled").replace(/\s+/g, "_");
+        const errors = [];
 
     // ── 1. COURSE THUMBNAIL ──
     let thumbnail = null;
@@ -760,16 +881,18 @@ export const createFullCourseService = async ({ data, files, instructorId }) => 
     }
 
     // ── 2. TRAILER VIDEO ──
-    let trailerVideo = data.trailerVideo || undefined;
-    const trailerFile = findFile(files, "trailerVideo", "course.trailerVideo");
-    if (trailerFile) {
-        try {
-            const result = await uploadCourseTrailer(trailerFile.buffer, courseName);
-            trailerVideo = result.secure_url;
-        } catch (e) {
-            logger.error(`Course trailer upload failed: ${e.message}`);
+        let trailerVideo = data.trailerVideo || undefined;
+        const trailerFile = findFile(files, "trailerVideo", "course.trailerVideo");
+        if (trailerFile) {
+            try {
+                const result = await uploadCourseTrailer(trailerFile.buffer, courseName);
+                trailerVideo = result.bunnyVideoId || result.public_id || result.secure_url;
+                trackUploadedBunnyVideo(rollbackCtx, result.bunnyVideoId || result.public_id);
+            } catch (e) {
+                logger.error(`Course trailer upload failed: ${e.message}`);
+                throw new Error(`Course trailer upload failed: ${e.message}`);
+            }
         }
-    }
 
     // ── 3. CHECK FOR EXISTING COURSE (idempotent resume) ──
     let course = await Course.findOne({ title: data.title }).populate("modules");
@@ -902,10 +1025,14 @@ export const createFullCourseService = async ({ data, files, instructorId }) => 
     const modulesData = data.modules || [];
     const existingModuleIds = course.modules?.map(m => m._id || m) || [];
 
-    await createModulesAndLessons({
-        modulesData, course, instructorId, courseName, files, errors,
-        existingModuleMap, existingLessonMap, existingModuleIds
-    });
+        await createModulesAndLessons({
+            modulesData, course, instructorId, courseName, files, errors,
+            existingModuleMap, existingLessonMap, existingModuleIds, rollbackCtx
+        });
+
+        if (hasVideoRelatedErrors(errors)) {
+            throw new Error(`Video component errors: ${errors.filter((err) => /video|trailer|bunny|thumbnail/i.test(String(err || ""))).join(" | ")}`);
+        }
 
     // ── 7. UPDATE TOTALS ──
     await recalculateCourseTotals(course._id);
@@ -921,7 +1048,11 @@ export const createFullCourseService = async ({ data, files, instructorId }) => 
     // ── 8. RETURN POPULATED COURSE ──
     const updatedCourse = await populateFullCourse(Course.findById(course._id));
 
-    return { course: updatedCourse, errors, isResuming };
+        return { course: updatedCourse, errors, isResuming };
+    } catch (error) {
+        await rollbackUploadedMedia(rollbackCtx);
+        throw error;
+    }
 };
 
 /**
@@ -933,6 +1064,9 @@ export const createFullCourseService = async ({ data, files, instructorId }) => 
  * @returns {Object} { course }
  */
 export const saveDraftCourseService = async ({ courseId, data, files }) => {
+    const rollbackCtx = createMediaRollbackContext();
+
+    try {
     const { modules: modulesData, ...courseFields } = data;
 
     let course = await Course.findById(courseId);
@@ -958,9 +1092,11 @@ export const saveDraftCourseService = async ({ courseId, data, files }) => {
     if (trailerFile) {
         try {
             const result = await uploadCourseTrailer(trailerFile.buffer, courseName);
-            courseFields.trailerVideo = result.secure_url;
+            courseFields.trailerVideo = result.bunnyVideoId || result.public_id || result.secure_url;
+            trackUploadedBunnyVideo(rollbackCtx, result.bunnyVideoId || result.public_id);
         } catch (error) {
             logger.error(`Course trailer update failed: ${error.message}`);
+            throw new Error(`Course trailer update failed: ${error.message}`);
         }
     }
 
@@ -978,8 +1114,12 @@ export const saveDraftCourseService = async ({ courseId, data, files }) => {
 
         // Create new modules and lessons
         await createModulesAndLessons({
-            modulesData, course, instructorId, courseName, files, errors
+            modulesData, course, instructorId, courseName, files, errors, rollbackCtx
         });
+
+        if (hasVideoRelatedErrors(errors)) {
+            throw new Error(`Video component errors: ${errors.filter((err) => /video|trailer|bunny|thumbnail/i.test(String(err || ""))).join(" | ")}`);
+        }
 
         // Recalculate totals
         await recalculateCourseTotals(course._id);
@@ -989,6 +1129,10 @@ export const saveDraftCourseService = async ({ courseId, data, files }) => {
     }
 
     return { course };
+    } catch (error) {
+        await rollbackUploadedMedia(rollbackCtx);
+        throw error;
+    }
 };
 
 /**
@@ -1000,6 +1144,9 @@ export const saveDraftCourseService = async ({ courseId, data, files }) => {
  * @returns {Object} { course }
  */
 export const createDraftCourseService = async ({ data = {}, files, instructorId }) => {
+    const rollbackCtx = createMediaRollbackContext();
+
+    try {
     const instructor = await Instructor.findById(instructorId);
     if (!instructor) throw new Error("Instructor not found");
 
@@ -1022,9 +1169,11 @@ export const createDraftCourseService = async ({ data = {}, files, instructorId 
     if (trailerFile) {
         try {
             const result = await uploadCourseTrailer(trailerFile.buffer, courseName);
-            trailerVideo = result.secure_url;
+            trailerVideo = result.bunnyVideoId || result.public_id || result.secure_url;
+            trackUploadedBunnyVideo(rollbackCtx, result.bunnyVideoId || result.public_id);
         } catch (error) {
             logger.error(`Draft trailer upload failed: ${error.message}`);
+            throw new Error(`Draft trailer upload failed: ${error.message}`);
         }
     }
 
@@ -1050,7 +1199,12 @@ export const createDraftCourseService = async ({ data = {}, files, instructorId 
             courseName,
             files,
             errors,
+            rollbackCtx,
         });
+
+        if (hasVideoRelatedErrors(errors)) {
+            throw new Error(`Video component errors: ${errors.filter((err) => /video|trailer|bunny|thumbnail/i.test(String(err || ""))).join(" | ")}`);
+        }
         await recalculateCourseTotals(draftCourse._id);
     }
 
@@ -1060,6 +1214,10 @@ export const createDraftCourseService = async ({ data = {}, files, instructorId 
 
     const course = await populateFullCourse(Course.findById(draftCourse._id));
     return { course };
+    } catch (error) {
+        await rollbackUploadedMedia(rollbackCtx);
+        throw error;
+    }
 };
 
 /**
@@ -1071,6 +1229,9 @@ export const createDraftCourseService = async ({ data = {}, files, instructorId 
  * @returns {Object} { course, errors }
  */
 export const updateFullCourseService = async ({ courseId, updateData, files }) => {
+    const rollbackCtx = createMediaRollbackContext();
+
+    try {
     const course = await Course.findById(courseId);
     if (!course) throw new Error("Course not found");
 
@@ -1103,6 +1264,7 @@ export const updateFullCourseService = async ({ courseId, updateData, files }) =
         }
 
         const lessonDoc = {
+            _id: new mongoose.Types.ObjectId(),
             title: lessonData.title,
             description: lessonData.description,
             course: course._id,
@@ -1131,9 +1293,19 @@ export const updateFullCourseService = async ({ courseId, updateData, files }) =
             li: lIdx,
             files,
             errors,
+            rollbackCtx,
         });
 
         const createdLesson = await Lesson.create(lessonDoc);
+
+        // Backfill lesson references on linked models created before lesson document existed.
+        if (createdLesson.assignmentId) {
+            await Assignment.findByIdAndUpdate(createdLesson.assignmentId, { lesson: createdLesson._id, updatedBy: instructorId });
+        }
+        if (createdLesson.materialId) {
+            await Material.findByIdAndUpdate(createdLesson.materialId, { lesson: createdLesson._id, updatedBy: instructorId });
+        }
+
         await Module.findByIdAndUpdate(moduleDoc._id, {
             $addToSet: { lessons: createdLesson._id },
             $inc: { totalLessons: 1 }
@@ -1165,12 +1337,14 @@ export const updateFullCourseService = async ({ courseId, updateData, files }) =
         if (courseTrailerFile) {
             try {
                 if (course.trailerVideo) {
-                    await deleteBunnyVideo(course.trailerVideo).catch(err =>
+                    const oldTrailerId = extractBunnyVideoId(course.trailerVideo) || course.trailerVideo;
+                    await deleteBunnyVideo(oldTrailerId).catch(err =>
                         logger.warn(`Old trailer delete failed: ${err.message}`)
                     );
                 }
                 const result = await uploadCourseTrailer(courseTrailerFile.buffer, course.title || "course");
-                courseUpdate.trailerVideo = result.secure_url;
+                courseUpdate.trailerVideo = result.bunnyVideoId || result.public_id || result.secure_url;
+                trackUploadedBunnyVideo(rollbackCtx, result.bunnyVideoId || result.public_id);
             } catch (error) {
                 logger.error(`Course trailer update failed: ${error.message}`);
                 throw new Error("Course trailer upload failed");
@@ -1271,18 +1445,111 @@ export const updateFullCourseService = async ({ courseId, updateData, files }) =
             if (moduleData.lessons && Array.isArray(moduleData.lessons)) {
                 for (let lIdx = 0; lIdx < moduleData.lessons.length; lIdx++) {
                     const lessonData = moduleData.lessons[lIdx];
-                    if (!lessonData.id) {
-                        try {
-                            await createLessonInModule({ moduleDoc: module, moduleData, lessonData, mIdx, lIdx });
-                        } catch (error) {
-                            logger.error(`Lesson create failed: ${error.message}`);
-                            errors.push(`Lesson create failed: ${error.message}`);
+                    let lesson = null;
+
+                    if (lessonData.id) {
+                        lesson = await Lesson.findById(lessonData.id);
+                        if (!lesson) {
+                            errors.push(`Lesson ${lessonData.id} not found`);
+                            continue;
                         }
-                        continue;
+                    } else {
+                        const fallbackOrder = lessonData.order || lIdx + 1;
+                        const fallbackFilters = [{ order: fallbackOrder }];
+                        if (lessonData.title) {
+                            fallbackFilters.push({ title: lessonData.title });
+                        }
+
+                        lesson = await Lesson.findOne({
+                            course: course._id,
+                            module: module._id,
+                            $or: fallbackFilters,
+                        });
+
+                        if (!lesson) {
+                            try {
+                                await createLessonInModule({ moduleDoc: module, moduleData, lessonData, mIdx, lIdx });
+                            } catch (error) {
+                                logger.error(`Lesson create failed: ${error.message}`);
+                                errors.push(`Lesson create failed: ${error.message}`);
+                            }
+                            continue;
+                        }
                     }
 
-                    const lesson = await Lesson.findById(lessonData.id);
-                    if (!lesson) { errors.push(`Lesson ${lessonData.id} not found`); continue; }
+                    await Module.findByIdAndUpdate(module._id, { $addToSet: { lessons: lesson._id } });
+
+                    const previousType = lesson.type;
+                    const nextType = lessonData.type || lesson.type;
+
+                    const cleanupLinkedByType = async (type) => {
+                        if (type === "video" && lesson.videoId) {
+                            const video = await Video.findById(lesson.videoId);
+                            if (video?.bunnyVideoId) {
+                                try {
+                                    await deleteBunnyVideo(video.bunnyVideoId).catch(err =>
+                                        logger.warn(`Old lesson video delete failed: ${err.message}`)
+                                    );
+                                } catch (err) {
+                                    logger.warn(`Bunny video deletion error: ${err.message}`);
+                                }
+                            }
+                            await Video.findByIdAndDelete(lesson.videoId);
+                            lesson.videoId = undefined;
+                        }
+
+                        if (type === "assignment" && lesson.assignmentId) {
+                            const asg = await Assignment.findById(lesson.assignmentId);
+                            if (asg?.requiredFiles?.length) {
+                                for (const fileMeta of asg.requiredFiles) {
+                                    const fileUrl = fileMeta?.url;
+                                    if (fileUrl) {
+                                        await deleteRawResource(fileUrl).catch(err =>
+                                            logger.warn(`Old assignment file delete failed: ${err.message}`)
+                                        );
+                                    }
+                                }
+                            }
+                            await Assignment.findByIdAndDelete(lesson.assignmentId);
+                            lesson.assignmentId = undefined;
+                        }
+
+                        if (type === "live" && lesson.liveClassId) {
+                            const live = await LiveClass.findById(lesson.liveClassId);
+                            if (live?.streamId) {
+                                await deleteLiveStream(live.streamId).catch(err =>
+                                    logger.warn(`Old live stream delete failed: ${err.message}`)
+                                );
+                            }
+                            if (live?.bunnyVideoId) {
+                                await deleteLiveStream(live.bunnyVideoId).catch(err =>
+                                    logger.warn(`Old bunny live stream delete failed: ${err.message}`)
+                                );
+                            }
+                            await LiveClass.findByIdAndDelete(lesson.liveClassId);
+                            lesson.liveClassId = undefined;
+                        }
+
+                        if (type === "material" && lesson.materialId) {
+                            const mat = await Material.findById(lesson.materialId);
+                            if (mat?.fileUrl) {
+                                await deleteRawResource(mat.fileUrl).catch(err =>
+                                    logger.warn(`Old material file delete failed: ${err.message}`)
+                                );
+                            }
+                            await Material.findByIdAndDelete(lesson.materialId);
+                            lesson.materialId = undefined;
+                        }
+                    };
+
+                    if (previousType !== nextType) {
+                        try {
+                            await cleanupLinkedByType(previousType);
+                        } catch (error) {
+                            logger.error(`Lesson linked cleanup failed: ${error.message}`);
+                            errors.push(`Lesson linked cleanup failed: ${error.message}`);
+                        }
+                    }
 
                     // Lesson thumbnail
                     const lessonThumbFile = files?.find(f => f.fieldname === `lesson.${mIdx}.${lIdx}.thumbnail`);
@@ -1300,66 +1567,233 @@ export const updateFullCourseService = async ({ courseId, updateData, files }) =
                     if (lessonData.title) lesson.title = lessonData.title;
                     if (lessonData.description !== undefined) lesson.description = lessonData.description;
                     if (lessonData.order) lesson.order = lessonData.order;
-                    if (lessonData.type) lesson.type = lessonData.type;
+                    lesson.type = nextType;
                     if (lessonData.isFree !== undefined) lesson.isFree = lessonData.isFree;
 
                     await lesson.save({ validateBeforeSave: false });
 
-                    // ── UPDATE VIDEO PACKAGE ──
-                    if (lessonData.type === "video" && lessonData.videoPackage && lesson.videoPackageId) {
-                        const vp = await VideoPackage.findById(lesson.videoPackageId);
-                        if (vp) {
-                            if (lessonData.videoPackage.packageName) vp.packageName = lessonData.videoPackage.packageName;
-                            if (lessonData.videoPackage.description !== undefined) vp.description = lessonData.videoPackage.description;
+                    const upsertMissingLinked = async () => {
+                        if (lesson.type === "video" && lessonData.video && !lesson.videoId) {
+                            const tempLessonDoc = {};
+                            await createLinkedModel({
+                                lessonType: "video",
+                                lesInfo: lessonData,
+                                lessonDoc: tempLessonDoc,
+                                targetLesson: lesson,
+                                instructorId,
+                                courseId: course._id,
+                                moduleId: module._id,
+                                courseName: (course.title || "course").replace(/\s+/g, "_"),
+                                moduleName: (moduleData.title || module.title || `Module_${mIdx + 1}`).replace(/\s+/g, "_"),
+                                lessonName: (lessonData.title || lesson.title || `Lesson_${lIdx + 1}`).replace(/\s+/g, "_"),
+                                mi: mIdx,
+                                li: lIdx,
+                                files,
+                                errors,
+                                rollbackCtx,
+                            });
+                            if (tempLessonDoc.videoId) {
+                                lesson.videoId = tempLessonDoc.videoId;
+                            }
+                        }
 
-                            if (lessonData.videoPackage.videos && Array.isArray(lessonData.videoPackage.videos)) {
-                                for (let vIdx = 0; vIdx < lessonData.videoPackage.videos.length; vIdx++) {
-                                    const videoData = lessonData.videoPackage.videos[vIdx];
-                                    const vpVideoIndex = vp.videos.findIndex(v =>
-                                        v._id?.toString() === videoData.id || v.videoId?.toString() === videoData.id
-                                    );
+                        if (lesson.type === "assignment" && lessonData.assignment && !lesson.assignmentId) {
+                            const tempLessonDoc = {};
+                            await createLinkedModel({
+                                lessonType: "assignment",
+                                lesInfo: lessonData,
+                                lessonDoc: tempLessonDoc,
+                                targetLesson: lesson,
+                                instructorId,
+                                courseId: course._id,
+                                moduleId: module._id,
+                                courseName: (course.title || "course").replace(/\s+/g, "_"),
+                                moduleName: (moduleData.title || module.title || `Module_${mIdx + 1}`).replace(/\s+/g, "_"),
+                                lessonName: (lessonData.title || lesson.title || `Lesson_${lIdx + 1}`).replace(/\s+/g, "_"),
+                                mi: mIdx,
+                                li: lIdx,
+                                files,
+                                errors,
+                                rollbackCtx,
+                            });
+                            if (tempLessonDoc.assignmentId) {
+                                lesson.assignmentId = tempLessonDoc.assignmentId;
+                            }
+                        }
 
-                                    if (vpVideoIndex >= 0) {
-                                        const vpVideo = vp.videos[vpVideoIndex];
-                                        if (videoData.title) vpVideo.title = videoData.title;
-                                        if (videoData.description !== undefined) vpVideo.description = videoData.description;
+                        if (lesson.type === "live" && lessonData.liveClass && !lesson.liveClassId) {
+                            const tempLessonDoc = {};
+                            await createLinkedModel({
+                                lessonType: "live",
+                                lesInfo: lessonData,
+                                lessonDoc: tempLessonDoc,
+                                targetLesson: lesson,
+                                instructorId,
+                                courseId: course._id,
+                                moduleId: module._id,
+                                courseName: (course.title || "course").replace(/\s+/g, "_"),
+                                moduleName: (moduleData.title || module.title || `Module_${mIdx + 1}`).replace(/\s+/g, "_"),
+                                lessonName: (lessonData.title || lesson.title || `Lesson_${lIdx + 1}`).replace(/\s+/g, "_"),
+                                mi: mIdx,
+                                li: lIdx,
+                                files,
+                                errors,
+                                rollbackCtx,
+                            });
+                            if (tempLessonDoc.liveClassId) {
+                                lesson.liveClassId = tempLessonDoc.liveClassId;
+                            }
+                        }
 
-                                        // Handle video file update
-                                        const videoFile = files?.find(f => f.fieldname === `video.${mIdx}.${lIdx}.${vIdx}`);
-                                        if (videoFile) {
-                                            if (vpVideo.bunnyVideoId) {
-                                                try { await deleteBunnyVideo(vpVideo.bunnyVideoId).catch(err => logger.warn(`Old video delete failed: ${err.message}`)); } catch (err) { logger.error(`Bunny video deletion error: ${err.message}`); }
-                                            }
-                                            try {
-                                                const result = await uploadVideoPackageVideo(videoFile.buffer, course.title, moduleData.title || module.title, lessonData.title || lesson.title, videoData.title || `video_${vIdx}`);
-                                                vpVideo.bunnyVideoId = result.bunnyVideoId || result.public_id;
-                                                vpVideo.url = result.secure_url;
-                                                vpVideo.duration = result.duration || vpVideo.duration || 0;
-                                                vpVideo.fileSize = result.bytes || 0;
-                                                vpVideo.status = result.status || "processing";
-                                                vpVideo.thumbnail = result.thumbnail || getVideoThumbnail(result.bunnyVideoId || result.public_id);
-                                            } catch (error) {
-                                                logger.error(`Video upload failed: ${error.message}`);
-                                                errors.push(`Video upload: ${error.message}`);
-                                            }
-                                        }
+                        if (lesson.type === "material" && lessonData.material && !lesson.materialId) {
+                            const tempLessonDoc = {};
+                            await createLinkedModel({
+                                lessonType: "material",
+                                lesInfo: lessonData,
+                                lessonDoc: tempLessonDoc,
+                                targetLesson: lesson,
+                                instructorId,
+                                courseId: course._id,
+                                moduleId: module._id,
+                                courseName: (course.title || "course").replace(/\s+/g, "_"),
+                                moduleName: (moduleData.title || module.title || `Module_${mIdx + 1}`).replace(/\s+/g, "_"),
+                                lessonName: (lessonData.title || lesson.title || `Lesson_${lIdx + 1}`).replace(/\s+/g, "_"),
+                                mi: mIdx,
+                                li: lIdx,
+                                files,
+                                errors,
+                                rollbackCtx,
+                            });
+                            if (tempLessonDoc.materialId) {
+                                lesson.materialId = tempLessonDoc.materialId;
+                            }
+                        }
+                    };
 
-                                        // Handle video thumbnail
-                                        const videoThumbFile = files?.find(f => f.fieldname === `video.${mIdx}.${lIdx}.${vIdx}.thumb`);
-                                        if (videoThumbFile) {
-                                            try {
-                                                const result = await uploadLessonThumbnail(videoThumbFile.buffer, course.title, moduleData.title || module.title, lessonData.title || lesson.title);
-                                                vpVideo.thumbnail = result.secure_url;
-                                            } catch (error) {
-                                                logger.error(`Video thumbnail update failed: ${error.message}`);
-                                                errors.push(`Video thumbnail: ${error.message}`);
-                                            }
-                                        }
+                    await upsertMissingLinked();
+
+                    // ── UPDATE VIDEO ──
+                    if (lesson.type === "video" && lessonData.video && lesson.videoId) {
+                        const video = await Video.findById(lesson.videoId);
+                        if (video) {
+                            if (lessonData.video.title) video.title = lessonData.video.title;
+                            if (lessonData.video.description !== undefined) video.description = lessonData.video.description;
+
+                            // Handle single video file upload
+                            const videoFile = files?.find(f => f.fieldname === `video.${mIdx}.${lIdx}.0`);
+                            if (videoFile) {
+                                if (video.bunnyVideoId) {
+                                    try {
+                                        await deleteBunnyVideo(video.bunnyVideoId).catch(err => logger.warn(`Old video delete failed: ${err.message}`));
+                                    } catch (err) {
+                                        logger.error(`Bunny video deletion error: ${err.message}`);
                                     }
+                                }
+                                try {
+                                    const result = await uploadVideo(videoFile.buffer, course.title, moduleData.title || module.title, lessonData.title || lesson.title, lessonData.video.title || "video_1");
+                                    video.bunnyVideoId = result.bunnyVideoId || result.public_id;
+                                    video.url = result.secure_url;
+                                    video.duration = Number(result.duration) || Number(lessonData.video.duration) || video.duration || 0;
+                                    video.fileSize = result.bytes || 0;
+                                    video.status = video.bunnyVideoId ? "available" : (result.status || "processing");
+                                    video.thumbnail = result.thumbnail || getVideoThumbnail(result.bunnyVideoId || result.public_id);
+                                    trackUploadedBunnyVideo(rollbackCtx, video.bunnyVideoId);
+                                } catch (error) {
+                                    logger.error(`Video upload failed: ${error.message}`);
+                                    errors.push(`Video upload: ${error.message}`);
                                 }
                             }
 
-                            await vp.save({ validateBeforeSave: false });
+                            // Handle video thumbnail file upload
+                            const videoThumbFile = files?.find(f => f.fieldname === `video.${mIdx}.${lIdx}.0.thumb`);
+                            if (videoThumbFile) {
+                                try {
+                                    const result = await uploadLessonThumbnail(videoThumbFile.buffer, course.title, moduleData.title || module.title, lessonData.title || lesson.title);
+                                    video.thumbnail = result.secure_url;
+                                    trackUploadedRawUrl(rollbackCtx, result.secure_url);
+                                    trackUploadedImagePublicId(rollbackCtx, result.public_id);
+                                } catch (error) {
+                                    logger.error(`Video thumbnail update failed: ${error.message}`);
+                                    errors.push(`Video thumbnail: ${error.message}`);
+                                }
+                            }
+
+                            await video.save({ validateBeforeSave: false });
+                        }
+                    }
+
+                    // ── UPDATE ASSIGNMENT ──
+                    if (lesson.type === "assignment" && lessonData.assignment && lesson.assignmentId) {
+                        const asg = await Assignment.findById(lesson.assignmentId);
+                        if (asg) {
+                            if (lessonData.assignment.title) asg.title = lessonData.assignment.title;
+                            if (lessonData.assignment.description !== undefined) asg.description = lessonData.assignment.description;
+                            if (lessonData.assignment.instructions !== undefined) asg.instructions = lessonData.assignment.instructions;
+                            if (lessonData.assignment.type) asg.type = lessonData.assignment.type;
+                            if (lessonData.assignment.maxScore !== undefined) asg.maxScore = Number(lessonData.assignment.maxScore) || asg.maxScore;
+                            if (lessonData.assignment.passingScore !== undefined) asg.passingScore = Number(lessonData.assignment.passingScore) || asg.passingScore;
+                            if (lessonData.assignment.dueDate !== undefined) asg.dueDate = lessonData.assignment.dueDate || asg.dueDate;
+                            if (lessonData.assignment.allowLateSubmission !== undefined) asg.allowLateSubmission = !!lessonData.assignment.allowLateSubmission;
+                            if (lessonData.assignment.lateSubmissionPenalty !== undefined) asg.lateSubmissionPenalty = Number(lessonData.assignment.lateSubmissionPenalty) || 0;
+                            asg.updatedBy = instructorId;
+                            asg.lesson = lesson._id;
+                            await asg.save({ validateBeforeSave: false });
+                        }
+                    }
+
+                    // ── UPDATE LIVE CLASS ──
+                    if (lesson.type === "live" && lessonData.liveClass && lesson.liveClassId) {
+                        const live = await LiveClass.findById(lesson.liveClassId);
+                        if (live) {
+                            if (lessonData.liveClass.title) live.title = lessonData.liveClass.title;
+                            if (lessonData.liveClass.description !== undefined) live.description = lessonData.liveClass.description;
+                            if (lessonData.liveClass.scheduledAt !== undefined) live.scheduledAt = lessonData.liveClass.scheduledAt;
+                            if (lessonData.liveClass.duration !== undefined) live.duration = Number(lessonData.liveClass.duration) || live.duration;
+                            if (lessonData.liveClass.timezone !== undefined) live.timezone = lessonData.liveClass.timezone;
+                            if (lessonData.liveClass.maxParticipants !== undefined) live.maxParticipants = Number(lessonData.liveClass.maxParticipants) || live.maxParticipants;
+                            if (lessonData.liveClass.notes !== undefined) live.notes = lessonData.liveClass.notes;
+                            live.updatedBy = instructorId;
+                            await live.save({ validateBeforeSave: false });
+                        }
+                    }
+
+                    // ── UPDATE SINGLE MATERIAL LINKED TO LESSON ──
+                    if (lesson.type === "material" && lessonData.material && lesson.materialId) {
+                        const material = await Material.findById(lesson.materialId);
+                        if (material) {
+                            if (lessonData.material.title) material.title = lessonData.material.title;
+                            if (lessonData.material.description !== undefined) material.description = lessonData.material.description;
+                            if (lessonData.material.type) material.type = lessonData.material.type;
+                            material.isPublic = !!lesson.isFree;
+                            material.accessLevel = lesson.isFree ? "public" : (material.accessLevel || "enrolled_students");
+                            material.lesson = lesson._id;
+                            material.updatedBy = instructorId;
+
+                            const matFile = files?.find(f => f.fieldname === `material.${mIdx}.${lIdx}.0`);
+                            if (matFile) {
+                                if (material.fileUrl && material.fileUrl.includes("r2")) {
+                                    try {
+                                        await deleteRawResource(material.fileUrl).catch(err => logger.warn(`Old material delete failed: ${err.message}`));
+                                    } catch (err) {
+                                        logger.error(`Material deletion error: ${err.message}`);
+                                    }
+                                }
+                                try {
+                                    const resourceType = matFile.mimetype?.startsWith("video") ? "video" : matFile.mimetype?.startsWith("image") ? "image" : "raw";
+                                    const result = await uploadMaterialFile(matFile.buffer, course.title, moduleData.title || module.title, lessonData.title || lesson.title, matFile.originalname, resourceType);
+                                    material.fileUrl = result.secure_url;
+                                    material.fileName = matFile.originalname;
+                                    material.fileSize = result.bytes || matFile.size;
+                                    material.mimeType = matFile.mimetype;
+                                    if (result.pages) material.metadata = { ...material.metadata, pages: result.pages };
+                                    if (result.duration) material.metadata = { ...material.metadata, duration: result.duration };
+                                } catch (error) {
+                                    logger.error(`Material file upload failed: ${error.message}`);
+                                    errors.push(`Material file: ${error.message}`);
+                                }
+                            }
+
+                            await material.save({ validateBeforeSave: false });
                         }
                     }
 
@@ -1396,6 +1830,8 @@ export const updateFullCourseService = async ({ courseId, updateData, files }) =
                             await material.save({ validateBeforeSave: false });
                         }
                     }
+
+                    await lesson.save({ validateBeforeSave: false });
                 }
             }
         }
@@ -1434,11 +1870,23 @@ export const updateFullCourseService = async ({ courseId, updateData, files }) =
 
     await recalculateCourseTotals(courseId);
 
+    if (hasVideoRelatedErrors(errors)) {
+        throw new Error(`Video component errors: ${errors.filter((err) => /video|trailer|bunny|thumbnail/i.test(String(err || ""))).join(" | ")}`);
+    }
+
     if (requestedStatus === "published") {
         const publishValidationErrors = await validateCoursePublishReadiness(courseId);
         if (publishValidationErrors.length > 0) {
             throw new Error(`Course is not ready to publish: ${publishValidationErrors.join(" | ")}`);
         }
+
+        await Module.updateMany({ course: courseId }, { isPublished: true, updatedBy: instructorId });
+        await Lesson.updateMany({ course: courseId }, { isPublished: true, updatedBy: instructorId });
+        await Video.updateMany({ course: courseId }, { isPublished: true, isPublic: true, updatedBy: instructorId });
+        await Material.updateMany(
+            { course: courseId },
+            { status: "published", isPublic: true, accessLevel: "public", updatedBy: instructorId }
+        );
 
         course.status = "published";
         course.isPublished = true;
@@ -1450,6 +1898,10 @@ export const updateFullCourseService = async ({ courseId, updateData, files }) =
 
     const updatedCourse = await Course.findById(courseId);
     return { course: updatedCourse, errors };
+    } catch (error) {
+        await rollbackUploadedMedia(rollbackCtx);
+        throw error;
+    }
 };
 
 /**
@@ -1470,7 +1922,10 @@ export const deleteFullCourseService = async (courseId) => {
     }
 
     if (course.trailerVideo) {
-        try { await deleteBunnyVideo(course.trailerVideo); } catch (e) {
+        try {
+            const trailerId = extractBunnyVideoId(course.trailerVideo) || course.trailerVideo;
+            await deleteBunnyVideo(trailerId);
+        } catch (e) {
             logger.error(`Failed to delete course trailer: ${e.message}`);
             errors.push(`Trailer deletion: ${e.message}`);
         }

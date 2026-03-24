@@ -75,19 +75,20 @@ const hydrateModules = (rawModules = []) =>
       title: l.title || '', description: l.description || '',
       type: l.type || 'video', isFree: l.isFree || false,
       content: { articleContent: l.content?.articleContent || '' },
-      videoPackage: l.details?.videoPackage
+      video: l.details?.video
         ? {
-            _id: l.details.videoPackage._id,
-            packageName: l.details.videoPackage.packageName || '',
-            description: l.details.videoPackage.description || '',
-            videos: (l.details.videoPackage.videos || []).map(v => ({
-              _uid: uid(), _id: v._id, title: v.title || '', description: v.description || '',
-              duration: v.duration || 0, url: v.url || '', bunnyVideoId: v.bunnyVideoId || '',
-              thumbnail: v.thumbnail || '', status: v.status || '',
-              videoFile: null, thumbnailFile: null,
-            })),
+        _id: l.details.video?._id,
+        title: l.details.video?.title || '',
+        description: l.details.video?.description || '',
+        duration: l.details.video?.duration || 0,
+        url: l.details.video?.url || '',
+        bunnyVideoId: l.details.video?.bunnyVideoId || '',
+        thumbnail: l.details.video?.thumbnail || '',
+        status: l.details.video?.status || '',
+            videoFile: null,
+            thumbnailFile: null,
           }
-        : { packageName: '', description: '', videos: [{ _uid: uid(), title: '', description: '', duration: 0, videoFile: null, thumbnailFile: null }] },
+        : { title: '', description: '', duration: 0, videoFile: null, thumbnailFile: null },
       assignment: l.details?.assignment
         ? {
             _id: l.details.assignment._id,
@@ -166,14 +167,14 @@ const buildUpdateFormData = (courseData, modules, certificates, thumbnailFile, t
       lessons: (m.lessons || []).map((l, lIdx) => {
         if (l.thumbnailFile) fd.append(`lesson.${mIdx}.${lIdx}.thumbnail`, l.thumbnailFile);
         const lp = { id: l._id, title: l.title, description: l.description || '', type: l.type, isFree: l.isFree, order: lIdx + 1 };
-        if (l.type === 'video' && l.videoPackage) {
-          lp.videoPackage = {
-            packageName: l.videoPackage.packageName || l.title, description: l.videoPackage.description || '',
-            videos: (l.videoPackage.videos || []).map((v, vIdx) => {
-              if (v.videoFile) fd.append(`video.${mIdx}.${lIdx}.${vIdx}`, v.videoFile);
-              if (v.thumbnailFile) fd.append(`video.${mIdx}.${lIdx}.${vIdx}.thumb`, v.thumbnailFile);
-              return { id: v._id, title: v.title || `Video ${vIdx + 1}`, description: v.description || '' };
-            }),
+        if (l.type === 'video' && l.video) {
+          if (l.video.videoFile) fd.append(`video.${mIdx}.${lIdx}.0`, l.video.videoFile);
+          if (l.video.thumbnailFile) fd.append(`video.${mIdx}.${lIdx}.0.thumb`, l.video.thumbnailFile);
+          lp.video = {
+            id: l.video._id,
+            title: l.video.title || l.title,
+            description: l.video.description || '',
+            duration: parseInt(l.video.duration) || 0,
           };
         }
         if (l.type === 'article') lp.content = { articleContent: l.content?.articleContent || '' };
@@ -327,14 +328,11 @@ function LessonItem({ lesson, lessonIdx, onUpdate, onRemove, dragHandleProps }) 
   const [collapsed, setCollapsed] = useState(false);
 
   const updateField = (field, value) => onUpdate({ ...lesson, [field]: value });
-  const updateVideoPackage = (field, value) => onUpdate({ ...lesson, videoPackage: { ...lesson.videoPackage, [field]: value } });
+  const updateVideo = (field, value) => onUpdate({ ...lesson, video: { ...lesson.video, [field]: value } });
+  const patchVideo = (patch) => onUpdate({ ...lesson, video: { ...lesson.video, ...patch } });
   const updateAssignment = (field, value) => onUpdate({ ...lesson, assignment: { ...lesson.assignment, [field]: value } });
   const updateLiveClass = (field, value) => onUpdate({ ...lesson, liveClass: { ...lesson.liveClass, [field]: value } });
   const updateMaterial = (field, value) => onUpdate({ ...lesson, material: { ...lesson.material, [field]: value } });
-
-  const addVideo = () => { updateVideoPackage('videos', [...(lesson.videoPackage?.videos || []), { _uid: uid(), title: '', description: '', duration: 0, videoFile: null, thumbnailFile: null }]); };
-  const removeVideo = (vi) => { updateVideoPackage('videos', (lesson.videoPackage?.videos || []).filter((_, i) => i !== vi)); };
-  const updateVideo = (vi, field, value) => { const vids = [...(lesson.videoPackage?.videos || [])]; vids[vi] = { ...vids[vi], [field]: value }; updateVideoPackage('videos', vids); };
 
   const typeInfo = LESSON_TYPES.find(t => t.value === lesson.type);
   const LIcon = typeInfo?.icon || FileText;
@@ -377,79 +375,77 @@ function LessonItem({ lesson, lessonIdx, onUpdate, onRemove, dragHandleProps }) 
           {/* VIDEO */}
           {lesson.type === 'video' && (
             <div className="space-y-3 p-3 bg-[#0d0d0d] rounded-lg border border-gray-800">
-              <div className="flex items-center justify-between">
-                <h5 className="text-gray-300 text-xs font-semibold flex items-center gap-1.5"><Video className="w-3.5 h-3.5 text-blue-400" /> Video Package</h5>
-              </div>
+              <h5 className="text-gray-300 text-xs font-semibold flex items-center gap-1.5"><Video className="w-3.5 h-3.5 text-blue-400" /> Video</h5>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div><label className="text-gray-400 text-xs mb-1 block">Package Name</label><input value={lesson.videoPackage?.packageName || ''} onChange={e => updateVideoPackage('packageName', e.target.value)} className={inputCls} placeholder="e.g. Introduction Videos" /></div>
-                <div><label className="text-gray-400 text-xs mb-1 block">Description</label><input value={lesson.videoPackage?.description || ''} onChange={e => updateVideoPackage('description', e.target.value)} className={inputCls} placeholder="Package description" /></div>
+                <div><label className="text-gray-400 text-xs mb-1 block">Video Title</label><input value={lesson.video?.title || ''} onChange={e => updateVideo('title', e.target.value)} className={inputCls} placeholder="Enter video title" /></div>
+                <div><label className="text-gray-400 text-xs mb-1 block">Description</label><input value={lesson.video?.description || ''} onChange={e => updateVideo('description', e.target.value)} className={inputCls} placeholder="Video description" /></div>
               </div>
-              <div className="space-y-2">
-                {(lesson.videoPackage?.videos || []).map((video, vi) => (
-                  <div key={video._uid || vi} className="p-3 bg-[#111] border border-gray-800 rounded-lg space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-400 text-[10px] font-medium">Video {vi + 1}</span>
-                      {(lesson.videoPackage?.videos || []).length > 1 && <button type="button" onClick={() => removeVideo(vi)} className="text-red-400 hover:text-red-300 p-0.5"><Trash2 className="w-3 h-3" /></button>}
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      <div><label className="text-gray-500 text-[10px] mb-0.5 block">Title</label><input value={video.title} onChange={e => updateVideo(vi, 'title', e.target.value)} className={inputCls} placeholder="Video title" /></div>
-                      <div><label className="text-gray-500 text-[10px] mb-0.5 block">Duration (seconds)</label><input type="number" value={video.duration} onChange={e => updateVideo(vi, 'duration', e.target.value)} className={inputCls} min="0" /></div>
-                    </div>
-                    <div><label className="text-gray-500 text-[10px] mb-0.5 block">Video File</label>
-                      <label className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs px-3 py-1.5 rounded cursor-pointer transition-colors w-fit">
-                        <Upload className="w-3 h-3" /> {video.videoFile ? video.videoFile.name : (video.url ? 'Replace video' : 'Choose file')}
-                        <input
-                          type="file"
-                          accept="video/*"
-                          onChange={e => {
-                            const f = e.target.files?.[0];
-                            if (f && isValidVideoFile(f)) {
-                              updateVideo(vi, 'videoFile', f);
-                              updateVideo(vi, 'videoPreviewUrl', URL.createObjectURL(f));
-                            }
-                          }}
-                          className="hidden"
-                        />
-                      </label>
-                      {video.videoFile && <CheckCircle className="w-3.5 h-3.5 text-green-500 inline ml-2" />}
-                      {video.url && !video.videoFile && <span className="text-gray-600 text-[10px] ml-2">Current: uploaded on CDN</span>}
-                    </div>
+              <div className="space-y-3 p-3 bg-[#111] border border-gray-800 rounded-lg">
+                <div><label className="text-gray-500 text-xs mb-1 block">Video File</label>
+                  <label className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs px-3 py-1.5 rounded cursor-pointer transition-colors w-fit">
+                    <Upload className="w-3 h-3" /> {lesson.video?.videoFile ? lesson.video.videoFile.name : (lesson.video?.url ? 'Replace video' : 'Choose file')}
+                    <input
+                      type="file"
+                      accept="video/*"
+                      onChange={e => {
+                        const f = e.target.files?.[0];
+                        if (f && isValidVideoFile(f)) {
+                          const previewUrl = URL.createObjectURL(f);
+                          patchVideo({ videoFile: f, videoPreviewUrl: previewUrl });
+                        }
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                  {lesson.video?.videoFile && <CheckCircle className="w-3.5 h-3.5 text-green-500 inline ml-2" />}
+                  {lesson.video?.url && !lesson.video.videoFile && <span className="text-gray-600 text-[10px] ml-2">Current: uploaded on CDN</span>}
+                </div>
 
-                    {(video.videoPreviewUrl || video.url) && (
-                      <div>
-                        <label className="text-gray-500 text-[10px] mb-1 block">Video Preview</label>
-                        <video controls className="w-full rounded-md border border-gray-800 bg-black" src={video.videoPreviewUrl || video.url} />
-                      </div>
-                    )}
-
-                    <div>
-                      <label className="text-gray-500 text-[10px] mb-0.5 block">Video Thumbnail</label>
-                      <label className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs px-3 py-1.5 rounded cursor-pointer transition-colors w-fit">
-                        <Upload className="w-3 h-3" /> {video.thumbnailFile ? video.thumbnailFile.name : 'Choose image'}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={e => {
-                            const f = e.target.files?.[0];
-                            if (f && isValidImageFile(f)) {
-                              updateVideo(vi, 'thumbnailFile', f);
-                              updateVideo(vi, 'thumbnailPreviewUrl', URL.createObjectURL(f));
-                            }
-                          }}
-                          className="hidden"
-                        />
-                      </label>
+                {(lesson.video?.videoPreviewUrl || lesson.video?.url) && (
+                  <div>
+                    <label className="text-gray-500 text-xs mb-1 block">Video Preview</label>
+                    <video
+                      controls
+                      className="w-full rounded-md border border-gray-800 bg-black"
+                      src={lesson.video.videoPreviewUrl || lesson.video.url}
+                      onLoadedMetadata={(event) => {
+                        if (!lesson.video.videoFile) return;
+                        const detectedDuration = Math.round(event.currentTarget.duration || 0);
+                        if (detectedDuration > 0 && Number(lesson.video.duration || 0) !== detectedDuration) {
+                          patchVideo({ duration: detectedDuration });
+                        }
+                      }}
+                    />
+                    <div className="text-gray-400 text-[10px] mt-1">
+                      {lesson.video?.duration ? `Duration: ${lesson.video.duration}s` : 'Duration will be auto-detected'}
                     </div>
-
-                    {(video.thumbnailPreviewUrl || video.thumbnail) && (
-                      <div>
-                        <label className="text-gray-500 text-[10px] mb-1 block">Thumbnail Preview</label>
-                        <img src={video.thumbnailPreviewUrl || video.thumbnail} alt="Video thumbnail preview" className="w-full h-28 object-cover rounded-md border border-gray-800" />
-                      </div>
-                    )}
                   </div>
-                ))}
-                <button type="button" onClick={addVideo} className="flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs font-medium bg-blue-500/10 px-2.5 py-1.5 rounded-md w-full justify-center"><Plus className="w-3 h-3" /> Add Video</button>
+                )}
+
+                <div>
+                  <label className="text-gray-500 text-xs mb-1 block">Video Thumbnail (Optional)</label>
+                  <label className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs px-3 py-1.5 rounded cursor-pointer transition-colors w-fit">
+                    <Upload className="w-3 h-3" /> {lesson.video?.thumbnailFile ? lesson.video.thumbnailFile.name : 'Choose image'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={e => {
+                        const f = e.target.files?.[0];
+                        if (f && isValidImageFile(f)) {
+                          patchVideo({ thumbnailFile: f, thumbnailPreviewUrl: URL.createObjectURL(f) });
+                        }
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                {(lesson.video?.thumbnailPreviewUrl || lesson.video?.thumbnail) && (
+                  <div>
+                    <label className="text-gray-500 text-xs mb-1 block">Thumbnail Preview</label>
+                    <img src={lesson.video.thumbnailPreviewUrl || lesson.video.thumbnail} alt="Video thumbnail preview" className="w-full h-28 object-cover rounded-md border border-gray-800" />
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -552,7 +548,17 @@ function LessonItem({ lesson, lessonIdx, onUpdate, onRemove, dragHandleProps }) 
                     <video controls src={lesson.material.materialPreviewUrl || lesson.material.fileUrl} className="w-full rounded-md border border-gray-800 bg-black" />
                   )}
                   {getFilePreviewKind(lesson.material.fileName, lesson.material.mimeType) === 'pdf' && (
-                    <iframe title="Material PDF preview" src={lesson.material.materialPreviewUrl || lesson.material.fileUrl} className="w-full h-64 rounded-md border border-gray-800 bg-black" />
+                    <div className="rounded-md border border-gray-800 bg-[#0b0b0b] p-3">
+                      <p className="text-gray-400 text-xs mb-2">PDF preview is disabled here to keep module editing stable.</p>
+                      <a
+                        href={lesson.material.materialPreviewUrl || lesson.material.fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs px-3 py-1.5 rounded"
+                      >
+                        Open PDF in new tab
+                      </a>
+                    </div>
                   )}
                   {getFilePreviewKind(lesson.material.fileName, lesson.material.mimeType) === 'other' && (
                     <p className="text-gray-500 text-xs">Preview is unavailable for this file type.</p>

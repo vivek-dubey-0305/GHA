@@ -1,6 +1,18 @@
 import BgAnimationWrapper from "../../animations/BgAnimationWrapper";
 
-export default function ILPageHeader() {
+const compactNumber = (value) => {
+  const num = Number(value || 0);
+  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+  if (num >= 1000) return `${Math.round(num / 100) / 10}K`;
+  return String(num);
+};
+
+export default function ILPageHeader({
+  totalInstructors = 0,
+  totalLiveSessions = 0,
+  totalCourses = 0,
+  totalStudents = 0,
+}) {
   return (
     <div className="il-hero">
       {/* Background Animation */}
@@ -26,20 +38,20 @@ export default function ILPageHeader() {
         </div>
         <div className="il-hero-stats-grid">
           <div className="il-hero-stat">
-            <div className="il-hs-num">48</div>
-            <div className="il-hs-label">Instructors</div>
+            <div className="il-hs-num">{compactNumber(totalInstructors)}+</div>
+            <div className="il-hs-label">instructors</div>
           </div>
           <div className="il-hero-stat">
-            <div className="il-hs-num">4.87</div>
-            <div className="il-hs-label">Avg Rating</div>
+            <div className="il-hs-num">{compactNumber(totalLiveSessions)}+</div>
+            <div className="il-hs-label">live sessions</div>
           </div>
           <div className="il-hero-stat">
-            <div className="il-hs-num">320+</div>
-            <div className="il-hs-label">Total Courses</div>
+            <div className="il-hs-num">{compactNumber(totalCourses)}</div>
+            <div className="il-hs-label">total courses</div>
           </div>
           <div className="il-hero-stat">
-            <div className="il-hs-num">480K</div>
-            <div className="il-hs-label">Students Taught</div>
+            <div className="il-hs-num">{compactNumber(totalStudents)}+</div>
+            <div className="il-hs-label">learners</div>
           </div>
         </div>
       </div>

@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 export default function IDCtaBottom({ instructor }) {
   if (!instructor) return null;
-  const firstName = instructor.name.split(" ")[0];
+  const firstName = String(instructor.name || "Instructor").split(" ")[0];
 
   return (
     <div className="id-cta-bottom">
@@ -15,7 +15,7 @@ export default function IDCtaBottom({ instructor }) {
             START LEARNING<br/>FROM {firstName.toUpperCase()}
           </div>
           <div className="id-cta-b-sub">
-            {instructor.courses} courses. {instructor.students.toLocaleString()} engineers taught. Real production code. Zero fluff.
+            {Number(instructor.courses || 0)} courses. {Number(instructor.students || 0).toLocaleString()} engineers taught. Real production code. Zero fluff.
           </div>
         </div>
         <div className="id-cta-b-actions">

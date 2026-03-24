@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import "../../components/CoursePages/course-pages.css";
 import "../../components/CoursePages/CourseListing/course-listing.css";
 
@@ -15,12 +16,12 @@ import CLCourseGrid from "../../components/CoursePages/CourseListing/CLCourseGri
 import CLPagination from "../../components/CoursePages/CourseListing/CLPagination";
 
 import {
-  mockCourses,
-  filterCourses,
-  sortCourses,
-} from "../../mock/course";
-
-const ITEMS_PER_PAGE = 9;
+  getAllCourses,
+  setFilters,
+  setSortBy,
+  setSearch,
+  clearFilters,
+} from "../../redux/slices/course.slice.js";
 
 export default function Course() {
   // ── Cursor & particles ──
@@ -28,31 +29,33 @@ export default function Course() {
   const canvasRef = useCPParticles();
   useCPReveal();
 
-  // ── Filter state ──
-  const [searchQuery, setSearchQuery]   = useState("");
+  // ── Redux state ──
+  const dispatch = useDispatch();
+  const {
+    courses,
+    pagination,
+    filters,
+    sortBy,
+    loadingCourses,
+    error,
+  } = useSelector((state) => state.course);
+
+  // ── Local UI state ──
+  const [viewMode, setViewMode] = useState("grid");
+  const [priceRange, setPriceRange] = useState([0, 10000]);
   const [activeFilters, setActiveFilters] = useState({});
-  const [priceRange, setPriceRange]      = useState([0, 299]);
-  const [sortMode, setSortMode]          = useState("popular");
-  const [viewMode, setViewMode]          = useState("grid");
-  const [currentPage, setCurrentPage]    = useState(1);
 
-  // Recalculate on every filter/sort change
-  const filtered = filterCourses(
-    mockCourses,
-    { ...activeFilters, priceRange },
-    searchQuery
-  );
-  const sorted   = sortCourses(filtered, sortMode);
-  const totalPages = Math.ceil(sorted.length / ITEMS_PER_PAGE);
-  const paginated  = sorted.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
+  // ── Initialize: Fetch courses on mount ──
+  useEffect(() => {
+    dispatch(getAllCourses({
+      page: 1,
+      limit: 12,
+      ...filters,
+      sort: sortBy,
+    }));
+  }, [dispatch]);
 
-  // Reset to page 1 whenever filters change
-  useEffect(() => { setCurrentPage(1); }, [searchQuery, activeFilters, priceRange, sortMode]);
-
-  // ── Filter helpers ──
+  // ── Handle filter toggle ──
   const toggleFilter = (type, val) => {
     setActiveFilters((prev) => {
       const existing = prev[type] || [];
@@ -62,6 +65,9 @@ export default function Course() {
       const updated = { ...prev };
       if (next.length === 0) delete updated[type];
       else updated[type] = next;
+      
+      // Dispatch Redux action
+      dispatch(setFilters(updated));
       return updated;
     });
   };
@@ -69,19 +75,117 @@ export default function Course() {
   const toggleFlag = (flag) => toggleFilter("flags", flag);
 
   const removeFilter = (type, valStr) => {
-    if (type === "search") { setSearchQuery(""); return; }
-    const val = valStr.replace(/^"|"$/g, ""); // strip quotes from search chip
+    if (type === "search") {
+      dispatch(setSearch(""));
+      setActiveFilters((prev) => {
+        const updated = { ...prev };
+        delete updated.search;
+        return updated;
+      });
+      return;
+    }
+    const val = valStr.replace(/^"|"$/g, "");
     toggleFilter(type, val);
   };
 
-  const clearAll = () => {
-    setActiveFilters({});
-    setSearchQuery("");
-    setPriceRange([0, 299]);
+  const handlePriceChange = (newRange) => {
+    setPriceRange(newRange);
+    dispatch(setFilters({
+      ...filters,
+      minPrice: newRange[0],
+      maxPrice: newRange[1],
+    }));
   };
 
+  const handleSearch = (query) => {
+    dispatch(setSearch(query));
+    setActiveFilters((prev) => ({
+      ...prev,
+      search: query,
+    }));
+  };
+
+  const handleSort = (newSort) => {
+    dispatch(setSortBy(newSort));
+  };
+
+  const clearAll = () => {
+    dispatch(clearFilters());
+    setActiveFilters({});
+    setPriceRange([0, 10000]);
+  };
+
+  // ── Fetch on filter/sort change ──
+  useEffect(() => {
+    const params = {
+      page: 1,
+      limit: 12,
+      ...filters,
+      sort: sortBy,
+    };
+    if (priceRange[0] > 0) params.minPrice = priceRange[0];
+    if (priceRange[1] < 10000) params.maxPrice = priceRange[1];
+    
+    dispatch(getAllCourses(params));
+  }, [filters, sortBy, priceRange, dispatch]);
+
   // ── Stats for header ──
-  const totalStudents  = mockCourses.reduce((s, c) => s + (c.students || c.enrolledCount || 0), 0);
+  const totalStudents = courses.reduce(
+    (sum, course) =>
+      sum +
+      Number(
+        course?.enrolledCount ||
+          course?.students ||
+          course?.totalEnrollments ||
+          course?.totalStudents ||
+          0
+      ),
+    0
+  );
+  const totalCoursesCount =
+    Number(pagination?.totalItems) ||
+    Number(pagination?.totalResults) ||
+    Number(pagination?.count) ||
+    courses.length ||
+    0;
+  const totalCategories = new Set(
+    courses
+      .map((course) => {
+        if (typeof course?.category === "string") return course.category;
+        if (typeof course?.cat === "string") return course.cat;
+        return course?.category?.title || null;
+      })
+      .filter(Boolean)
+  ).size;
+  const totalInternships = courses.reduce((sum, course) => {
+    const internshipFromFlag = Boolean(course?.internship || course?.isInternshipEligible || course?.internshipEligible);
+    const internshipFromBadges = Array.isArray(course?.badges)
+      ? course.badges.some((badge) => {
+          if (typeof badge === "string") return badge.toLowerCase().includes("intern");
+          const cls = String(badge?.cls || "").toLowerCase();
+          const label = String(badge?.label || "").toLowerCase();
+          return cls.includes("intern") || label.includes("intern");
+        })
+      : false;
+
+    return sum + (internshipFromFlag || internshipFromBadges ? 1 : 0);
+  }, 0);
+
+  if (loadingCourses && courses.length === 0) {
+    return (
+      <div className="cl-page" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+        <div style={{ color: "#f4f3ee", fontSize: "1.5rem" }}>Loading courses...</div>
+      </div>
+    );
+  }
+
+  if (error && courses.length === 0) {
+    return (
+      <div className="cl-page" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+        <div style={{ color: "#ff6b6b", fontSize: "1.2rem" }}>Error: {error}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="cl-page">
@@ -93,22 +197,23 @@ export default function Course() {
 
       {/* NAVBAR */}
       <CLNavbar
-        searchQuery={searchQuery}
-        onSearch={setSearchQuery}
-        resultCount={filtered.length}
+        searchQuery={filters.search || ""}
+        onSearch={handleSearch}
+        resultCount={totalCoursesCount}
       />
 
       {/* PAGE HEADER */}
       <CLPageHeader
-        totalCourses={mockCourses.length}
+        totalCourses={totalCoursesCount}
+        totalCategories={totalCategories}
         totalStudents={totalStudents}
-        totalInstructors={4}
+        totalInternships={totalInternships}
       />
 
       {/* CHIPS BAR */}
       <CLChipsBar
         activeFilters={activeFilters}
-        searchQuery={searchQuery}
+        searchQuery={filters.search || ""}
         onRemoveFilter={removeFilter}
         onClearAll={clearAll}
       />
@@ -121,25 +226,44 @@ export default function Course() {
           onToggleFlag={toggleFlag}
           onClearAll={clearAll}
           priceRange={priceRange}
-          onPriceRange={setPriceRange}
+          onPriceRange={handlePriceChange}
         />
 
         <main className="cl-main" id="cl-mainContent">
           <CLToolbar
-            resultCount={filtered.length}
-            sortMode={sortMode}
-            onSort={setSortMode}
+            resultCount={totalCoursesCount}
+            sortMode={sortBy}
+            onSort={handleSort}
             viewMode={viewMode}
             onView={setViewMode}
           />
 
-          <CLCourseGrid courses={paginated} viewMode={viewMode} />
+          {loadingCourses ? (
+            <div style={{ textAlign: "center", padding: "2rem", color: "#f4f3ee" }}>
+              Loading courses...
+            </div>
+          ) : courses.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "2rem", color: "#f4f3ee" }}>
+              No courses found. Try adjusting your filters.
+            </div>
+          ) : (
+            <>
+              <CLCourseGrid courses={courses} viewMode={viewMode} />
 
-          <CLPagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPage={setCurrentPage}
-          />
+              <CLPagination
+                currentPage={pagination.currentPage || 1}
+                totalPages={pagination.totalPages || 1}
+                onPage={(page) => {
+                  dispatch(getAllCourses({
+                    page,
+                    limit: 12,
+                    ...filters,
+                    sort: sortBy,
+                  }));
+                }}
+              />
+            </>
+          )}
         </main>
       </div>
 

@@ -50,7 +50,7 @@ export const updateInstructorProfile = async (Instructor, id, updateData, file) 
             "otpAttempts", "otpLastSentAt", "passwordChangedAt", "passwordResetToken",
             "passwordResetExpires", "deletedAt", "deletionReason", "createdBy",
             "updatedBy", "createdAt", "updatedAt", "courses", "liveClasses",
-            "videoPackages", "totalStudentsTeaching", "totalCourses", "totalLiveClasses",
+            "totalStudentsTeaching", "totalCourses", "totalLiveClasses",
             "totalReviews", "rating", "isTopInstructor", "cfLiveInputId", "cfRtmpUrl",
             "cfRtmpKey", "cfSrtUrl", "cfWebRTCUrl", "lastLogin", "lastLoginIP"
         ];

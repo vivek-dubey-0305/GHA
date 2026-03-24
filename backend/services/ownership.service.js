@@ -3,7 +3,7 @@ import { Module } from "../models/module.model.js";
 import { Lesson } from "../models/lesson.model.js";
 import { Material } from "../models/material.model.js";
 import { Assignment } from "../models/assignment.model.js";
-import { VideoPackage } from "../models/videopackage.model.js";
+import { Video } from "../models/video.model.js";
 import { LiveClass } from "../models/liveclass.model.js";
 
 /**
@@ -76,14 +76,14 @@ export const isInstructorAssignmentOwner = async (instructorId, assignmentId) =>
 };
 
 /**
- * Check if instructor owns a video package
+ * Check if instructor owns a video
  * @param {String} instructorId - Instructor ID
- * @param {String} videoPackageId - Video Package ID
+ * @param {String} videoId - Video ID
  * @returns {Boolean} - True if owns
  */
-export const isInstructorVideoPackageOwner = async (instructorId, videoPackageId) => {
-    const videoPackage = await VideoPackage.findById(videoPackageId);
-    return videoPackage && videoPackage.instructor.toString() === instructorId;
+export const isInstructorVideoOwner = async (instructorId, videoId) => {
+    const video = await Video.findById(videoId);
+    return video && video.instructor.toString() === instructorId;
 };
 
 /**
@@ -116,8 +116,8 @@ export const checkInstructorOwnership = async (entityType, entityId, instructorI
             return await isInstructorMaterialOwner(instructorId, entityId);
         case 'assignment':
             return await isInstructorAssignmentOwner(instructorId, entityId);
-        case 'videopackage':
-            return await isInstructorVideoPackageOwner(instructorId, entityId);
+        case 'video':
+            return await isInstructorVideoOwner(instructorId, entityId);
         case 'liveclass':
             return await isInstructorLiveClassOwner(instructorId, entityId);
         default:

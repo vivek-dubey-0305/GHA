@@ -10,7 +10,7 @@ import { Assignment } from "../models/assignment.model.js";
 import { Submission } from "../models/submission.model.js";
 import { Certificate } from "../models/certificate.model.js";
 import { LiveClass } from "../models/liveclass.model.js";
-import { VideoPackage } from "../models/videopackage.model.js";
+import { Video } from "../models/video.model.js";
 import { Material } from "../models/material.model.js";
 import { Progress } from "../models/progress.model.js";
 import { asyncHandler } from "../middlewares/async.middleware.js";
@@ -112,7 +112,7 @@ const instructorCrud = generateCrudHandlers(Instructor, {
     updateImageFunction: updateImage,
     deleteImageFunction: deleteImage,
     entityType: "Instructor",
-    populateOptions: ["courses", "liveClasses", "videoPackages"],
+    populateOptions: ["courses", "liveClasses", "videos"],
 });
 
 export const getAllInstructors = instructorCrud.getAll;
@@ -604,11 +604,11 @@ export const getLiveClassById = liveClassCrud.getById;
 export const updateLiveClass = liveClassCrud.update;
 export const deleteLiveClass = liveClassCrud.delete;
 
-// ========================= VIDEO PACKAGE CRUD =========================
+// ========================= VIDEO CRUD =========================
 
-const videoPackageCrud = generateAdminResourceHandlers(VideoPackage, {
-    resourceName: "Video package",
-    resourceKey: "videoPackages",
+const videoCrud = generateAdminResourceHandlers(Video, {
+    resourceName: "Video",
+    resourceKey: "videos",
     buildFilter: (query) => {
         const f = {};
         if (query.instructorId) f.instructor = query.instructorId;
@@ -618,27 +618,27 @@ const videoPackageCrud = generateAdminResourceHandlers(VideoPackage, {
     },
     listPopulate: [
         { path: "instructor", select: "firstName lastName" },
-        { path: "course", select: "title" }
+        { path: "course", select: "title" },
+        { path: "lesson", select: "title" }
     ],
     detailPopulate: [
         { path: "instructor", select: "firstName lastName" },
-        { path: "course", select: "title" }
+        { path: "course", select: "title" },
+        { path: "lesson", select: "title" }
     ],
     beforeDelete: async (doc) => {
-        for (const video of (doc.videos || [])) {
-            if (video.bunnyVideoId) {
-                try { await deleteBunnyVideo(video.bunnyVideoId); } catch (e) {
-                    logger.error(`Failed to delete Bunny video ${video.bunnyVideoId}: ${e.message}`);
-                }
+        if (doc.bunnyVideoId) {
+            try { await deleteBunnyVideo(doc.bunnyVideoId); } catch (e) {
+                logger.error(`Failed to delete Bunny video ${doc.bunnyVideoId}: ${e.message}`);
             }
         }
     }
 });
 
-export const getAllVideoPackages = videoPackageCrud.getAll;
-export const getVideoPackageById = videoPackageCrud.getById;
-export const updateVideoPackage = videoPackageCrud.update;
-export const deleteVideoPackage = videoPackageCrud.delete;
+export const getAllVideos = videoCrud.getAll;
+export const getVideoById = videoCrud.getById;
+export const updateVideo = videoCrud.update;
+export const deleteVideo = videoCrud.delete;
 
 // ========================= MATERIAL CRUD =========================
 

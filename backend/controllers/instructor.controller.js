@@ -1,7 +1,7 @@
 import { Instructor } from "../models/instructor.model.js";
 import { Course } from "../models/course.model.js";
 import { LiveClass } from "../models/liveclass.model.js";
-import { VideoPackage } from "../models/videopackage.model.js";
+import { Video } from "../models/video.model.js";
 import { Material } from "../models/material.model.js";
 import { Enrollment } from "../models/enrollment.model.js";
 import { Review } from "../models/review.model.js";
@@ -32,7 +32,7 @@ import {
 
 /**
  * Instructor Self-Management Controller
- * Handles profile, dashboard, courses, live classes, video packages, materials, earnings
+ * Handles profile, dashboard, courses, live classes, videos, materials, earnings
  */
 
 // ========================= PROFILE MANAGEMENT =========================
@@ -246,7 +246,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
         totalEnrollments,
         totalReviews,
         liveClassStats,
-        videoPackageStats
+        videoStats
     ] = await Promise.all([
         Instructor.findById(instructorId),
         Course.countDocuments({ instructor: instructorId }),
@@ -257,7 +257,10 @@ export const getDashboard = asyncHandler(async (req, res) => {
             course: { $in: (await Course.find({ instructor: instructorId }).select("_id")).map(c => c._id) }
         }),
         LiveClass.getClassStats(instructorId),
-        VideoPackage.getPackageStats(instructorId)
+        Video.aggregate([
+            { $match: { instructor: instructorId } },
+            { $group: { _id: null, totalVideos: { $sum: 1 }, totalDuration: { $sum: "$duration" }, totalViews: { $sum: "$views" } } }
+        ])
     ]);
 
     successResponse(res, 200, "Dashboard retrieved successfully", {
@@ -268,7 +271,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
             totalReviews,
             totalStudentsTeaching: instructor.totalStudentsTeaching,
             liveClasses: liveClassStats[0] || {},
-            videoPackages: videoPackageStats[0] || {}
+            videos: videoStats[0] || { totalVideos: 0, totalDuration: 0, totalViews: 0 }
         }
     });
 });
@@ -351,24 +354,25 @@ export const getMyLiveClasses = asyncHandler(async (req, res) => {
     });
 });
 
-// ========================= MY VIDEO PACKAGES =========================
+// ========================= MY VIDEOS =========================
 
-// @route   GET /api/v1/instructor/video-packages
-// @desc    Get my video packages
+// @route   GET /api/v1/instructor/videos
+// @desc    Get my videos
 // @access  Private (Instructor)
-export const getMyVideoPackages = asyncHandler(async (req, res) => {
+export const getMyVideos = asyncHandler(async (req, res) => {
     const { page, limit, skip } = getPagination(req.query, 10);
 
     const filter = { instructor: req.instructor.id };
-    const total = await VideoPackage.countDocuments(filter);
-    const packages = await VideoPackage.find(filter)
+    const total = await Video.countDocuments(filter);
+    const videos = await Video.find(filter)
         .populate("course", "title")
+        .populate("lesson", "title")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit);
 
-    successResponse(res, 200, "Video packages retrieved successfully", {
-        videoPackages: packages,
+    successResponse(res, 200, "Videos retrieved successfully", {
+        videos: videos,
         pagination: createPaginationResponse(total, page, limit)
     });
 });

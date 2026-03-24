@@ -12,7 +12,7 @@ import { Module } from "../models/module.model.js";
 import { Lesson } from "../models/lesson.model.js";
 import { Assignment } from "../models/assignment.model.js";
 import { LiveClass } from "../models/liveclass.model.js";
-import { VideoPackage } from "../models/videopackage.model.js";
+import { Video } from "../models/video.model.js";
 import { Material } from "../models/material.model.js";
 import { Payment } from "../models/payment.model.js";
 import { Enrollment } from "../models/enrollment.model.js";
@@ -57,7 +57,7 @@ const cleanup = async () => {
             const collections = [
                 "certificates", "reviews", "submissions", "progress",
                 "enrollments", "payments", "payouts", "wallets", "materials", 
-                "videopackages", "liveclasses", "assignments", "lessons", 
+                "videos", "liveclasses", "assignments", "lessons", 
                 "modules", "courses", "instructors", "users"
             ];
 
@@ -171,10 +171,12 @@ const cleanup = async () => {
                 console.log(`   🗑️  Deleted ${seedData.materialIds.length} Materials`);
             }
 
-            // Video Packages
-            if (seedData.videoPackageId) {
-                await VideoPackage.findByIdAndDelete(seedData.videoPackageId).catch(() => {});
-                console.log("   🗑️  Deleted Video Package");
+            // Videos
+            if (seedData.videoIds && Array.isArray(seedData.videoIds)) {
+                for (const id of seedData.videoIds) {
+                    await Video.findByIdAndDelete(id).catch(() => {});
+                }
+                console.log(`   🗑️  Deleted ${seedData.videoIds.length} Videos`);
             }
 
             // Live Classes

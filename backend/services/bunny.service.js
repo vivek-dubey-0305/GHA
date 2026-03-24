@@ -38,6 +38,27 @@ const headers = {
 const sanitizeName = (name) =>
     (name || "untitled").replace(/[^a-zA-Z0-9_\- ]/g, "_").substring(0, 100);
 
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const tryResolveVideoDuration = async (videoId, attempts = 4, delayMs = 1500) => {
+    for (let i = 0; i < attempts; i++) {
+        try {
+            const details = await getVideoDetails(videoId);
+            if (Number(details?.duration) > 0) {
+                return Number(details.duration);
+            }
+        } catch (err) {
+            logger.warn(`Duration lookup attempt ${i + 1} failed for ${videoId}: ${err.message}`);
+        }
+
+        if (i < attempts - 1) {
+            await wait(delayMs);
+        }
+    }
+
+    return 0;
+};
+
 /**
  * Generate a Bunny Stream signed token URL for secure playback.
  * Only enrolled + logged-in users should receive this URL.
@@ -84,14 +105,14 @@ export const generateSignedThumbnailUrl = (videoId) => {
  * Create a video entry in Bunny Stream and upload the file buffer.
  * Two-step process: 1) Create video object  2) PUT the binary payload
  *
- * This replaces `uploadVideoPackageVideo` and `uploadCourseTrailer` from R2 for videos.
+ * Upload a lesson/course video to Bunny Stream.
  *
  * @param {Buffer} fileBuffer   – raw video bytes
  * @param {string} title        – human-readable title
  * @param {string} [collectionId] – optional Bunny collection GUID
  * @returns {Promise<Object>}   – { videoId, url, thumbnailUrl, status, length, ... }
  */
-export const uploadVideoPackageVideo = async (fileBuffer, courseName, moduleName, lessonName, videoTitle) => {
+export const uploadVideo = async (fileBuffer, courseName, moduleName, lessonName, videoTitle) => {
     const fullTitle = sanitizeName(`${courseName}_${moduleName}_${lessonName}_${videoTitle}`);
 
     try {
@@ -130,6 +151,8 @@ export const uploadVideoPackageVideo = async (fileBuffer, courseName, moduleName
 
         logger.info(`Video uploaded to Bunny Stream: ${fullTitle} (id: ${videoId})`);
 
+        const resolvedDuration = await tryResolveVideoDuration(videoId);
+
         // Return shape compatible with what controllers expect
         return {
             public_id: videoId,          // bunny video GUID — used as identifier for delete etc.
@@ -138,10 +161,10 @@ export const uploadVideoPackageVideo = async (fileBuffer, courseName, moduleName
             thumbnail: thumbnailUrl,
             format: "m3u8",
             bytes: fileBuffer.length,
-            duration: videoData.length || 0,   // Bunny returns length in seconds once processed
+            duration: resolvedDuration || videoData.length || 0,
             width: videoData.width || null,
             height: videoData.height || null,
-            status: "processing",        // Bunny encodes async; status will become "available" later
+            status: "available",
             bunnyVideoId: videoId,
         };
     } catch (error) {
@@ -207,10 +230,10 @@ export const uploadCourseTrailer = async (fileBuffer, courseName) => {
 
 /**
  * Upload lesson video to Bunny Stream.
- * (Kept for compatibility — same as uploadVideoPackageVideo but simpler naming)
+ * Upload lesson video to Bunny Stream with default title.
  */
 export const uploadLessonVideo = async (fileBuffer, courseName, moduleName, lessonName) => {
-    return uploadVideoPackageVideo(fileBuffer, courseName, moduleName, lessonName, "lesson");
+    return uploadVideo(fileBuffer, courseName, moduleName, lessonName, "lesson");
 };
 
 /**
@@ -421,7 +444,7 @@ export const refreshPlaybackUrl = (videoId, expiresInSec = 14400) => {
 
 /**
  * Get auto-generated thumbnail URL from Bunny for a video.
- * This replaces `uploadVideoPackageThumbnail` for cases where the
+ * Upload lesson thumbnail for cases where the
  * user doesn't upload a custom thumbnail — Bunny provides one automatically.
  *
  * If a custom thumbnail is uploaded, it goes to R2 via the existing R2 service.

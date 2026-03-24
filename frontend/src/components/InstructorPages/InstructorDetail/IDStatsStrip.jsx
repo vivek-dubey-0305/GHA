@@ -30,12 +30,12 @@ export default function IDStatsStrip({ instructor }) {
   }, []);
 
   const stats = [
-    { target: instructor.students, label: "Students Taught", isCounter: true },
-    { val: instructor.courses,     label: "Courses Created" },
-    { val: instructor.rating,      label: "Avg Rating" },
-    { target: instructor.reviews,  label: "Reviews", isCounter: true },
-    { val: instructor.liveClasses, label: "Live Classes" },
-    { val: `${instructor.exp} yrs`, label: "Experience" },
+    { target: Number(instructor.students || 0), label: "Students Taught", isCounter: true },
+    { val: Number(instructor.courses || 0),     label: "Courses Created" },
+    { val: Number(instructor.rating || 0).toFixed(2), label: "Avg Rating" },
+    { target: Number(instructor.reviews || 0),  label: "Reviews", isCounter: true },
+    { val: Number(instructor.liveClasses || 0), label: "Live Classes" },
+    { val: `${Number(instructor.exp || 0)} yrs`, label: "Experience" },
   ];
 
   return (

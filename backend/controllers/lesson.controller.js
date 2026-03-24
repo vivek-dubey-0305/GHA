@@ -2,7 +2,7 @@ import { Lesson } from "../models/lesson.model.js";
 import { Module } from "../models/module.model.js";
 import { Course } from "../models/course.model.js";
 import { Assignment } from "../models/assignment.model.js";
-import { VideoPackage } from "../models/videopackage.model.js";
+import { Video } from "../models/video.model.js";
 import { LiveClass } from "../models/liveclass.model.js";
 import { Material } from "../models/material.model.js";
 import { asyncHandler } from "../middlewares/async.middleware.js";
@@ -39,7 +39,7 @@ export const getLessons = asyncHandler(async (req, res) => {
 export const getLesson = asyncHandler(async (req, res) => {
     const lesson = await Lesson.findById(req.params.id)
         .populate("module", "title order")
-        .populate("videoPackageId")
+        .populate("videoId")
         .populate("assignmentId")
         .populate("liveClassId")
         .populate("materialId");
@@ -161,17 +161,15 @@ export const deleteLesson = asyncHandler(async (req, res) => {
     if (lesson.thumbnail?.public_id) await deleteImage(lesson.thumbnail.public_id);
 
     // Clean up referenced models
-    if (lesson.videoPackageId) {
+    if (lesson.videoId) {
         try {
-            const vp = await VideoPackage.findById(lesson.videoPackageId);
-            if (vp) {
-                for (const v of (vp.videos || [])) {
-                    // Delete video from Bunny Stream using bunnyVideoId
-                    if (v.bunnyVideoId) await deleteBunnyVideo(v.bunnyVideoId).catch(() => {});
-                }
-                await VideoPackage.findByIdAndDelete(lesson.videoPackageId);
+            const video = await Video.findById(lesson.videoId);
+            if (video) {
+                // Delete video from Bunny Stream using bunnyVideoId
+                if (video.bunnyVideoId) await deleteBunnyVideo(video.bunnyVideoId).catch(() => {});
+                await Video.findByIdAndDelete(lesson.videoId);
             }
-        } catch (e) { logger.error(`Error cleaning up VideoPackage: ${e.message}`); }
+        } catch (e) { logger.error(`Error cleaning up Video: ${e.message}`); }
     }
     if (lesson.assignmentId) {
         try {

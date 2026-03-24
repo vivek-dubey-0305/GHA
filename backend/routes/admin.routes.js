@@ -24,8 +24,8 @@ import {
     getAllCertificates, getCertificateById, createCertificate, updateCertificate, deleteCertificate, revokeCertificate,
     // Live Class CRUD
     getAllLiveClasses, getLiveClassById, updateLiveClass, deleteLiveClass,
-    // Video Package CRUD
-    getAllVideoPackages, getVideoPackageById, updateVideoPackage, deleteVideoPackage,
+    // Video CRUD
+    getAllVideos, getVideoById, updateVideo, deleteVideo,
     // Material CRUD
     getAllMaterials, getMaterialById, updateMaterial, deleteMaterial,
     // Progress CRUD
@@ -131,11 +131,11 @@ router.get("/live-classes/:id", getLiveClassById);
 router.put("/live-classes/:id", updateLiveClass);
 router.delete("/live-classes/:id", deleteLiveClass);
 
-// ===== Video Package CRUD =====
-router.get("/video-packages", getAllVideoPackages);
-router.get("/video-packages/:id", getVideoPackageById);
-router.put("/video-packages/:id", updateVideoPackage);
-router.delete("/video-packages/:id", deleteVideoPackage);
+// ===== Video CRUD =====
+router.get("/videos", getAllVideos);
+router.get("/videos/:id", getVideoById);
+router.put("/videos/:id", updateVideo);
+router.delete("/videos/:id", deleteVideo);
 
 // ===== Material CRUD =====
 router.get("/materials", getAllMaterials);

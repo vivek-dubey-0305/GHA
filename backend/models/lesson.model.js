@@ -69,10 +69,10 @@ const lessonSchema = new mongoose.Schema({
 
     // === MODEL REFERENCES (one per lesson type) ===
 
-    // type = "video" → VideoPackage model
-    videoPackageId: {
+    // type = "video" → Video model
+    videoId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "VideoPackage"
+        ref: "Video"
     },
 
     // type = "assignment" → Assignment model

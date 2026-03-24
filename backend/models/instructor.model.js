@@ -687,10 +687,6 @@ const instructorSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "LiveClass"
     }],
-    videoPackages: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "VideoPackage"
-    }],
 
     // ══════════════════════════════════════════
     //  CLOUDFLARE STREAM (One Live Input per Instructor)
@@ -788,7 +784,6 @@ instructorSchema.index({ verificationCodeExpires: 1 }, { expireAfterSeconds: 0 }
 // Content references
 instructorSchema.index({ courses: 1 });
 instructorSchema.index({ liveClasses: 1 });
-instructorSchema.index({ videoPackages: 1 });
 
 // Listing page sorting & filtering
 instructorSchema.index({ "rating.averageRating": -1 });
@@ -1123,15 +1118,6 @@ instructorSchema.statics.getInstructorLiveClasses = function (instructorId) {
         path: "liveClasses",
         match: { scheduledAt: { $gte: new Date() }, status: { $in: ["scheduled", "live"] } },
         select: "title scheduledAt duration status actualParticipants",
-        populate: { path: "course", select: "title" }
-    });
-};
-
-/** Fetch instructor with their video packages */
-instructorSchema.statics.getInstructorVideoPackages = function (instructorId) {
-    return this.findById(instructorId).populate({
-        path: "videoPackages",
-        select: "packageName totalVideos totalDuration isPublished totalViews",
         populate: { path: "course", select: "title" }
     });
 };
