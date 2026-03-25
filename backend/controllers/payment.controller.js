@@ -38,7 +38,7 @@ export const initiatePayment = asyncHandler(async (req, res) => {
     if (course.status !== "published" || !course.isPublished) {
         return errorResponse(res, 400, "Course is not available for enrollment");
     }
-
+    console.log("Over here")
     if (course.maxStudents && course.enrolledCount >= course.maxStudents) {
         return errorResponse(res, 400, "Course is full");
     }

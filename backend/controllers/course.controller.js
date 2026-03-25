@@ -1,3 +1,5 @@
+//course.controller.js
+
 import { Course } from "../models/course.model.js";
 import { Module } from "../models/module.model.js";
 import { Lesson } from "../models/lesson.model.js";

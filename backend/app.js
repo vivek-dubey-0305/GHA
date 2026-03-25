@@ -161,6 +161,10 @@ import { Notification } from "./models/notification.model.js";
 
 const app = express();
 
+// Render/NGINX forwards client IP via X-Forwarded-* headers.
+// Trust first proxy so express-rate-limit can derive a stable client key.
+app.set("trust proxy", 1);
+
 // ================= ENV =================
 config({ path: "./.env" });
 validateConfig();

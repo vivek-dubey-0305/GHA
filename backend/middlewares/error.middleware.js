@@ -1,3 +1,4 @@
+//error middleware
 import logger from "../configs/logger.config.js";
 
 class ErrorHandler extends Error {
@@ -21,26 +22,33 @@ export const errorMiddleware = (err, req, res, next) => {
 
     //* Mongoose Validation Error
     if (err.name === "ValidationError") {
-        const messages = Object.values(err.errors).map(e => e.message);
+        const rawErrors = err?.errors && typeof err.errors === "object" ? Object.values(err.errors) : [];
+        const messages = rawErrors.map((e) => e?.message).filter(Boolean);
         const message = `Validation failed: ${messages.join(", ")}`;
         err = new ErrorHandler(message, 400);
     }
 
+    //* express-rate-limit / general validation style errors
+    if (err.code === "ERR_ERL_UNEXPECTED_X_FORWARDED_FOR") {
+        err = new ErrorHandler("Server proxy configuration error", 500)
+    }
+
     //* JWT Token
-    if (err.name == "JsonWenTokenError") {
-        const message = `Invalid JSON Wen Token, try Agian!`
+    if (err.name == "JsonWebTokenError") {
+        const message = `Invalid JSON Web Token, try again!`
         err = new ErrorHandler(message, 400)
     }
 
     //* JWT Expired
     if (err.name == "TokenExpiredError") {
-        const message = `JSON wenToken is Expired, Try again!`
+        const message = `JSON Web Token is expired, try again!`
         err = new ErrorHandler(message, 400)
     }
 
     //* Duplicate mongoose error
-    if (err.name == 11000) {
-        const message = `Duplicate value entered for field: ${Object.keys(err.keyValue).join(", ")}`;
+    if (err.code == 11000) {
+        const fields = err?.keyValue ? Object.keys(err.keyValue).join(", ") : "unique field";
+        const message = `Duplicate value entered for field: ${fields}`;
         err = new ErrorHandler(message, 400)
     }
 

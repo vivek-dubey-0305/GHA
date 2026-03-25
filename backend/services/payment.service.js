@@ -26,18 +26,29 @@ function getRazorpayClient() {
 }
 
 export async function createRazorpayOrder({ amount, currency = "INR", receipt, notes = {} }) {
-	const client = getRazorpayClient();
+	try {
+		const client = getRazorpayClient();
 
-	const order = await client.orders.create({
-		amount: Math.round(Number(amount) * 100),
-		currency,
-		receipt,
-		notes
-	});
+		const order = await client.orders.create({
+			amount: Math.round(Number(amount) * 100),
+			currency,
+			receipt,
+			notes
+		});
 
-	logger.info(`Razorpay order created | orderId=${order.id} | amountPaise=${order.amount}`);
+		logger.info(`Razorpay order created | orderId=${order.id} | amountPaise=${order.amount}`);
 
-	return order;
+		return order;
+	} catch (error) {
+		const normalizedMessage =
+			error?.error?.description ||
+			error?.error?.reason ||
+			error?.message ||
+			"Failed to create Razorpay order";
+
+		logger.error(`Razorpay order creation failed: ${normalizedMessage}`);
+		throw new Error(normalizedMessage);
+	}
 }
 
 export function verifyRazorpayPaymentSignature({ orderId, paymentId, signature }) {
