@@ -155,10 +155,15 @@ export const initiatePayment = asyncHandler(async (req, res) => {
         });
     }
 
+    const shortUser = String(req.user.id).slice(-6);
+    const shortCourse = String(courseId).slice(-6);
+    const shortTs = Date.now().toString(36);
+    const receipt = `c${shortCourse}u${shortUser}t${shortTs}`.slice(0, 40);
+
     const order = await createRazorpayOrder({
         amount,
         currency: req.body.currency || "INR",
-        receipt: `course_${courseId}_user_${req.user.id}_${Date.now()}`,
+        receipt,
         notes: {
             userId: String(req.user.id),
             courseId: String(courseId)

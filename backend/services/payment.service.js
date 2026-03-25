@@ -28,11 +28,14 @@ function getRazorpayClient() {
 export async function createRazorpayOrder({ amount, currency = "INR", receipt, notes = {} }) {
 	try {
 		const client = getRazorpayClient();
+		const safeReceipt = String(receipt || `rcpt_${Date.now().toString(36)}`)
+			.replace(/[^a-zA-Z0-9_\-]/g, "")
+			.slice(0, 40);
 
 		const order = await client.orders.create({
 			amount: Math.round(Number(amount) * 100),
 			currency,
-			receipt,
+			receipt: safeReceipt,
 			notes
 		});
 
