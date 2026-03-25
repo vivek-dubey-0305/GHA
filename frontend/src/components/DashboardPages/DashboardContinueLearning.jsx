@@ -32,7 +32,7 @@ export default function DashboardContinueLearning() {
                   alt={enr.course.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent" />
                 <div className="absolute bottom-2 left-3 right-3">
                   <div className="flex items-center justify-between text-xs text-gray-300 mb-1">
                     <span>{enr.progressPercentage}%</span>
@@ -64,7 +64,7 @@ export default function DashboardContinueLearning() {
                     {enr.lastAccessedAt ? `Last: ${timeAgo(enr.lastAccessedAt)}` : ""}
                   </span>
                   <Link
-                    to={`/dashboard/courses`}
+                    to={`/dashboard/learn/${enr.course._id}`}
                     className="flex items-center gap-1.5 bg-yellow-400 text-black text-xs font-semibold px-3 py-1.5 rounded-lg
                       hover:bg-yellow-300 transition-colors active:scale-95"
                   >

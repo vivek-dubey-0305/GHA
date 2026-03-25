@@ -1,12 +1,14 @@
 import { User } from "../models/user.model.js";
 import { Enrollment } from "../models/enrollment.model.js";
 import { Progress } from "../models/progress.model.js";
+import { Lesson } from "../models/lesson.model.js";
 import { Review } from "../models/review.model.js";
 import { Certificate } from "../models/certificate.model.js";
 import { asyncHandler } from "../middlewares/async.middleware.js";
 import { errorResponse, successResponse } from "../utils/response.utils.js";
 import { getPagination, createPaginationResponse } from "../utils/pagination.utils.js";
 import { getMyProfile as getProfile, updateMyProfile as updateProfile, deleteMyProfilePicture as deleteProfilePicture, updatePreferences as updateUserPreferences } from "../services/profile.service.js";
+import { upsertLessonProgress } from "../services/progress.service.js";
 
 /**
  * User (Student) Self-Management Controller
@@ -140,39 +142,20 @@ export const getCourseProgress = asyncHandler(async (req, res) => {
 // @access  Private (User)
 export const updateLessonProgress = asyncHandler(async (req, res) => {
     const { lessonId } = req.params;
-    const { courseId, progressPercentage, timeSpent, videoProgress } = req.body;
+    const { progressPercentage, timeSpent, videoProgress, activityProgress } = req.body;
 
-    if (!courseId) return errorResponse(res, 400, "courseId is required");
+    const lesson = await Lesson.findById(lessonId).select("_id course type");
+    if (!lesson) return errorResponse(res, 404, "Lesson not found");
 
     // Verify enrollment
-    const isEnrolled = await Enrollment.isUserEnrolled(req.user.id, courseId);
+    const isEnrolled = await Enrollment.isUserEnrolled(req.user.id, lesson.course);
     if (!isEnrolled) return errorResponse(res, 403, "You are not enrolled in this course");
 
-    let progress = await Progress.findOne({ user: req.user.id, lesson: lessonId });
-
-    if (!progress) {
-        progress = await Progress.create({
-            user: req.user.id,
-            course: courseId,
-            lesson: lessonId,
-            status: "in-progress"
-        });
-    }
-
-    const updated = await progress.updateProgress({ progressPercentage, timeSpent, videoProgress });
-
-    // Update enrollment progress
-    const courseProgressData = await Progress.getCourseProgress(req.user.id, courseId);
-    if (courseProgressData.length > 0) {
-        await Enrollment.findOneAndUpdate(
-            { user: req.user.id, course: courseId },
-            {
-                progressPercentage: courseProgressData[0].completionPercentage,
-                completedLessons: courseProgressData[0].completedLessons,
-                lastAccessedAt: new Date()
-            }
-        );
-    }
+    const updated = await upsertLessonProgress({
+        userId: req.user.id,
+        lesson,
+        payload: { progressPercentage, timeSpent, videoProgress, activityProgress },
+    });
 
     successResponse(res, 200, "Progress updated successfully", updated);
 });

@@ -5,6 +5,8 @@ import { Lesson } from "../models/lesson.model.js";
 import { asyncHandler } from "../middlewares/async.middleware.js";
 import { errorResponse, successResponse } from "../utils/response.utils.js";
 import logger from "../configs/logger.config.js";
+import { syncEnrollmentProgress, upsertLessonProgress } from "../services/progress.service.js";
+import { reconcileSubmittedAssignmentProgress } from "../services/assignment-progress-reconcile.service.js";
 
 /**
  * Progress Controller
@@ -15,9 +17,18 @@ import logger from "../configs/logger.config.js";
 // @desc    Get user's progress for a course
 // @access  Private (User)
 export const getCourseProgress = asyncHandler(async (req, res) => {
-    const progress = await Progress.getCourseProgress(req.user.id, req.params.courseId);
+    await reconcileSubmittedAssignmentProgress({
+        userId: req.user.id,
+        courseId: req.params.courseId,
+        source: "progress.getCourseProgress",
+    });
 
-    if (!progress || progress.length === 0) {
+    const progress = await Progress.find({
+        user: req.user.id,
+        course: req.params.courseId,
+    }).sort({ updatedAt: -1 });
+
+    if (progress.length === 0) {
         return successResponse(res, 200, "No progress found", {
             progress: [],
             overallPercentage: 0
@@ -64,68 +75,11 @@ export const updateLessonProgress = asyncHandler(async (req, res) => {
         return errorResponse(res, 403, "You must be enrolled in the course");
     }
 
-    let progress = await Progress.findOne({
-        user: req.user.id,
-        lesson: req.params.lessonId
+    const progress = await upsertLessonProgress({
+        userId: req.user.id,
+        lesson,
+        payload: req.body,
     });
-
-    if (!progress) {
-        progress = await Progress.create({
-            user: req.user.id,
-            course: lesson.course,
-            lesson: req.params.lessonId,
-            status: "in_progress",
-            progressPercentage: 0
-        });
-    }
-
-    const updateData = req.body;
-
-    // Update video progress
-    if (updateData.videoProgress) {
-        progress.videoProgress = {
-            ...progress.videoProgress?.toObject?.() || {},
-            ...updateData.videoProgress
-        };
-    }
-
-    // Update assignment progress
-    if (updateData.assignmentProgress) {
-        progress.assignmentProgress = {
-            ...progress.assignmentProgress?.toObject?.() || {},
-            ...updateData.assignmentProgress
-        };
-    }
-
-    // Update quiz progress
-    if (updateData.quizProgress) {
-        progress.quizProgress = {
-            ...progress.quizProgress?.toObject?.() || {},
-            ...updateData.quizProgress
-        };
-    }
-
-    // Update time spent
-    if (updateData.timeSpent) {
-        progress.timeSpent = (progress.timeSpent || 0) + updateData.timeSpent;
-    }
-
-    // Update percentage
-    if (updateData.progressPercentage !== undefined) {
-        progress.progressPercentage = updateData.progressPercentage;
-    }
-
-    await progress.save();
-
-    // Update enrollment progress
-    const enrollment = await Enrollment.findOne({
-        user: req.user.id,
-        course: lesson.course
-    });
-
-    if (enrollment) {
-        await enrollment.updateProgress(req.params.lessonId, updateData.progressPercentage || progress.progressPercentage);
-    }
 
     successResponse(res, 200, "Progress updated successfully", progress);
 });
@@ -137,37 +91,21 @@ export const markLessonComplete = asyncHandler(async (req, res) => {
     const lesson = await Lesson.findById(req.params.lessonId);
     if (!lesson) return errorResponse(res, 404, "Lesson not found");
 
-    let progress = await Progress.findOne({
-        user: req.user.id,
-        lesson: req.params.lessonId
-    });
-
-    if (!progress) {
-        progress = await Progress.create({
-            user: req.user.id,
-            course: lesson.course,
-            lesson: req.params.lessonId,
-            status: "completed",
+    const progress = await upsertLessonProgress({
+        userId: req.user.id,
+        lesson,
+        payload: {
             progressPercentage: 100,
-            completedAt: new Date()
-        });
-    } else {
-        await progress.markCompleted();
-    }
-
-    // Update enrollment
-    const enrollment = await Enrollment.findOne({
-        user: req.user.id,
-        course: lesson.course
+            activityProgress: {
+                articleCompleted: true,
+                materialDownloaded: true,
+                liveAttended: true,
+                assignmentSubmitted: true,
+            }
+        },
     });
 
-    if (enrollment) {
-        // Add to completed lessons
-        if (!enrollment.completedLessons.includes(req.params.lessonId)) {
-            enrollment.completedLessons.push(req.params.lessonId);
-        }
-        await enrollment.updateProgress(req.params.lessonId, 100);
-    }
+    await syncEnrollmentProgress({ userId: req.user.id, courseId: lesson.course });
 
     successResponse(res, 200, "Lesson marked as completed", progress);
 });
@@ -176,7 +114,7 @@ export const markLessonComplete = asyncHandler(async (req, res) => {
 // @desc    Get overall learning stats for the user
 // @access  Private (User)
 export const getMyLearningStats = asyncHandler(async (req, res) => {
-    const allProgress = await Progress.getUserProgress(req.user.id);
+    const allProgress = await Progress.find({ user: req.user.id }).lean();
 
     const stats = {
         totalLessonsStarted: allProgress.length,
@@ -222,7 +160,10 @@ export const getCourseStudentProgress = asyncHandler(async (req, res) => {
 
     const progressData = await Promise.all(
         enrollments.map(async (enrollment) => {
-            const progress = await Progress.getCourseProgress(enrollment.user._id, req.params.courseId);
+            const progress = await Progress.find({
+                user: enrollment.user._id,
+                course: req.params.courseId,
+            }).lean();
             const completedLessons = progress.filter(p => p.status === "completed").length;
             return {
                 student: enrollment.user,

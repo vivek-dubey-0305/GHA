@@ -4,7 +4,10 @@ import {
     getMyAnnouncements,
     updateAnnouncement,
     deleteAnnouncement,
-    getCourseAnnouncements
+    getCourseAnnouncements,
+    getUserAnnouncements,
+    markAnnouncementRead,
+    markAllUserAnnouncementsRead,
 } from "../controllers/announcement.controller.js";
 import { authenticateInstructor } from "../middlewares/instructor.auth.middleware.js";
 import { authenticateUser } from "../middlewares/user.auth.middleware.js";
@@ -18,6 +21,9 @@ router.put("/instructor/my/:id", authenticateInstructor, updateAnnouncement);
 router.delete("/instructor/my/:id", authenticateInstructor, deleteAnnouncement);
 
 // User routes (view course announcements)
+router.get("/user/my", authenticateUser, getUserAnnouncements);
+router.patch("/user/read-all", authenticateUser, markAllUserAnnouncementsRead);
+router.patch("/user/:id/read", authenticateUser, markAnnouncementRead);
 router.get("/course/:courseId", authenticateUser, getCourseAnnouncements);
 
 export default router;

@@ -100,10 +100,38 @@ export default function HPFooter() {
           transition: transform 0.25s, background 0.3s;
         }
         .hp-scroll-top:hover { transform: scale(1.1); background: #fff; }
+        @media (max-width: 1200px) {
+          .hp-footer {
+            padding: 52px 40px 32px;
+          }
+          .hp-footer-grid {
+            gap: 34px;
+          }
+        }
         @media (max-width: 900px) { .hp-footer-grid { grid-template-columns: 1fr 1fr; gap: 40px; } }
+        @media (max-width: 700px) {
+          .hp-footer-bottom {
+            flex-direction: column;
+            align-items: flex-start;
+          }
+          .hp-scroll-top {
+            right: 16px;
+            bottom: 16px;
+          }
+        }
         @media (max-width: 480px) {
-          .hp-footer { padding: 40px 24px 28px; }
+          .hp-footer { padding: 40px 14px 28px; }
           .hp-footer-grid { grid-template-columns: 1fr; gap: 32px; }
+          .hp-footer-brand-name {
+            font-size: 2rem;
+            letter-spacing: 3px;
+          }
+          .hp-scroll-top {
+            width: 38px;
+            height: 38px;
+            right: 12px;
+            bottom: 12px;
+          }
         }
       `}</style>
     </>

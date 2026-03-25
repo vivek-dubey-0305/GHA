@@ -2,10 +2,13 @@ import { Submission } from "../models/submission.model.js";
 import { Assignment } from "../models/assignment.model.js";
 import { Course } from "../models/course.model.js";
 import { Enrollment } from "../models/enrollment.model.js";
+import { Lesson } from "../models/lesson.model.js";
 import { asyncHandler } from "../middlewares/async.middleware.js";
 import { errorResponse, successResponse } from "../utils/response.utils.js";
 import { getPagination, createPaginationResponse } from "../utils/pagination.utils.js";
 import logger from "../configs/logger.config.js";
+import { upsertLessonProgress } from "../services/progress.service.js";
+import { reconcileSubmittedAssignmentProgress } from "../services/assignment-progress-reconcile.service.js";
 
 /**
  * Submission Controller
@@ -16,7 +19,9 @@ import logger from "../configs/logger.config.js";
 // @desc    Submit an assignment
 // @access  Private (User - enrolled)
 export const createSubmission = asyncHandler(async (req, res) => {
-    const { assignmentId } = req.params;
+    const assignmentId = req.params.assignmentId || req.body.assignmentId;
+    if (!assignmentId) return errorResponse(res, 400, "assignmentId is required");
+
     const assignment = await Assignment.findById(assignmentId);
     if (!assignment) return errorResponse(res, 404, "Assignment not found");
 
@@ -36,6 +41,10 @@ export const createSubmission = asyncHandler(async (req, res) => {
         return errorResponse(res, 400, "Assignment submission deadline has passed");
     }
 
+    const lesson = assignment.lesson
+        ? await Lesson.findById(assignment.lesson).select("_id type course")
+        : await Lesson.findOne({ assignmentId: assignment._id }).select("_id type course");
+
     const submissionData = {
         user: req.user.id,
         assignment: assignmentId,
@@ -52,10 +61,39 @@ export const createSubmission = asyncHandler(async (req, res) => {
     // If resubmitting
     if (existing && existing.status === "returned") {
         const updated = await existing.resubmit(req.body.content);
+
+        if (lesson) {
+            await upsertLessonProgress({
+                userId: req.user.id,
+                lesson,
+                payload: {
+                    assignmentSubmitted: true,
+                    activityProgress: {
+                        assignmentStarted: true,
+                        assignmentSubmitted: true,
+                    },
+                },
+            });
+        }
+
         return successResponse(res, 200, "Assignment resubmitted successfully", updated);
     }
 
     const submission = await Submission.create(submissionData);
+
+    if (lesson) {
+        await upsertLessonProgress({
+            userId: req.user.id,
+            lesson,
+            payload: {
+                assignmentSubmitted: true,
+                activityProgress: {
+                    assignmentStarted: true,
+                    assignmentSubmitted: true,
+                },
+            },
+        });
+    }
 
     // Update assignment submission count
     await assignment.updateAnalytics();
@@ -72,6 +110,14 @@ export const getMySubmissions = asyncHandler(async (req, res) => {
 
     const options = { courseId, status, limit, skip, sort: "-submittedAt" };
     const submissions = await Submission.getUserSubmissions(req.user.id, options);
+
+    await reconcileSubmittedAssignmentProgress({
+        userId: req.user.id,
+        courseId,
+        submissions,
+        source: "submission.getMySubmissions",
+    });
+
     const total = await Submission.countDocuments({
         user: req.user.id,
         ...(courseId && { course: courseId }),

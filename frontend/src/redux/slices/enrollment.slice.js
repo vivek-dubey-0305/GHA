@@ -7,14 +7,9 @@ export const checkEnrollment = createAsyncThunk(
   async (courseId, { rejectWithValue }) => {
     try {
       const response = await apiClient.get(`/enrollments/check/${courseId}`);
-      console.info('[enrollment] checkEnrollment:success', {
-        courseId,
-        isEnrolled: response?.data?.data?.isEnrolled,
-      });
       return { courseId, payload: response.data };
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Failed to check enrollment';
-      console.error('[enrollment] checkEnrollment:error', { message, courseId });
       return rejectWithValue(message);
     }
   }
@@ -25,14 +20,9 @@ export const enrollInCourse = createAsyncThunk(
   async ({ courseId, paymentId }, { rejectWithValue }) => {
     try {
       const response = await apiClient.post('/enrollments', { courseId, paymentId });
-      console.info('[enrollment] enrollInCourse:success', {
-        courseId,
-        enrollmentId: response?.data?.data?._id,
-      });
       return response.data;
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Failed to enroll in course';
-      console.error('[enrollment] enrollInCourse:error', { message, courseId, paymentId });
       return rejectWithValue(message);
     }
   }
@@ -43,11 +33,9 @@ export const getEnrollmentById = createAsyncThunk(
   async (enrollmentId, { rejectWithValue }) => {
     try {
       const response = await apiClient.get(`/enrollments/${enrollmentId}`);
-      console.info('[enrollment] getEnrollmentById:success', { enrollmentId });
       return response.data;
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Failed to fetch enrollment details';
-      console.error('[enrollment] getEnrollmentById:error', { message, enrollmentId });
       return rejectWithValue(message);
     }
   }
@@ -58,11 +46,27 @@ export const requestEnrollmentRefund = createAsyncThunk(
   async ({ enrollmentId, reason }, { rejectWithValue }) => {
     try {
       const response = await apiClient.post(`/enrollments/${enrollmentId}/refund`, { reason });
-      console.info('[enrollment] requestEnrollmentRefund:success', { enrollmentId });
       return response.data;
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Failed to request enrollment refund';
-      console.error('[enrollment] requestEnrollmentRefund:error', { message, enrollmentId });
+      return rejectWithValue(message);
+    }
+  }
+);
+
+export const getMyEnrollments = createAsyncThunk(
+  'enrollment/getMyEnrollments',
+  async ({ page = 1, limit = 100, status } = {}, { rejectWithValue }) => {
+    try {
+      const params = new URLSearchParams();
+      params.append('page', page);
+      params.append('limit', limit);
+      if (status) params.append('status', status);
+
+      const response = await apiClient.get(`/user/enrollments?${params.toString()}`);
+      return response.data;
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || 'Failed to fetch my enrollments';
       return rejectWithValue(message);
     }
   }
@@ -73,6 +77,8 @@ const enrollmentSlice = createSlice({
   initialState: {
     enrollmentByCourse: {},
     currentEnrollment: null,
+    myEnrollments: [],
+    myEnrollmentsPagination: null,
     loading: false,
     error: null,
   },
@@ -139,6 +145,27 @@ const enrollmentSlice = createSlice({
         state.currentEnrollment = action.payload?.data || state.currentEnrollment;
       })
       .addCase(requestEnrollmentRefund.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+
+      .addCase(getMyEnrollments.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(getMyEnrollments.fulfilled, (state, action) => {
+        state.loading = false;
+        state.myEnrollments = action.payload?.data?.enrollments || [];
+        state.myEnrollmentsPagination = action.payload?.data?.pagination || null;
+
+        state.myEnrollments.forEach((enrollment) => {
+          const courseId = String(enrollment?.course?._id || enrollment?.course || '');
+          if (courseId) {
+            state.enrollmentByCourse[courseId] = ['active', 'completed'].includes(enrollment?.status);
+          }
+        });
+      })
+      .addCase(getMyEnrollments.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       });

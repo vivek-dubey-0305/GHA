@@ -153,6 +153,36 @@ export const getMyPayments = createAsyncThunk(
   }
 );
 
+export const getLatestPaymentForCourse = createAsyncThunk(
+  'payment/getLatestPaymentForCourse',
+  async (courseId, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.get('/payments/my?page=1&limit=50');
+      const payments = response?.data?.data?.payments || [];
+      const normalizedCourseId = String(courseId);
+
+      const coursePayments = payments
+        .filter((payment) => String(payment?.course?._id || payment?.course) === normalizedCourseId)
+        .sort((a, b) => new Date(b?.createdAt || b?.initiatedAt || 0) - new Date(a?.createdAt || a?.initiatedAt || 0));
+
+      const latestPayment = coursePayments[0] || null;
+      console.info('[payment] 🔍 getLatestPaymentForCourse:success', {
+        courseId,
+        status: latestPayment?.status || 'none',
+      });
+
+      return {
+        courseId: normalizedCourseId,
+        payment: latestPayment,
+      };
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || 'Failed to fetch payment status for course';
+      console.error('[payment] ❌ getLatestPaymentForCourse:error', { message, courseId });
+      return rejectWithValue({ courseId: String(courseId), message });
+    }
+  }
+);
+
 export const requestPaymentRefund = createAsyncThunk(
   'payment/requestPaymentRefund',
   async ({ paymentId, reason }, { rejectWithValue }) => {
@@ -176,6 +206,8 @@ const paymentSlice = createSlice({
     payments: [],
     paymentsPagination: null,
     latestEnrollment: null,
+    latestPaymentByCourse: {},
+    paymentStatusByCourse: {},
     loading: false,
     checkoutLoading: false,
     error: null,
@@ -249,6 +281,23 @@ const paymentSlice = createSlice({
       .addCase(getMyPayments.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+      })
+
+      .addCase(getLatestPaymentForCourse.pending, (state, action) => {
+        const courseId = String(action.meta.arg);
+        state.paymentStatusByCourse[courseId] = 'checking';
+      })
+      .addCase(getLatestPaymentForCourse.fulfilled, (state, action) => {
+        const { courseId, payment } = action.payload;
+        state.latestPaymentByCourse[courseId] = payment;
+        state.paymentStatusByCourse[courseId] = payment?.status || 'none';
+      })
+      .addCase(getLatestPaymentForCourse.rejected, (state, action) => {
+        const courseId = String(action.payload?.courseId || action.meta.arg || '');
+        if (courseId) {
+          state.paymentStatusByCourse[courseId] = 'error';
+        }
+        state.error = action.payload?.message || action.payload;
       })
 
       .addCase(requestPaymentRefund.pending, (state) => {

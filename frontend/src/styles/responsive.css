@@ -1,0 +1,92 @@
+/* Global responsive foundation */
+:root {
+  --gha-pad-desktop: 60px;
+  --gha-pad-laptop: 40px;
+  --gha-pad-tablet: 24px;
+  --gha-pad-mobile: 14px;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+* {
+  min-width: 0;
+}
+
+img,
+picture,
+video,
+canvas,
+svg {
+  max-width: 100%;
+}
+
+.gha-responsive-shell {
+  width: min(1260px, 100% - clamp(2 * var(--gha-pad-mobile), 8vw, 2 * var(--gha-pad-desktop)));
+  margin-inline: auto;
+}
+
+.gha-responsive-pad {
+  padding-left: clamp(var(--gha-pad-mobile), 4vw, var(--gha-pad-desktop));
+  padding-right: clamp(var(--gha-pad-mobile), 4vw, var(--gha-pad-desktop));
+}
+
+@media (max-width: 1024px) {
+  :root {
+    --gha-pad-desktop: var(--gha-pad-laptop);
+  }
+}
+
+@media (max-width: 768px) {
+  :root {
+    --gha-pad-desktop: var(--gha-pad-tablet);
+  }
+
+  .gha-stack-mobile {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --gha-pad-desktop: var(--gha-pad-mobile);
+  }
+}
+
+/* Touch devices: disable custom cursor effects safely */
+@media (hover: none), (pointer: coarse) {
+  .hp-page,
+  .cp-page,
+  .pp-page,
+  .ip-page {
+    cursor: auto !important;
+  }
+
+  .hp-cursor,
+  .hp-cursor-ring,
+  .cp-cursor,
+  .cp-cursor-ring,
+  .pp-cursor,
+  .pp-cursor-ring,
+  .ip-cursor,
+  .ip-cursor-ring {
+    display: none !important;
+  }
+
+  .hp-page a,
+  .hp-page button,
+  .cp-page a,
+  .cp-page button,
+  .pp-page a,
+  .pp-page button,
+  .ip-page a,
+  .ip-page button {
+    cursor: pointer !important;
+  }
+}

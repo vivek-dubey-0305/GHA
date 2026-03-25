@@ -19,18 +19,18 @@ export function PageShell({ title, subtitle, actions, children, delay = 0 }) {
   return (
     <div className="w-full min-h-screen bg-[#0f0f0f]">
       <motion.div
-        className="border-b border-gray-800 bg-[#0a0a0a] px-6 py-6"
+        className="border-b border-gray-800 bg-[#0a0a0a] px-4 py-5 sm:px-6 sm:py-6"
         {...fadeUp(delay)}
       >
         <div className="max-w-7xl mx-auto flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold text-white">{title}</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-white leading-tight">{title}</h1>
             {subtitle && <p className="text-gray-400 text-sm mt-1">{subtitle}</p>}
           </div>
           {actions && <div className="flex items-center gap-3">{actions}</div>}
         </div>
       </motion.div>
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <div className="max-w-7xl mx-auto space-y-8">{children}</div>
       </div>
     </div>
@@ -164,7 +164,7 @@ export function ProgressBar({ value, className = "", animated = true }) {
   return (
     <div className={`w-full h-1.5 bg-gray-800 rounded-full overflow-hidden ${className}`}>
       <motion.div
-        className={`h-full bg-gradient-to-r ${color}`}
+        className={`h-full bg-linear-to-r ${color}`}
         initial={animated ? { width: 0 } : { width: `${value}%` }}
         animate={{ width: `${value}%` }}
         transition={{ duration: 1, ease: "easeOut" }}

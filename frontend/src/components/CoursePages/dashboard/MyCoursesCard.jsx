@@ -9,7 +9,16 @@ import { formatDuration, timeAgo } from "../../../utils/format.utils";
 import { LEVEL_COLORS } from "../../../constants/dashboard.constants";
 
 export default function MyCoursesCard({ enrollment, delay = 0 }) {
-  const { course, progressPercentage, completedLessons, totalLessons, lastAccessedAt, status } = enrollment;
+  const { course = {}, progressPercentage = 0, completedLessons = 0, totalLessons = 0, lastAccessedAt, status } = enrollment;
+  const instructorObj = typeof course.instructor === "object" ? course.instructor : null;
+  const instructorName = instructorObj
+    ? `${instructorObj.firstName || ""} ${instructorObj.lastName || ""}`.trim() || "Instructor"
+    : "Instructor";
+  const levelKey = String(course.level || "beginner").toLowerCase();
+  const levelClasses = LEVEL_COLORS[levelKey] || "text-gray-300 bg-gray-700/30";
+  const safeDuration = Number(course.totalDuration || 0);
+  const safeRating = Number(course.rating || 0);
+  const safeTotalReviews = Number(course.totalReviews || 0);
 
   return (
     <motion.div
@@ -26,10 +35,10 @@ export default function MyCoursesCard({ enrollment, delay = 0 }) {
           alt={course.title}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+        <div className="absolute inset-0 bg-linear-to-t from-black/70 to-transparent" />
         <div className="absolute top-3 left-3">
-          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${LEVEL_COLORS[course.level]}`}>
-            {course.level}
+          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${levelClasses}`}>
+            {course.level || "beginner"}
           </span>
         </div>
         {status === "completed" && (
@@ -47,23 +56,23 @@ export default function MyCoursesCard({ enrollment, delay = 0 }) {
 
         <div className="flex items-center gap-2 mb-3">
           <Avatar
-            src={course.instructor?.profilePicture?.secure_url}
-            name={`${course.instructor?.firstName} ${course.instructor?.lastName}`}
+            src={instructorObj?.profilePicture?.secure_url}
+            name={instructorName}
             size="sm"
           />
           <p className="text-gray-500 text-xs truncate">
-            {course.instructor?.firstName} {course.instructor?.lastName}
+            {instructorName}
           </p>
         </div>
 
         {/* Rating */}
         <div className="flex items-center gap-1 mb-3">
           <Star className="w-3 h-3 text-yellow-400 fill-yellow-400" />
-          <span className="text-yellow-400 text-xs font-semibold">{course.rating}</span>
-          <span className="text-gray-600 text-xs">({course.totalReviews})</span>
+          <span className="text-yellow-400 text-xs font-semibold">{safeRating.toFixed(1)}</span>
+          <span className="text-gray-600 text-xs">({safeTotalReviews})</span>
           <span className="text-gray-700 mx-1">·</span>
           <Clock className="w-3 h-3 text-gray-600" />
-          <span className="text-gray-600 text-xs">{formatDuration(course.totalDuration)}</span>
+          <span className="text-gray-600 text-xs">{formatDuration(safeDuration)}</span>
         </div>
 
         {/* Progress */}
@@ -81,12 +90,12 @@ export default function MyCoursesCard({ enrollment, delay = 0 }) {
         {/* Actions */}
         <div className="mt-4">
           <Link
-            to="/dashboard/courses"
+            to={`/dashboard/learn/${course._id}`}
             className="w-full flex items-center justify-center gap-2 py-2 bg-yellow-400 text-black
               font-semibold text-sm rounded-xl hover:bg-yellow-300 transition-colors active:scale-95"
           >
             <Play className="w-3 h-3 fill-black" />
-            {status === "completed" ? "Review" : "Resume"}
+            {status === "completed" ? "Review" : "Continue"}
           </Link>
         </div>
       </div>

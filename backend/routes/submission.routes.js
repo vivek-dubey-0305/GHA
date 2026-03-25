@@ -13,6 +13,7 @@ import { authenticateInstructor } from "../middlewares/instructor.auth.middlewar
 const router = express.Router();
 
 // ===== User Routes (Protected) =====
+router.post("/assignment/:assignmentId", authenticateUser, createSubmission);
 router.post("/", authenticateUser, createSubmission);
 router.get("/my", authenticateUser, getMySubmissions);
 router.get("/:id", authenticateUser, getSubmission);

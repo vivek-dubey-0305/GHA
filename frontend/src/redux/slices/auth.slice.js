@@ -177,12 +177,9 @@ export const initializeAuth = createAsyncThunk(
     try {
       // Try to refresh token silently to check if user is authenticated
       // Use authClient which is configured for /api/v1/user/auth endpoints
-      console.log("====================")
       const response = await authClient.post(`/refresh-token`, {});
-      console.log("response for refresh-api", response)
       return response.data;
     } catch (error) {
-      console.log("Error in refresh api", error)
       // If refresh fails, user is not authenticated, but don't treat as error
       // Just return null to indicate no auth
       return null;

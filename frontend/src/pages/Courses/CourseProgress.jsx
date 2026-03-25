@@ -1,12 +1,14 @@
 /**
  * pages/Courses/CourseProgress.jsx
  */
+import { useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { TrendingUp, Clock, BookOpen, CheckCircle } from "lucide-react";
+import { useDispatch, useSelector } from "react-redux";
 import { UserLayout } from "../../components/layout/UserLayout";
 import { PageShell, SectionTitle, Card, ProgressBar, StatCard, fadeUp } from "../../components/DashboardPages/DashboardUI";
-import { mockEnrollments, mockCourseCompletionData, mockWeeklyStudyData } from "../../mock/dashboard";
 import { formatDuration } from "../../utils/format.utils";
+import { getMyEnrollments } from "../../redux/slices/enrollment.slice";
 
 // ─── Inline bar chart (CSS) ──────────────────────────────────────────────────
 
@@ -35,13 +37,45 @@ function BarChart({ data, valueKey, labelKey, unit = "" }) {
 }
 
 export default function CourseProgress() {
-  const active = mockEnrollments.filter((e) => e.status === "active");
-  const completed = mockEnrollments.filter((e) => e.status === "completed");
-  const totalTime = mockEnrollments.reduce((s, e) => s + e.timeSpent, 0);
+  const dispatch = useDispatch();
+  const { myEnrollments, loading, error } = useSelector((state) => state.enrollment);
+
+  useEffect(() => {
+    dispatch(getMyEnrollments({ page: 1, limit: 100 }));
+  }, [dispatch]);
+
+  const enrollments = myEnrollments || [];
+  const active = enrollments.filter((e) => e.status === "active");
+  const completed = enrollments.filter((e) => e.status === "completed");
+  const totalTime = enrollments.reduce((s, e) => s + Number(e?.timeSpent || 0), 0);
+  const avgCompletion = enrollments.length
+    ? Math.round(enrollments.reduce((s, e) => s + Number(e?.progressPercentage || 0), 0) / enrollments.length)
+    : 0;
+
+  const weeklyStudyData = useMemo(() => {
+    const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const today = new Date();
+    const buckets = labels.map((day) => ({ day, hours: 0 }));
+
+    enrollments.forEach((enrollment) => {
+      const ts = enrollment?.lastAccessedAt ? new Date(enrollment.lastAccessedAt) : null;
+      if (!ts || Number.isNaN(ts.getTime())) return;
+
+      const daysDiff = Math.floor((today - ts) / (1000 * 60 * 60 * 24));
+      if (daysDiff < 0 || daysDiff > 6) return;
+
+      const dayIndex = (ts.getDay() + 6) % 7;
+      buckets[dayIndex].hours += Number(enrollment?.timeSpent || 0) / 60;
+    });
+
+    return buckets.map((b) => ({ ...b, hours: Math.round(b.hours * 10) / 10 }));
+  }, [enrollments]);
 
   return (
     <UserLayout>
       <PageShell title="Course Progress" subtitle="Detailed breakdown of your learning analytics.">
+        {loading && <p className="text-gray-500 text-sm py-2">Loading progress...</p>}
+        {error && <p className="text-red-400 text-sm py-2">{error}</p>}
 
         {/* Overview stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -49,7 +83,7 @@ export default function CourseProgress() {
             { icon: BookOpen,     label: "In Progress",      value: active.length,    subtitle: "Active courses"       },
             { icon: CheckCircle,  label: "Completed",        value: completed.length, subtitle: "Courses finished"     },
             { icon: Clock,        label: "Total Study Time", value: formatDuration(totalTime), subtitle: "Across all courses" },
-            { icon: TrendingUp,   label: "Avg. Completion",  value: `${Math.round(mockEnrollments.reduce((s,e) => s + e.progressPercentage, 0) / mockEnrollments.length)}%`, subtitle: "All courses" },
+            { icon: TrendingUp,   label: "Avg. Completion",  value: `${avgCompletion}%`, subtitle: "All courses" },
           ].map((c, i) => (
             <motion.div key={c.label} {...fadeUp(i * 0.06)}>
               <StatCard {...c} />
@@ -61,7 +95,7 @@ export default function CourseProgress() {
         <motion.div {...fadeUp(0.15)}>
           <SectionTitle icon={Clock}>Weekly Study Hours</SectionTitle>
           <Card className="p-6">
-            <BarChart data={mockWeeklyStudyData} valueKey="hours" labelKey="day" unit="h" />
+            <BarChart data={weeklyStudyData} valueKey="hours" labelKey="day" unit="h" />
           </Card>
         </motion.div>
 
@@ -69,7 +103,7 @@ export default function CourseProgress() {
         <motion.div {...fadeUp(0.2)}>
           <SectionTitle icon={TrendingUp}>Course Breakdown</SectionTitle>
           <div className="space-y-3">
-            {mockEnrollments.map((enr, i) => (
+            {enrollments.map((enr, i) => (
               <motion.div key={enr._id} {...fadeUp(0.25 + i * 0.05)}>
                 <Card className="p-4">
                   <div className="flex items-center gap-4">

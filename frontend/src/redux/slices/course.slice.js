@@ -45,21 +45,10 @@ export const getCourseById = createAsyncThunk(
   'course/getCourseById',
   async (courseId, { rejectWithValue }) => {
     try {
-      console.log("== COURSE DETAIL FETCH START ==");
-      console.log("-- courseId:", courseId);
       const response = await apiClient.get(`/courses/${courseId}`);
       const payload = response.data.data;
-      console.log("** COURSE DETAIL RESPONSE #3 **");
-      console.log("-- keys:", Object.keys(payload || {}));
-      console.log("-- totals => modules:", payload?.totalModules, "lessons:", payload?.totalLessons, "duration:", payload?.totalDuration);
-      console.log("-- populated modules length:", Array.isArray(payload?.modules) ? payload.modules.length : 0);
-      console.log("===============================");
       return payload; // Course object with populated modules, lessons, instructor
     } catch (error) {
-      console.log("== COURSE DETAIL FETCH ERROR ==");
-      console.log("-- courseId:", courseId);
-      console.log("## error:", error?.response?.data || error?.message);
-      console.log("===============================");
       const message = error.response?.data?.message || error.message || 'Failed to fetch course details';
       return rejectWithValue(message);
     }
@@ -321,11 +310,6 @@ const courseSlice = createSlice({
         }, 0);
 
         state.currentCourse = { ...coursePayload, totalMaterials };
-        console.log("== COURSE DETAIL REDUCER DEBUG ==");
-        console.log("-- course:", coursePayload?._id);
-        console.log("-- totalModules:", coursePayload?.totalModules, "| totalLessons:", coursePayload?.totalLessons);
-        console.log("** state.modules length:", state.modules.length, "| totalMaterials:", totalMaterials);
-        console.log("===============================");
         // Extract instructor if it exists
         if (coursePayload.instructor) {
           state.currentInstructor = coursePayload.instructor;

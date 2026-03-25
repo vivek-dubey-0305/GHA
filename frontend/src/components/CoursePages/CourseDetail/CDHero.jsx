@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+// CDHero.jsx
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import VideoPlayer from "./VideoPlayer";
 
@@ -18,7 +19,15 @@ function useCountdown(initialSeconds) {
 }
 
 /* ── Enroll Card ── */
-function EnrollCard({ course, cardRef, onPreviewClick, hasPreview }) {
+function EnrollCard({
+  course,
+  cardRef,
+  onPreviewClick,
+  hasPreview,
+  onEnrollClick,
+  enrollLabel,
+  enrollDisabled,
+}) {
   const timer = useCountdown(14 * 3600 + 32 * 60 + 7);
   const videoDurationLabel = Number(course?.totalDuration || 0) < 60
     ? `${Number(course?.totalDuration || 0)}m`
@@ -98,8 +107,8 @@ function EnrollCard({ course, cardRef, onPreviewClick, hasPreview }) {
           <span className="cd-countdown-timer">{timer}</span>
         </div>
 
-        <button className="cd-enroll-btn">
-          <span>Enroll Now — Get Instant Access</span>
+        <button className="cd-enroll-btn" onClick={onEnrollClick} disabled={enrollDisabled}>
+          <span>{enrollLabel}</span>
         </button>
         <button className="cd-try-btn" onClick={hasPreview ? onPreviewClick : undefined} disabled={!hasPreview}>
           Try Free Preview ({course.previewLessons?.length || 0} Lessons)
@@ -140,11 +149,17 @@ function EnrollCard({ course, cardRef, onPreviewClick, hasPreview }) {
 }
 
 /* ── Hero ── */
-export default function CDHero({ course, cardRef }) {
-  if (!course) return null;
-
+export default function CDHero({
+  course,
+  cardRef,
+  onEnroll,
+  enrollLabel = "Enroll Now — Get Instant Access",
+  enrollDisabled = false,
+}) {
   const [videoPlayerOpen, setVideoPlayerOpen] = useState(false);
   const [previewVideo, setPreviewVideo] = useState({ url: "", title: "" });
+
+  if (!course) return null;
 
   const stars = "★".repeat(Math.round(course.rating || 0));
   const heroDurationLabel = Number(course?.totalDuration || 0) < 60
@@ -293,7 +308,15 @@ export default function CDHero({ course, cardRef }) {
       </div>
 
       {/* FLOATING CARD */}
-      <EnrollCard course={course} cardRef={cardRef} onPreviewClick={handleOpenPreview} hasPreview={hasPreview} />
+      <EnrollCard
+        course={course}
+        cardRef={cardRef}
+        onPreviewClick={handleOpenPreview}
+        hasPreview={hasPreview}
+        onEnrollClick={onEnroll}
+        enrollLabel={enrollLabel}
+        enrollDisabled={enrollDisabled}
+      />
     </div>
   );
 }

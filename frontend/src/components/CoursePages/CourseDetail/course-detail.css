@@ -84,6 +84,10 @@
   transition: background 0.3s;
 }
 .cd-nav-enroll-btn:hover { background: #fff; }
+.cd-nav-enroll-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
 
 /* ── HERO ── */
 .cd-detail-hero {
@@ -340,6 +344,13 @@
 }
 .cd-enroll-btn:hover::before { transform: translateX(0); }
 .cd-enroll-btn span { position: relative; z-index: 1; }
+.cd-enroll-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+.cd-enroll-btn:disabled::before {
+  transform: translateX(-101%);
+}
 
 .cd-try-btn {
   width: 100%;
@@ -891,6 +902,10 @@
   white-space: nowrap;
 }
 .cd-sticky-enroll-btn:hover { background: #fff; }
+.cd-sticky-enroll-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
 .cd-sticky-guarantee { font-size: 0.72rem; color: #0a0a0a; opacity: 0.6; letter-spacing: 1px; }
 
 /* ── FOOTER ── */
