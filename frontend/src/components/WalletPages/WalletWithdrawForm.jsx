@@ -12,19 +12,61 @@ const METHODS = [
   { id: "bank_transfer",label: "Bank Transfer",  placeholder: "Account number" },
 ];
 
-export default function WalletWithdrawForm({ availableBalance, currency = "INR" }) {
+export default function WalletWithdrawForm({
+  availableBalance,
+  currency = "INR",
+  onSubmit,
+  submitting = false,
+  serverError = "",
+}) {
   const [method, setMethod] = useState("upi");
   const [amount, setAmount] = useState("");
-  const [detail, setDetail] = useState("");
+  const [upiId, setUpiId] = useState("");
+  const [bankHolder, setBankHolder] = useState("");
+  const [bankAccount, setBankAccount] = useState("");
+  const [bankIfsc, setBankIfsc] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const amt = parseFloat(amount);
-    if (!amt || amt < 100) return setError("Minimum withdrawal is ₹100.");
+    const minAmount = method === "upi" ? 10 : 100;
+    if (!amt || amt < minAmount) return setError(`Minimum withdrawal is ₹${minAmount}.`);
     if (amt > availableBalance) return setError("Insufficient balance.");
-    if (!detail.trim()) return setError("Please enter your payment details.");
+
+    if (method === "upi") {
+      if (!upiId.trim()) return setError("Please enter your UPI ID.");
+    }
+
+    if (method === "bank_transfer") {
+      if (!bankHolder.trim() || !bankAccount.trim() || !bankIfsc.trim()) {
+        return setError("Please enter account holder, account number, and IFSC code.");
+      }
+    }
+
     setError("");
+
+    try {
+      if (onSubmit) {
+        await onSubmit({
+          amount: amt,
+          method,
+          upiId: method === "upi" ? upiId.trim() : undefined,
+          bankDetails:
+            method === "bank_transfer"
+              ? {
+                  accountHolderName: bankHolder.trim(),
+                  accountNumber: bankAccount.trim(),
+                  ifscCode: bankIfsc.trim().toUpperCase(),
+                }
+              : undefined,
+        });
+      }
+    } catch (err) {
+      setError(err?.message || "Withdrawal request failed.");
+      return;
+    }
+
     setSubmitted(true);
   };
 
@@ -44,7 +86,14 @@ export default function WalletWithdrawForm({ availableBalance, currency = "INR" 
         </p>
         <p className="text-gray-600 text-xs">via {METHODS.find((m) => m.id === method)?.label}</p>
         <button
-          onClick={() => { setSubmitted(false); setAmount(""); setDetail(""); }}
+          onClick={() => {
+            setSubmitted(false);
+            setAmount("");
+            setUpiId("");
+            setBankHolder("");
+            setBankAccount("");
+            setBankIfsc("");
+          }}
           className="mt-6 text-yellow-400 text-sm hover:text-yellow-300 transition-colors"
         >
           Make another withdrawal
@@ -78,7 +127,7 @@ export default function WalletWithdrawForm({ availableBalance, currency = "INR" 
       {/* Amount */}
       <div>
         <label className="text-sm text-gray-400 font-medium block mb-2">
-          Amount <span className="text-gray-600 text-xs">(min ₹100)</span>
+          Amount <span className="text-gray-600 text-xs">(min ₹{method === "upi" ? 10 : 100})</span>
         </label>
         <div className="relative">
           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">₹</span>
@@ -87,7 +136,7 @@ export default function WalletWithdrawForm({ availableBalance, currency = "INR" 
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="0"
-            min={100}
+            min={method === "upi" ? 10 : 100}
             max={availableBalance}
             className="w-full pl-8 pr-4 py-3 bg-black/40 border border-gray-800 rounded-xl text-white text-lg
               font-bold focus:outline-none focus:border-yellow-400/50 transition-colors"
@@ -105,35 +154,73 @@ export default function WalletWithdrawForm({ availableBalance, currency = "INR" 
       </div>
 
       {/* Detail */}
-      <div>
-        <label className="text-sm text-gray-400 font-medium block mb-2">
-          {METHODS.find((m) => m.id === method)?.label} Details
-        </label>
-        <input
-          type="text"
-          value={detail}
-          onChange={(e) => setDetail(e.target.value)}
-          placeholder={METHODS.find((m) => m.id === method)?.placeholder}
-          className="w-full px-4 py-3 bg-black/40 border border-gray-800 rounded-xl text-white text-sm
-            focus:outline-none focus:border-yellow-400/50 transition-colors placeholder-gray-600"
-        />
-      </div>
-
-      {/* Error */}
-      {error && (
-        <div className="flex items-center gap-2 p-3 bg-red-400/10 border border-red-400/20 rounded-xl">
-          <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-          <p className="text-red-400 text-sm">{error}</p>
+      {method === "upi" && (
+        <div>
+          <label className="text-sm text-gray-400 font-medium block mb-2">UPI ID</label>
+          <input
+            type="text"
+            value={upiId}
+            onChange={(e) => setUpiId(e.target.value)}
+            placeholder="yourname@upi"
+            className="w-full px-4 py-3 bg-black/40 border border-gray-800 rounded-xl text-white text-sm
+              focus:outline-none focus:border-yellow-400/50 transition-colors placeholder-gray-600"
+          />
         </div>
       )}
 
-      <YellowButton onClick={handleSubmit} className="w-full flex items-center justify-center gap-2 py-3 text-base">
+      {method === "bank_transfer" && (
+        <div className="grid gap-3">
+          <div>
+            <label className="text-sm text-gray-400 font-medium block mb-2">Account Holder Name</label>
+            <input
+              type="text"
+              value={bankHolder}
+              onChange={(e) => setBankHolder(e.target.value)}
+              placeholder="Full name"
+              className="w-full px-4 py-3 bg-black/40 border border-gray-800 rounded-xl text-white text-sm
+                focus:outline-none focus:border-yellow-400/50 transition-colors placeholder-gray-600"
+            />
+          </div>
+          <div>
+            <label className="text-sm text-gray-400 font-medium block mb-2">Account Number</label>
+            <input
+              type="text"
+              value={bankAccount}
+              onChange={(e) => setBankAccount(e.target.value)}
+              placeholder="Bank account number"
+              className="w-full px-4 py-3 bg-black/40 border border-gray-800 rounded-xl text-white text-sm
+                focus:outline-none focus:border-yellow-400/50 transition-colors placeholder-gray-600"
+            />
+          </div>
+          <div>
+            <label className="text-sm text-gray-400 font-medium block mb-2">IFSC Code</label>
+            <input
+              type="text"
+              value={bankIfsc}
+              onChange={(e) => setBankIfsc(e.target.value.toUpperCase())}
+              placeholder="ABCD0123456"
+              className="w-full px-4 py-3 bg-black/40 border border-gray-800 rounded-xl text-white text-sm
+                focus:outline-none focus:border-yellow-400/50 transition-colors placeholder-gray-600"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Error */}
+      {(error || serverError) && (
+        <div className="flex items-center gap-2 p-3 bg-red-400/10 border border-red-400/20 rounded-xl">
+          <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+          <p className="text-red-400 text-sm">{error || serverError}</p>
+        </div>
+      )}
+
+      <YellowButton onClick={handleSubmit} disabled={submitting} className="w-full flex items-center justify-center gap-2 py-3 text-base disabled:opacity-50">
         <ArrowUpRight className="w-4 h-4" />
-        Request Withdrawal
+        {submitting ? "Requesting..." : "Request Withdrawal"}
       </YellowButton>
 
       <p className="text-xs text-gray-600 text-center">
-        Withdrawals are processed within 2–3 business days. Minimum ₹100.
+        Withdrawals are processed within 2–3 business days. Min: ₹10 (UPI), ₹100 (Bank).
       </p>
     </div>
   );

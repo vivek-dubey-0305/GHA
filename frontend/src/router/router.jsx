@@ -478,7 +478,7 @@
 // export default router;
 
 
-
+/// ─── Router configuration with lazy loading, route guards, and error boundaries ─────────────────────────────────────────────────────────────
 
 import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
@@ -513,6 +513,7 @@ const Reset    = lazy(() => import('../pages/AuthPages/Reset'));
 // ─── Dashboard pages ──────────────────────────────────────────────────────────
 const Dashboard        = lazy(() => import('../pages/Dashboard/Dashboard'));
 const MyCourses        = lazy(() => import('../pages/Courses/MyCourses'));
+const CourseLearning   = lazy(() => import('../pages/Courses/CourseLearning'));
 const CourseProgress   = lazy(() => import('../pages/Courses/CourseProgress'));
 const Assignments      = lazy(() => import('../pages/Assignments/Assignments'));
 const LiveClasses      = lazy(() => import('../pages/LiveClasses/LiveClasses'));
@@ -636,6 +637,7 @@ const router = createBrowserRouter([
       // ── Dashboard ─────────────────────────────────────────────────────
       { path: 'dashboard',                    ...protectedRoute(Dashboard)         },
       { path: 'dashboard/courses',            ...protectedRoute(MyCourses)         },
+      { path: 'dashboard/learn/:courseId',    ...protectedRoute(CourseLearning)    },
       { path: 'dashboard/course-progress',    ...protectedRoute(CourseProgress)    },
       { path: 'dashboard/assignments',        ...protectedRoute(Assignments)       },
       { path: 'dashboard/live-classes',       ...protectedRoute(LiveClasses)       },

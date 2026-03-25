@@ -121,3 +121,98 @@ export const getCourseAnnouncements = asyncHandler(async (req, res) => {
         pagination: createPaginationResponse(total, page, limit)
     });
 });
+
+// @route   GET /api/v1/announcements/user/my
+// @desc    Get all announcements relevant to logged-in user
+// @access  Private (User)
+export const getUserAnnouncements = asyncHandler(async (req, res) => {
+    const { page, limit, skip } = getPagination(req.query, 20);
+
+    const enrollments = await Enrollment.find({ user: req.user.id, status: { $in: ["active", "completed"] } })
+        .select("course")
+        .lean();
+
+    const courseIds = enrollments.map((e) => e.course).filter(Boolean);
+
+    const instructorIds = courseIds.length > 0
+        ? (await Course.find({ _id: { $in: courseIds } }).select("instructor").lean()).map((c) => c.instructor)
+        : [];
+
+    const filter = {
+        isPublished: true,
+        $or: [
+            { course: { $in: courseIds } },
+            { course: null, instructor: { $in: instructorIds } },
+        ],
+    };
+
+    const total = await Announcement.countDocuments(filter);
+    const announcements = await Announcement.find(filter)
+        .populate("instructor", "firstName lastName profilePicture")
+        .populate("course", "title")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+
+    const withReadState = announcements.map((a) => {
+        const isRead = Array.isArray(a.readBy) && a.readBy.some((entry) => String(entry?.user) === String(req.user.id));
+        return { ...a, isRead };
+    });
+
+    const unreadCount = withReadState.filter((a) => !a.isRead).length;
+
+    successResponse(res, 200, "User announcements retrieved successfully", {
+        announcements: withReadState,
+        unreadCount,
+        pagination: createPaginationResponse(total, page, limit),
+    });
+});
+
+// @route   PATCH /api/v1/announcements/user/:id/read
+// @desc    Mark one announcement as read for logged-in user
+// @access  Private (User)
+export const markAnnouncementRead = asyncHandler(async (req, res) => {
+    const announcement = await Announcement.findById(req.params.id);
+    if (!announcement) return errorResponse(res, 404, "Announcement not found");
+
+    const alreadyRead = announcement.readBy.some((entry) => String(entry?.user) === String(req.user.id));
+    if (!alreadyRead) {
+        announcement.readBy.push({ user: req.user.id, readAt: new Date() });
+        await announcement.save();
+    }
+
+    successResponse(res, 200, "Announcement marked as read", announcement);
+});
+
+// @route   PATCH /api/v1/announcements/user/read-all
+// @desc    Mark all visible announcements as read for logged-in user
+// @access  Private (User)
+export const markAllUserAnnouncementsRead = asyncHandler(async (req, res) => {
+    const enrollments = await Enrollment.find({ user: req.user.id, status: { $in: ["active", "completed"] } })
+        .select("course")
+        .lean();
+
+    const courseIds = enrollments.map((e) => e.course).filter(Boolean);
+    const instructorIds = courseIds.length > 0
+        ? (await Course.find({ _id: { $in: courseIds } }).select("instructor").lean()).map((c) => c.instructor)
+        : [];
+
+    await Announcement.updateMany(
+        {
+            isPublished: true,
+            $or: [
+                { course: { $in: courseIds } },
+                { course: null, instructor: { $in: instructorIds } },
+            ],
+            "readBy.user": { $ne: req.user.id },
+        },
+        {
+            $push: {
+                readBy: { user: req.user.id, readAt: new Date() },
+            },
+        }
+    );
+
+    successResponse(res, 200, "All announcements marked as read");
+});

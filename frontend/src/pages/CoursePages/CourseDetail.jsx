@@ -1,5 +1,6 @@
-import { useRef, useEffect } from "react";
-import { useParams } from "react-router-dom";
+// CourseDetail.jsx
+import { useRef, useEffect, useMemo, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 
 import "../../components/CoursePages/course-pages.css";
@@ -23,10 +24,18 @@ import {
   getRelatedCourses as getRelatedCoursesAction,
   getCourseReviews,
 } from "../../redux/slices/course.slice.js";
+import { checkEnrollment, getMyEnrollments } from "../../redux/slices/enrollment.slice.js";
+import {
+  initiatePayment,
+  launchRazorpayCheckout,
+  getLatestPaymentForCourse,
+} from "../../redux/slices/payment.slice.js";
 
 export default function CourseDetail() {
   const { id } = useParams();
   const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const [isEnrollActionRunning, setIsEnrollActionRunning] = useState(false);
 
   // Hooks
   const { dotRef, ringRef } = useCPCursor();
@@ -45,6 +54,39 @@ export default function CourseDetail() {
     loadingCourseDetail,
     courseDetailError,
   } = useSelector((state) => state.course);
+  const { isAuthenticated, user } = useSelector((state) => state.auth);
+  const { enrollmentByCourse, error: enrollmentError } = useSelector((state) => state.enrollment);
+  const {
+    checkoutLoading,
+    paymentStatusByCourse,
+    latestPaymentByCourse,
+    error: paymentError,
+  } = useSelector((state) => state.payment);
+
+  const normalizedCourseId = String(id || "");
+  const isEnrolled = Boolean(enrollmentByCourse[normalizedCourseId]);
+  const paymentStatus =
+    paymentStatusByCourse[normalizedCourseId] || latestPaymentByCourse[normalizedCourseId]?.status || "none";
+  const isPaymentPending = ["pending", "processing", "checking"].includes(paymentStatus);
+  const enrollDisabled = !isEnrolled && (isPaymentPending || checkoutLoading || isEnrollActionRunning);
+
+  const enrollLabel = useMemo(() => {
+    if (isEnrolled) return "Continue Learning";
+    if (enrollDisabled) return "Processing Enrollment...";
+    return "Enroll Now — Get Instant Access";
+  }, [enrollDisabled, isEnrolled]);
+
+  const navbarCtaLabel = useMemo(() => {
+    if (isEnrolled) return "Continue Learning";
+    if (enrollDisabled) return "Processing...";
+    return "Enroll Now";
+  }, [enrollDisabled, isEnrolled]);
+
+  const stickyCtaLabel = useMemo(() => {
+    if (isEnrolled) return "Continue Learning";
+    if (enrollDisabled) return "Processing...";
+    return `Enroll for $${course?.discountPrice || course?.price || 0} →`;
+  }, [course?.discountPrice, course?.price, enrollDisabled, isEnrolled]);
 
   // Enroll card ref for scroll-to
   const enrollCardRef = useRef(null);
@@ -80,17 +122,127 @@ export default function CourseDetail() {
     }
   }, [course, dispatch, id]);
 
-  // Scroll to enroll card
-  const handleEnroll = () => {
-    if (enrollCardRef.current) {
-      enrollCardRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-      enrollCardRef.current.style.border = "1px solid #f5c518";
-      enrollCardRef.current.style.boxShadow = "0 0 40px rgba(245,197,24,0.15)";
-      setTimeout(() => {
-        if (enrollCardRef.current) {
-          enrollCardRef.current.style.boxShadow = "";
-        }
-      }, 2000);
+  useEffect(() => {
+    if (!normalizedCourseId || !isAuthenticated) return;
+    dispatch(checkEnrollment(normalizedCourseId));
+    dispatch(getLatestPaymentForCourse(normalizedCourseId));
+  }, [dispatch, isAuthenticated, normalizedCourseId]);
+
+  useEffect(() => {
+    if (!normalizedCourseId || !isAuthenticated || isEnrolled) return;
+    if (!["pending", "processing"].includes(paymentStatus)) return;
+
+    console.info("[enrollment-flow] ⏳ Polling payment + enrollment status", {
+      courseId: normalizedCourseId,
+      paymentStatus,
+    });
+
+    const timer = setInterval(() => {
+      dispatch(getLatestPaymentForCourse(normalizedCourseId));
+      dispatch(checkEnrollment(normalizedCourseId));
+    }, 5000);
+
+    return () => clearInterval(timer);
+  }, [dispatch, isAuthenticated, isEnrolled, normalizedCourseId, paymentStatus]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !isEnrolled) return;
+    dispatch(getMyEnrollments({ page: 1, limit: 100 }));
+  }, [dispatch, isAuthenticated, isEnrolled]);
+
+  const handleEnroll = async () => {
+    if (!course || !normalizedCourseId) return;
+
+    if (isEnrolled) {
+      console.info("[enrollment-flow] ✅ Already enrolled, redirecting to dashboard", {
+        courseId: normalizedCourseId,
+      });
+      navigate("/dashboard");
+      return;
+    }
+
+    if (!isAuthenticated) {
+      console.info("[enrollment-flow] 🔐 User not authenticated, redirecting to login", {
+        courseId: normalizedCourseId,
+      });
+      navigate("/login");
+      return;
+    }
+
+    if (enrollDisabled) {
+      console.info("[enrollment-flow] ⛔ Enrollment action blocked while processing", {
+        courseId: normalizedCourseId,
+        paymentStatus,
+      });
+      return;
+    }
+
+    setIsEnrollActionRunning(true);
+
+    try {
+      console.info("[enrollment-flow] 🚀 Initiating payment", {
+        courseId: normalizedCourseId,
+      });
+
+      const initPayload = await dispatch(
+        initiatePayment({ courseId: normalizedCourseId, paymentMethod: "razorpay" })
+      ).unwrap();
+
+      const initData = initPayload?.data || {};
+      const payment = initData?.payment;
+      const checkout = initData?.checkout;
+
+      if (initData?.isFreeEnrollment) {
+        console.info("[enrollment-flow] 🎉 Free enrollment completed instantly", {
+          courseId: normalizedCourseId,
+        });
+        await dispatch(checkEnrollment(normalizedCourseId));
+        await dispatch(getMyEnrollments({ page: 1, limit: 100 }));
+        navigate("/dashboard");
+        return;
+      }
+
+      if (!payment || !checkout) {
+        throw new Error("Payment checkout data missing from backend response");
+      }
+
+      console.info("[enrollment-flow] 💳 Launching Razorpay checkout", {
+        paymentId: payment?._id,
+        courseId: normalizedCourseId,
+      });
+
+      const verifyPayload = await dispatch(
+        launchRazorpayCheckout({
+          payment,
+          checkout,
+          prefill: {
+            name: `${user?.firstName || ""} ${user?.lastName || ""}`.trim(),
+            email: user?.email || "",
+            contact: user?.phone || "",
+          },
+        })
+      ).unwrap();
+
+      const verifyStatus = verifyPayload?.data?.payment?.status;
+      console.info("[enrollment-flow] 🔐 Payment verification callback received", {
+        paymentId: payment?._id,
+        status: verifyStatus,
+      });
+
+      await dispatch(getLatestPaymentForCourse(normalizedCourseId));
+      await dispatch(checkEnrollment(normalizedCourseId));
+
+      if (verifyStatus === "completed") {
+        await dispatch(getMyEnrollments({ page: 1, limit: 100 }));
+        navigate("/dashboard");
+      }
+    } catch (error) {
+      console.error("[enrollment-flow] ❌ Enrollment/payment flow failed", {
+        courseId: normalizedCourseId,
+        message: error?.message || String(error),
+      });
+    } finally {
+      setIsEnrollActionRunning(false);
     }
   };
 
@@ -122,10 +274,16 @@ export default function CourseDetail() {
       <CDScrollProgress />
 
       {/* Navbar */}
-      <CDNavbar onEnroll={handleEnroll} />
+      <CDNavbar onEnroll={handleEnroll} enrollLabel={navbarCtaLabel} enrollDisabled={enrollDisabled} />
 
       {/* Hero + floating card */}
-      <CDHero course={course} cardRef={enrollCardRef} />
+      <CDHero
+        course={course}
+        cardRef={enrollCardRef}
+        onEnroll={handleEnroll}
+        enrollLabel={enrollLabel}
+        enrollDisabled={enrollDisabled}
+      />
 
       {/* Certificate banner */}
       <CDCertBanner />
@@ -144,7 +302,32 @@ export default function CourseDetail() {
       <CDRelatedCourses courses={related} />
 
       {/* Sticky bottom enroll bar */}
-      <CDStickyEnroll course={course} onEnroll={handleEnroll} />
+      <CDStickyEnroll
+        course={course}
+        onEnroll={handleEnroll}
+        enrollLabel={stickyCtaLabel}
+        enrollDisabled={enrollDisabled}
+      />
+
+      {(paymentError || enrollmentError) && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "92px",
+            right: "20px",
+            maxWidth: "420px",
+            background: "rgba(255, 80, 80, 0.15)",
+            border: "1px solid rgba(255, 80, 80, 0.5)",
+            color: "#ffb4b4",
+            padding: "10px 14px",
+            zIndex: 999,
+            borderRadius: "8px",
+            fontSize: "0.78rem",
+          }}
+        >
+          ⚠ {(paymentError || enrollmentError)}
+        </div>
+      )}
 
       {/* Footer */}
       <CDFooter />

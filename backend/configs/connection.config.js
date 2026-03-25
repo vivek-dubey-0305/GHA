@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import logger from "./logger.config.js";
 import { dbConfig } from "./app.config.js";
+import { Progress } from "../models/progress.model.js";
 
 // Database Connection Function
 const connectDB = async () => {
@@ -21,6 +22,24 @@ const connectDB = async () => {
 
         const connectionInstance = await mongoose.connect(uri);
         logger.success(`Connected to database: ${connectionInstance.connection.host}`);
+
+        try {
+            const progressCollection = mongoose.connection.collection("progress");
+            const indexes = await progressCollection.indexes();
+            const legacyUniqueCourseIndex = indexes.find(
+                (idx) => idx?.name === "user_1_course_1" && idx?.unique
+            );
+
+            if (legacyUniqueCourseIndex) {
+                await progressCollection.dropIndex("user_1_course_1");
+                logger.info("Dropped legacy unique index: progress.user_1_course_1");
+            }
+
+            await Progress.syncIndexes();
+            logger.info("Progress indexes synced");
+        } catch (indexError) {
+            logger.warn(`Progress index migration warning: ${indexError.message}`);
+        }
     }
 
     catch (error) {

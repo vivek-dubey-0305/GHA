@@ -21,7 +21,7 @@ export const generateCertificate = asyncHandler(async (req, res) => {
     const enrollment = await Enrollment.findOne({
         user: req.user.id,
         course: courseId,
-        status: "active"
+        status: { $in: ["active", "completed"] }
     });
 
     if (!enrollment) {
@@ -46,18 +46,31 @@ export const generateCertificate = asyncHandler(async (req, res) => {
     const course = await Course.findById(courseId).populate("instructor", "firstName lastName");
     if (!course) return errorResponse(res, 404, "Course not found");
 
+    const totalLessons = Number(enrollment.totalLessons || 0);
+    const completedLessons = Number(enrollment.completedLessons || 0);
+    const timeSpentHours = Math.max(0, Number(enrollment.timeSpent || 0) / 60);
+
     const certificate = await Certificate.create({
+        title: `${course.title} Completion Certificate`,
         user: req.user.id,
         course: courseId,
         instructor: course.instructor._id,
         completionPercentage: enrollment.progressPercentage,
+        totalLessons,
+        completedLessons,
+        timeSpent: Math.round(timeSpentHours * 100) / 100,
+        certificateUrl: `${req.protocol}://${req.get("host")}/api/v1/certificates/verify/pending`,
         skills: course.learningOutcomes || [],
         grade: calculateGrade(enrollment.progressPercentage),
-        status: "issued"
+        status: "active"
     });
+
+    certificate.certificateUrl = `${req.protocol}://${req.get("host")}/api/v1/certificates/verify/${certificate.verificationCode}`;
+    await certificate.save();
 
     // Update enrollment with certificate reference
     enrollment.certificateId = certificate._id;
+    enrollment.certificateIssued = true;
     await enrollment.save();
 
     successResponse(res, 201, "Certificate generated successfully", certificate);

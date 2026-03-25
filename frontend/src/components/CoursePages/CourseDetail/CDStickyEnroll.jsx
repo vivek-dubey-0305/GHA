@@ -1,6 +1,12 @@
+// CDStickyEnroll.jsx
 import { useEffect, useState } from "react";
 
-export default function CDStickyEnroll({ course, onEnroll }) {
+export default function CDStickyEnroll({
+  course,
+  onEnroll,
+  enrollLabel = "Enroll Now",
+  enrollDisabled = false,
+}) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -18,8 +24,8 @@ export default function CDStickyEnroll({ course, onEnroll }) {
         ${course.discountPrice || course.price}
       </div>
       <div className="cd-sticky-actions">
-        <button className="cd-sticky-enroll-btn" onClick={onEnroll}>
-          Enroll for ${course.discountPrice || course.price} →
+        <button className="cd-sticky-enroll-btn" onClick={onEnroll} disabled={enrollDisabled}>
+          {enrollLabel}
         </button>
         <span className="cd-sticky-guarantee">30-day money-back guarantee</span>
       </div>

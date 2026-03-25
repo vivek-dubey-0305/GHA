@@ -1,24 +1,36 @@
 /**
  * pages/Wallet/Transactions.jsx
  */
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import { UserLayout } from "../../components/layout/UserLayout";
 import { PageShell, TabBar } from "../../components/DashboardPages/DashboardUI";
 import WalletTransactionTable from "../../components/WalletPages/WalletTransactionTable";
-import { mockTransactions } from "../../mock/dashboard";
 import { TRANSACTION_TABS } from "../../constants/dashboard.constants";
+import { getWalletTransactions } from "../../redux/slices/wallet.slice";
 
 export default function Transactions() {
+  const dispatch = useDispatch();
+  const { transactions, transactionsLoading, error } = useSelector((state) => state.wallet);
   const [tab, setTab] = useState("All");
 
-  const filtered = tab === "All" ? mockTransactions
-    : tab === "Credits" ? mockTransactions.filter((t) => t.type === "credit")
-    : mockTransactions.filter((t) => t.type === "debit");
+  useEffect(() => {
+    dispatch(getWalletTransactions({ page: 1, limit: 200 }));
+  }, [dispatch]);
+
+  const filtered = useMemo(() => {
+    const list = transactions || [];
+    if (tab === "All") return list;
+    if (tab === "Credits") return list.filter((t) => t.type === "credit");
+    return list.filter((t) => t.type === "debit");
+  }, [tab, transactions]);
 
   return (
     <UserLayout>
       <PageShell title="Transactions" subtitle="Full history of your wallet activity.">
         <TabBar tabs={TRANSACTION_TABS} active={tab} onChange={setTab} />
+        {transactionsLoading && <p className="text-gray-500 text-sm py-2">Loading transactions...</p>}
+        {error && <p className="text-red-400 text-sm py-2">{error}</p>}
         <WalletTransactionTable transactions={filtered} />
       </PageShell>
     </UserLayout>

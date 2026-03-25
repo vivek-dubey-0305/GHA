@@ -343,13 +343,13 @@ const Dashboard = () => {
       <div className="w-full bg-[#0f0f0f] min-h-screen">
         {/* Header */}
         <motion.div
-          className="border-b border-gray-800 bg-[#0a0a0a] px-6 py-6"
+          className="border-b border-gray-800 bg-[#0a0a0a] px-4 py-5 sm:px-6 sm:py-6"
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
         >
           <div className="max-w-7xl mx-auto">
-            <h1 className="text-2xl font-bold text-white">
+            <h1 className="text-xl sm:text-2xl font-bold text-white leading-tight">
               Good {getGreeting()},{" "}
               <span className="text-yellow-400">
                 {user.firstName} {user.lastName}
@@ -363,7 +363,7 @@ const Dashboard = () => {
         </motion.div>
 
         {/* Body */}
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           <div className="max-w-7xl mx-auto space-y-8">
 
             {/* Stat cards */}

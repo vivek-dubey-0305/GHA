@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-export default function CDNavbar({ onEnroll }) {
+export default function CDNavbar({ onEnroll, enrollLabel = "Enroll Now", enrollDisabled = false }) {
   const [scrolled, setScrolled] = useState(false);
   const navigate = useNavigate();
 
@@ -19,8 +19,8 @@ export default function CDNavbar({ onEnroll }) {
         ← Back to Courses
       </button>
 
-      <button className="cd-nav-enroll-btn" onClick={onEnroll}>
-        Enroll Now
+      <button className="cd-nav-enroll-btn" onClick={onEnroll} disabled={enrollDisabled}>
+        {enrollLabel}
       </button>
     </nav>
   );

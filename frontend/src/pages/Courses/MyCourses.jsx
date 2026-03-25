@@ -1,27 +1,36 @@
 /**
  * pages/Courses/MyCourses.jsx
  */
-import { useState } from "react";
-import { BookOpen, Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { BookOpen } from "lucide-react";
 import { UserLayout } from "../../components/layout/UserLayout";
 import { PageShell, TabBar, EmptyState, SearchBar } from "../../components/DashboardPages/DashboardUI";
 import MyCoursesCard from "../../components/CoursePages/dashboard/MyCoursesCard";
-import { mockEnrollments, mockWishlist } from "../../mock/dashboard";
 import { COURSE_TABS } from "../../constants/dashboard.constants";
-import { useTab, useSearch } from "../../hooks/useDashboard";
+import { useSearch } from "../../hooks/useDashboard";
+import { getMyEnrollments } from "../../redux/slices/enrollment.slice.js";
 
 export default function MyCourses() {
-  const { activeTab, setActiveIndex } = useTab(COURSE_TABS);
+  const dispatch = useDispatch();
   const [activeTabLabel, setActiveTabLabel] = useState(COURSE_TABS[0]);
+  const { myEnrollments, loading, error } = useSelector((state) => state.enrollment);
 
-  const tabEnrollments = {
-    "In Progress": mockEnrollments.filter((e) => e.status === "active"),
-    "Completed":   mockEnrollments.filter((e) => e.status === "completed"),
-    "Wishlist":    mockWishlist.map((c) => ({ _id: `wish_${c._id}`, course: c, progressPercentage: 0, completedLessons: 0, totalLessons: c.totalLessons, status: "wishlist" })),
-  };
+  useEffect(() => {
+    dispatch(getMyEnrollments({ page: 1, limit: 100 }));
+  }, [dispatch]);
+
+  const tabEnrollments = useMemo(
+    () => ({
+      "In Progress": myEnrollments.filter((e) => e.status === "active"),
+      "Completed": myEnrollments.filter((e) => e.status === "completed"),
+      Wishlist: [],
+    }),
+    [myEnrollments]
+  );
 
   const items = tabEnrollments[activeTabLabel] ?? [];
-  const { query, setQuery, filtered } = useSearch(items, ["course.title", "course.instructor.firstName"]);
+  const { query, setQuery, filtered } = useSearch(items, ["course.title"]);
 
   return (
     <UserLayout>
@@ -36,7 +45,9 @@ export default function MyCourses() {
         </div>
 
         {/* Grid */}
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="text-gray-400 text-sm py-8">Loading your enrollments...</div>
+        ) : filtered.length === 0 ? (
           <EmptyState
             icon={BookOpen}
             title="No courses here yet"
@@ -45,10 +56,12 @@ export default function MyCourses() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {filtered.map((enr, i) => (
-              <MyCoursesCard key={enr._id} enrollment={enr} delay={i * 0.05} />
+              <MyCoursesCard key={enr._id || `${enr?.course?._id}_${i}`} enrollment={enr} delay={i * 0.05} />
             ))}
           </div>
         )}
+
+        {error && <p className="text-red-400 text-xs">{error}</p>}
       </PageShell>
     </UserLayout>
   );

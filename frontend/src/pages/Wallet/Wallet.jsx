@@ -1,24 +1,37 @@
 /**
  * pages/Wallet/Wallet.jsx
  */
+import { useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import { UserLayout } from "../../components/layout/UserLayout";
 import { PageShell, SectionTitle } from "../../components/DashboardPages/DashboardUI";
 import { WalletBalance } from "../../components/WalletPages/WalletBalance";
 import WalletTransactionTable from "../../components/WalletPages/WalletTransactionTable";
-import { mockWallet, mockTransactions } from "../../mock/dashboard";
 import { Receipt } from "lucide-react";
+import { getMyWallet, getWalletTransactions } from "../../redux/slices/wallet.slice";
 
 export default function Wallet() {
+  const dispatch = useDispatch();
+  const { wallet, transactions, loading, transactionsLoading, error } = useSelector((state) => state.wallet);
+
+  useEffect(() => {
+    dispatch(getMyWallet());
+    dispatch(getWalletTransactions({ page: 1, limit: 5 }));
+  }, [dispatch]);
+
   return (
     <UserLayout>
       <PageShell title="Wallet" subtitle="Manage your prize money, referral earnings, and withdrawals.">
+        {(loading || transactionsLoading) && <p className="text-gray-500 text-sm py-2">Loading wallet data...</p>}
+        {error && <p className="text-red-400 text-sm py-2">{error}</p>}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1">
-            <WalletBalance wallet={mockWallet} />
+            <WalletBalance wallet={wallet || { balance: 0, holdAmount: 0, currency: "INR", lifetimeEarnings: 0, totalWithdrawn: 0, totalCredited: 0 }} />
           </div>
           <div className="lg:col-span-2">
             <SectionTitle icon={Receipt}>Recent Transactions</SectionTitle>
-            <WalletTransactionTable transactions={mockTransactions.slice(0, 5)} />
+            <WalletTransactionTable transactions={transactions || []} />
           </div>
         </div>
       </PageShell>

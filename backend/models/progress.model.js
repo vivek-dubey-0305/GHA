@@ -58,6 +58,51 @@ const progressSchema = new mongoose.Schema({
         }
     },
 
+    activityProgress: {
+        articleOpened: {
+            type: Boolean,
+            default: false
+        },
+        articleReadRatio: {
+            type: Number,
+            min: 0,
+            max: 1
+        },
+        articleCompleted: {
+            type: Boolean,
+            default: false
+        },
+        materialViewed: {
+            type: Boolean,
+            default: false
+        },
+        materialDownloaded: {
+            type: Boolean,
+            default: false
+        },
+        liveJoined: {
+            type: Boolean,
+            default: false
+        },
+        liveMinutes: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
+        liveAttended: {
+            type: Boolean,
+            default: false
+        },
+        assignmentStarted: {
+            type: Boolean,
+            default: false
+        },
+        assignmentSubmitted: {
+            type: Boolean,
+            default: false
+        }
+    },
+
     // Assignment Progress (if lesson is assignment)
     assignmentSubmitted: {
         type: Boolean,
@@ -91,7 +136,7 @@ const progressSchema = new mongoose.Schema({
 });
 
 // Indexes for performance
-progressSchema.index({ user: 1, course: 1 }, { unique: true }); // One progress per user-course
+progressSchema.index({ user: 1, course: 1 });
 progressSchema.index({ user: 1, lesson: 1 }, { unique: true }); // One progress per user-lesson
 progressSchema.index({ course: 1, status: 1 });
 progressSchema.index({ user: 1, status: 1 });

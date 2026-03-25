@@ -1,22 +1,43 @@
 /**
  * components/AchievementPages/CertificateCard.jsx
  */
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Award, Download, Share2, ExternalLink } from "lucide-react";
+import { Award, Download, Share2, ExternalLink, Lock } from "lucide-react";
 import { gradeColor, formatDate } from "../../utils/format.utils";
 
-export default function CertificateCard({ certificate, delay = 0 }) {
-  const { title, course, issuedAt, grade, skills, completionPercentage, certificateId, status } = certificate;
+export default function CertificateCard({ certificate, delay = 0, onUnlock, unlockLoading = false }) {
+  const [copied, setCopied] = useState(false);
+  const { title, course, issuedAt, grade, skills, completionPercentage, certificateId } = certificate;
+  const isLocked = Boolean(certificate?.isLocked);
+
+  const shareUrl = useMemo(() => {
+    if (!certificate?.verificationCode) return "";
+    return `${window.location.origin}/api/v1/certificates/verify/${certificate.verificationCode}`;
+  }, [certificate?.verificationCode]);
+
+  const handleCopy = async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay }}
-      className="bg-[#111] border border-gray-800 rounded-2xl overflow-hidden hover:border-yellow-400/20 transition-colors group"
+      className={`relative bg-[#111] border border-gray-800 rounded-2xl overflow-hidden transition-colors group ${
+        isLocked ? "opacity-50" : "hover:border-yellow-400/20"
+      }`}
     >
       {/* Certificate visual header */}
-      <div className="relative h-32 bg-gradient-to-br from-yellow-400/10 via-orange-400/5 to-transparent
+      <div className="relative h-32 bg-linear-to-br from-yellow-400/10 via-orange-400/5 to-transparent
         flex items-center justify-center border-b border-gray-800 overflow-hidden">
         {/* Decorative rings */}
         <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full border border-yellow-400/10" />
@@ -38,6 +59,22 @@ export default function CertificateCard({ certificate, delay = 0 }) {
         </div>
       </div>
 
+      {isLocked && (
+        <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-3 p-4">
+          <Lock className="w-6 h-6 text-yellow-300" />
+          <p className="text-xs text-gray-200 text-center">
+            Complete this course to unlock your certificate.
+          </p>
+          <button
+            onClick={onUnlock}
+            disabled={unlockLoading || Number(certificate?.completionPercentage || 0) < 100}
+            className="px-3 py-1.5 rounded-lg bg-yellow-400 text-black text-xs font-semibold disabled:opacity-50"
+          >
+            {unlockLoading ? "Unlocking..." : "Unlock Certificate"}
+          </button>
+        </div>
+      )}
+
       <div className="p-5">
         <h3 className="text-white font-bold text-sm leading-snug mb-1 line-clamp-2">{title}</h3>
         <p className="text-gray-500 text-xs mb-3">{course?.title}</p>
@@ -57,29 +94,41 @@ export default function CertificateCard({ certificate, delay = 0 }) {
         </div>
 
         <p className="text-xs text-gray-600 mb-4">
-          Issued {formatDate(issuedAt)} · {certificateId}
+          {issuedAt ? `Issued ${formatDate(issuedAt)} · ${certificateId}` : `Progress: ${Number(completionPercentage || 0)}%`}
         </p>
 
         {/* Actions */}
         <div className="flex gap-2">
           <a
-            href={certificate.certificateUrl}
+            href={certificate.certificateUrl || shareUrl || "#"}
             target="_blank"
             rel="noopener noreferrer"
             className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-yellow-400 text-black
-              font-semibold text-xs rounded-xl hover:bg-yellow-300 transition-colors active:scale-95"
+              font-semibold text-xs rounded-xl hover:bg-yellow-300 transition-colors active:scale-95 disabled:opacity-50"
+            onClick={(e) => {
+              if (isLocked || !(certificate.certificateUrl || shareUrl)) e.preventDefault();
+            }}
           >
             <Download className="w-3.5 h-3.5" /> Download
           </a>
-          <button className="flex items-center gap-1.5 px-3 py-2 border border-gray-700 text-gray-400
+          <button
+            onClick={handleCopy}
+            disabled={isLocked || !shareUrl}
+            className="flex items-center gap-1.5 px-3 py-2 border border-gray-700 text-gray-400
             text-xs rounded-xl hover:border-gray-500 hover:text-white transition-colors active:scale-95">
             <Share2 className="w-3.5 h-3.5" />
           </button>
-          <button className="flex items-center gap-1.5 px-3 py-2 border border-gray-700 text-gray-400
+          <button
+            onClick={() => {
+              if (!isLocked && shareUrl) window.open(shareUrl, "_blank", "noopener,noreferrer");
+            }}
+            disabled={isLocked || !shareUrl}
+            className="flex items-center gap-1.5 px-3 py-2 border border-gray-700 text-gray-400
             text-xs rounded-xl hover:border-gray-500 hover:text-white transition-colors active:scale-95">
             <ExternalLink className="w-3.5 h-3.5" />
           </button>
         </div>
+        {!isLocked && copied && <p className="text-[11px] text-green-400 mt-2">Share link copied.</p>}
       </div>
     </motion.div>
   );
