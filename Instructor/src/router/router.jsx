@@ -31,6 +31,7 @@ const Transactions = lazy(() => import('../pages/FinancePages/Transactions'));
 const Announcements = lazy(() => import('../pages/AnnouncementPages/Announcements'));
 const Notifications = lazy(() => import('../pages/NotificationPages/Notifications'));
 const DiscussionsQA = lazy(() => import('../pages/DiscussionPages/DiscussionsQA'));
+const DoubtTickets = lazy(() => import('../pages/DoubtTicketPages/DoubtTickets'));
 const Reviews = lazy(() => import('../pages/ReviewPages/Reviews'));
 const Profile = lazy(() => import('../pages/UserPages/Profile'));
 const PayoutSettings = lazy(() => import('../pages/AccountPages/PayoutSettings'));
@@ -222,6 +223,10 @@ const router = createBrowserRouter([
       {
         path: 'discussions',
         ...createRouteConfig(DiscussionsQA)
+      },
+      {
+        path: 'doubt-tickets',
+        ...createRouteConfig(DoubtTickets)
       },
       {
         path: 'certificates',

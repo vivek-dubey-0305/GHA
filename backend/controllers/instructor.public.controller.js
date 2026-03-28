@@ -181,19 +181,6 @@ export const getAllInstructorsPublic = asyncHandler(async (req, res) => {
   });
 });
 
-// @route   GET /api/v1/public/instructors/search
-// @desc    Search instructors publicly by keyword + optional filters
-// @access  Public
-export const searchInstructorsPublic = asyncHandler(async (req, res) => {
-  const searchTerm = req.query.q || req.query.query || req.query.search;
-  if (!searchTerm || !String(searchTerm).trim()) {
-    return errorResponse(res, 400, "Search query is required");
-  }
-
-  req.query.search = String(searchTerm).trim();
-  return getAllInstructorsPublic(req, res);
-});
-
 // @route   GET /api/v1/public/instructors/:id
 // @desc    Get single instructor details by ID with full professional profile
 // @access  Public

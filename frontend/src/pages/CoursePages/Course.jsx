@@ -1,22 +1,24 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { useSearchParams } from "react-router-dom";
 import "../../components/CoursePages/course-pages.css";
 import "../../components/CoursePages/CourseListing/course-listing.css";
 
-import useCPCursor    from "../../components/CoursePages/useCPCursor";
+import useCPCursor from "../../components/CoursePages/useCPCursor";
 import useCPParticles from "../../components/CoursePages/useCPParticles";
-import useCPReveal    from "../../components/CoursePages/useCPReveal";
+import useCPReveal from "../../components/CoursePages/useCPReveal";
 
-import CLNavbar     from "../../components/CoursePages/CourseListing/CLNavbar";
+import CLNavbar from "../../components/CoursePages/CourseListing/CLNavbar";
 import CLPageHeader from "../../components/CoursePages/CourseListing/CLPageHeader";
-import CLChipsBar   from "../../components/CoursePages/CourseListing/CLChipsBar";
-import CLSidebar    from "../../components/CoursePages/CourseListing/CLSidebar";
-import CLToolbar    from "../../components/CoursePages/CourseListing/CLToolbar";
+import CLChipsBar from "../../components/CoursePages/CourseListing/CLChipsBar";
+import CLSidebar from "../../components/CoursePages/CourseListing/CLSidebar";
+import CLToolbar from "../../components/CoursePages/CourseListing/CLToolbar";
 import CLCourseGrid from "../../components/CoursePages/CourseListing/CLCourseGrid";
 import CLPagination from "../../components/CoursePages/CourseListing/CLPagination";
 
 import {
   getAllCourses,
+  searchCourses,
   setFilters,
   setSortBy,
   setSearch,
@@ -24,49 +26,51 @@ import {
 } from "../../redux/slices/course.slice.js";
 
 export default function Course() {
-  // ── Cursor & particles ──
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlSearch = (searchParams.get("search") || "").trim();
+
   const { dotRef, ringRef } = useCPCursor();
   const canvasRef = useCPParticles();
   useCPReveal();
 
-  // ── Redux state ──
   const dispatch = useDispatch();
-  const {
-    courses,
-    pagination,
-    filters,
-    sortBy,
-    loadingCourses,
-    error,
-  } = useSelector((state) => state.course);
+  const { courses, pagination, filters, sortBy, loadingCourses, error } = useSelector((state) => state.course);
 
-  // ── Local UI state ──
   const [viewMode, setViewMode] = useState("grid");
   const [priceRange, setPriceRange] = useState([0, 10000]);
   const [activeFilters, setActiveFilters] = useState({});
+  const [navSearchInput, setNavSearchInput] = useState(urlSearch);
+  const isSearchHydrated = (filters.search || "") === urlSearch;
 
-  // ── Initialize: Fetch courses on mount ──
+  const syncUrlSearch = (value) => {
+    const current = (searchParams.get("search") || "").trim();
+    const desired = (value || "").trim();
+    if (current === desired) return;
+
+    const next = new URLSearchParams(searchParams);
+    if (desired) next.set("search", desired);
+    else next.delete("search");
+    setSearchParams(next, { replace: true });
+  };
+
   useEffect(() => {
-    dispatch(getAllCourses({
-      page: 1,
-      limit: 12,
-      ...filters,
-      sort: sortBy,
-    }));
-  }, [dispatch]);
+    dispatch(setSearch(urlSearch));
+  }, [dispatch, urlSearch]);
 
-  // ── Handle filter toggle ──
+  const scrollToListing = () => {
+    window.requestAnimationFrame(() => {
+      document.getElementById("cl-mainContent")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
   const toggleFilter = (type, val) => {
     setActiveFilters((prev) => {
       const existing = prev[type] || [];
-      const next = existing.includes(val)
-        ? existing.filter((v) => v !== val)
-        : [...existing, val];
+      const next = existing.includes(val) ? existing.filter((v) => v !== val) : [...existing, val];
       const updated = { ...prev };
       if (next.length === 0) delete updated[type];
       else updated[type] = next;
-      
-      // Dispatch Redux action
+
       dispatch(setFilters(updated));
       return updated;
     });
@@ -77,11 +81,13 @@ export default function Course() {
   const removeFilter = (type, valStr) => {
     if (type === "search") {
       dispatch(setSearch(""));
+      setNavSearchInput("");
       setActiveFilters((prev) => {
         const updated = { ...prev };
         delete updated.search;
         return updated;
       });
+      syncUrlSearch("");
       return;
     }
     const val = valStr.replace(/^"|"$/g, "");
@@ -90,19 +96,27 @@ export default function Course() {
 
   const handlePriceChange = (newRange) => {
     setPriceRange(newRange);
-    dispatch(setFilters({
-      ...filters,
-      minPrice: newRange[0],
-      maxPrice: newRange[1],
-    }));
+    dispatch(
+      setFilters({
+        ...filters,
+        minPrice: newRange[0],
+        maxPrice: newRange[1],
+      })
+    );
   };
 
   const handleSearch = (query) => {
-    dispatch(setSearch(query));
-    setActiveFilters((prev) => ({
-      ...prev,
-      search: query,
-    }));
+    setNavSearchInput(query);
+  };
+
+  const handleSearchSubmit = (query) => {
+    const normalized = String(query || "").trim();
+    const committed = normalized.length >= 2 ? normalized : "";
+
+    setNavSearchInput(normalized);
+    dispatch(setSearch(committed));
+    syncUrlSearch(committed);
+    scrollToListing();
   };
 
   const handleSort = (newSort) => {
@@ -111,43 +125,45 @@ export default function Course() {
 
   const clearAll = () => {
     dispatch(clearFilters());
+    setNavSearchInput("");
     setActiveFilters({});
     setPriceRange([0, 10000]);
+    syncUrlSearch("");
   };
 
-  // ── Fetch on filter/sort change ──
   useEffect(() => {
+    if (!isSearchHydrated) return;
+
+    const { search, ...restFilters } = filters;
     const params = {
       page: 1,
       limit: 12,
-      ...filters,
+      ...restFilters,
       sort: sortBy,
     };
+
     if (priceRange[0] > 0) params.minPrice = priceRange[0];
     if (priceRange[1] < 10000) params.maxPrice = priceRange[1];
-    
-    dispatch(getAllCourses(params));
-  }, [filters, sortBy, priceRange, dispatch]);
 
-  // ── Stats for header ──
+    const normalizedSearch = (search || "").trim();
+    if (normalizedSearch.length >= 2) {
+      dispatch(searchCourses({ query: normalizedSearch, ...params }));
+      return;
+    }
+
+    dispatch(getAllCourses(params));
+  }, [filters, sortBy, priceRange, dispatch, isSearchHydrated]);
+
   const totalStudents = courses.reduce(
     (sum, course) =>
       sum +
-      Number(
-        course?.enrolledCount ||
-          course?.students ||
-          course?.totalEnrollments ||
-          course?.totalStudents ||
-          0
-      ),
+      Number(course?.enrolledCount || course?.students || course?.totalEnrollments || course?.totalStudents || 0),
     0
   );
+
   const totalCoursesCount =
-    Number(pagination?.totalItems) ||
-    Number(pagination?.totalResults) ||
-    Number(pagination?.count) ||
-    courses.length ||
-    0;
+    Number(pagination?.totalItems) || Number(pagination?.totalResults) || Number(pagination?.count) || courses.length || 0;
+
   const totalCategories = new Set(
     courses
       .map((course) => {
@@ -157,6 +173,7 @@ export default function Course() {
       })
       .filter(Boolean)
   ).size;
+
   const totalInternships = courses.reduce((sum, course) => {
     const internshipFromFlag = Boolean(course?.internship || course?.isInternshipEligible || course?.internshipEligible);
     const internshipFromBadges = Array.isArray(course?.badges)
@@ -171,38 +188,20 @@ export default function Course() {
     return sum + (internshipFromFlag || internshipFromBadges ? 1 : 0);
   }, 0);
 
-  if (loadingCourses && courses.length === 0) {
-    return (
-      <div className="cl-page" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
-        <div style={{ color: "#f4f3ee", fontSize: "1.5rem" }}>Loading courses...</div>
-      </div>
-    );
-  }
-
-  if (error && courses.length === 0) {
-    return (
-      <div className="cl-page" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
-        <div style={{ color: "#ff6b6b", fontSize: "1.2rem" }}>Error: {error}</div>
-      </div>
-    );
-  }
-
   return (
     <div className="cl-page">
-      {/* Fixed overlays */}
-      <div className="cp-cursor" ref={dotRef}  />
+      <div className="cp-cursor" ref={dotRef} />
       <div className="cp-cursor-ring" ref={ringRef} />
       <div className="cp-noise" />
       <canvas className="cp-canvas" ref={canvasRef} />
 
-      {/* NAVBAR */}
       <CLNavbar
-        searchQuery={filters.search || ""}
+        searchQuery={navSearchInput}
         onSearch={handleSearch}
+        onSearchSubmit={handleSearchSubmit}
         resultCount={totalCoursesCount}
       />
 
-      {/* PAGE HEADER */}
       <CLPageHeader
         totalCourses={totalCoursesCount}
         totalCategories={totalCategories}
@@ -210,7 +209,6 @@ export default function Course() {
         totalInternships={totalInternships}
       />
 
-      {/* CHIPS BAR */}
       <CLChipsBar
         activeFilters={activeFilters}
         searchQuery={filters.search || ""}
@@ -218,7 +216,6 @@ export default function Course() {
         onClearAll={clearAll}
       />
 
-      {/* SIDEBAR + MAIN LAYOUT */}
       <div className="cl-layout">
         <CLSidebar
           activeFilters={activeFilters}
@@ -239,8 +236,13 @@ export default function Course() {
           />
 
           {loadingCourses ? (
-            <div style={{ textAlign: "center", padding: "2rem", color: "#f4f3ee" }}>
-              Loading courses...
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.8rem", padding: "2rem", color: "#f4f3ee" }}>
+              <div style={{ width: "18px", height: "18px", border: "2px solid rgba(245,197,24,0.25)", borderTopColor: "#f5c518", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+              <span>Searching courses...</span>
+            </div>
+          ) : error ? (
+            <div style={{ textAlign: "center", padding: "2rem", color: "#ff6b6b" }}>
+              Error: {error}
             </div>
           ) : courses.length === 0 ? (
             <div style={{ textAlign: "center", padding: "2rem", color: "#f4f3ee" }}>
@@ -254,12 +256,21 @@ export default function Course() {
                 currentPage={pagination.currentPage || 1}
                 totalPages={pagination.totalPages || 1}
                 onPage={(page) => {
-                  dispatch(getAllCourses({
+                  const { search, ...restFilters } = filters;
+                  const params = {
                     page,
                     limit: 12,
-                    ...filters,
+                    ...restFilters,
                     sort: sortBy,
-                  }));
+                  };
+
+                  const normalizedSearch = (search || "").trim();
+                  if (normalizedSearch.length >= 2) {
+                    dispatch(searchCourses({ query: normalizedSearch, ...params }));
+                    return;
+                  }
+
+                  dispatch(getAllCourses(params));
                 }}
               />
             </>
@@ -267,15 +278,11 @@ export default function Course() {
         </main>
       </div>
 
-      {/* Mobile filter button */}
-      <button
-        className="cl-mob-filter-btn"
-        onClick={() =>
-          document.getElementById("cl-sidebar")?.classList.toggle("open")
-        }
-      >
+      <button className="cl-mob-filter-btn" onClick={() => document.getElementById("cl-sidebar")?.classList.toggle("open")}>
         ⚙
       </button>
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

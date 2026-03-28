@@ -6,6 +6,10 @@ import connectDB from "./configs/connection.config.js";
 import logger from "./configs/logger.config.js";
 import { appConfig } from "./configs/app.config.js";
 import { validateEnvironment } from "./configs/env.config.js";
+import { startLiveClassReminderScheduler, stopLiveClassReminderScheduler } from "./services/liveclass-reminder.service.js";
+import { startDoubtReminderScheduler, stopDoubtReminderScheduler } from "./services/doubt-reminder.service.js";
+import { LIVE_REACTION_WHITELIST } from "./constants/liveclass.constant.js";
+import { LiveClass } from "./models/liveclass.model.js";
 
 // Validate environment variables at startup
 validateEnvironment();
@@ -27,11 +31,15 @@ process.on('unhandledRejection', (err) => {
 // Graceful shutdown
 process.on('SIGTERM', () => {
     logger.info('SIGTERM received, shutting down gracefully');
+    stopLiveClassReminderScheduler();
+    stopDoubtReminderScheduler();
     process.exit(0);
 });
 
 process.on('SIGINT', () => {
     logger.info('SIGINT received, shutting down gracefully');
+    stopLiveClassReminderScheduler();
+    stopDoubtReminderScheduler();
     process.exit(0);
 });
 
@@ -57,9 +65,68 @@ connectDB()
         const activeBroadcasts = new Map();
         io.activeBroadcasts = activeBroadcasts; // Store on io so controllers can access it
 
+        // Track room participants with profile metadata for fast snapshots.
+        const liveRoomParticipants = new Map();
+
+        const ensureParticipantMap = (liveClassId) => {
+            const key = String(liveClassId || "");
+            if (!liveRoomParticipants.has(key)) {
+                liveRoomParticipants.set(key, new Map());
+            }
+            return liveRoomParticipants.get(key);
+        };
+
+        const getParticipantList = (liveClassId) => {
+            const roomMap = liveRoomParticipants.get(String(liveClassId || ""));
+            if (!roomMap) return [];
+            return Array.from(roomMap.values()).sort(
+                (a, b) => new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime()
+            );
+        };
+
+        const emitParticipantCount = (liveClassId) => {
+            const participants = getParticipantList(liveClassId);
+            const totalOnline = participants.length;
+            io.to(`live:${liveClassId}`).emit("participant_count_updated", {
+                liveClassId,
+                totalOnline,
+            });
+            return totalOnline;
+        };
+
+        const removeSocketFromLiveRoom = (socket, liveClassId) => {
+            const classId = String(liveClassId || socket.liveClassId || "");
+            if (!classId) return;
+
+            const roomMap = liveRoomParticipants.get(classId);
+            if (roomMap) {
+                roomMap.delete(socket.id);
+                if (roomMap.size === 0) {
+                    liveRoomParticipants.delete(classId);
+                }
+            }
+
+            socket.leave(`live:${classId}`);
+            socket.to(`live:${classId}`).emit("participant_left", {
+                userId: socket.liveUserId,
+                name: socket.liveName,
+                role: socket.liveRole,
+                socketId: socket.id,
+            });
+
+            emitParticipantCount(classId);
+            socket.liveClassId = null;
+        };
+
+        // Reminder scheduler for scheduled live classes
+        startLiveClassReminderScheduler(io);
+        startDoubtReminderScheduler(io);
+
         // Socket.IO connection handling
         io.on("connection", (socket) => {
             logger.info(`Socket connected: ${socket.id}`);
+
+            socket.liveClassId = null;
 
             // Join a course discussion room
             socket.on("join_course", (courseId) => {
@@ -80,23 +147,88 @@ connectDB()
                 logger.info(`Socket ${socket.id} joined notifications:${role}:${userId}`);
             });
 
+            // Join a doubt ticket chat room for real-time replies
+            socket.on("join_doubt_ticket", ({ ticketId }) => {
+                if (!ticketId) return;
+                socket.join(`doubt-ticket:${ticketId}`);
+                logger.info(`Socket ${socket.id} joined doubt-ticket:${ticketId}`);
+            });
+
+            // Leave a doubt ticket chat room
+            socket.on("leave_doubt_ticket", ({ ticketId }) => {
+                if (!ticketId) return;
+                socket.leave(`doubt-ticket:${ticketId}`);
+                logger.info(`Socket ${socket.id} left doubt-ticket:${ticketId}`);
+            });
+
             socket.on("disconnect", () => {
                 logger.info(`Socket disconnected: ${socket.id}`);
             });
 
             // ─── Live Class Events ───────────────────────────────
             // Join a live class room
-            socket.on("join_live_class", ({ liveClassId, userId, role, name }) => {
+            socket.on("join_live_class", async ({ liveClassId, userId, role, name, firstName, lastName, profilePicture }) => {
+                if (!liveClassId) return;
+
+                if (socket.liveClassId && String(socket.liveClassId) !== String(liveClassId)) {
+                    removeSocketFromLiveRoom(socket, socket.liveClassId);
+                }
+
                 socket.join(`live:${liveClassId}`);
                 socket.liveClassId = liveClassId;
                 socket.liveUserId = userId;
                 socket.liveRole = role;
                 socket.liveName = name;
 
+                const participant = {
+                    socketId: socket.id,
+                    userId,
+                    role,
+                    name,
+                    firstName: firstName || "",
+                    lastName: lastName || "",
+                    profilePicture: profilePicture || null,
+                    joinedAt: new Date().toISOString(),
+                };
+
+                const participantMap = ensureParticipantMap(liveClassId);
+                participantMap.set(socket.id, participant);
+
+                const liveClassIdStr = liveClassId?.toString();
+                const broadcastMeta = activeBroadcasts.get(liveClassIdStr);
+                const participantList = getParticipantList(liveClassId);
+                const totalOnline = participantList.length;
+
+                socket.emit("session_snapshot", {
+                    liveClassId,
+                    broadcastStarted: !!broadcastMeta,
+                    broadcastStartedAt: broadcastMeta?.startedAt || null,
+                    totalOnline,
+                });
+
+                socket.emit("participant_list_snapshot", {
+                    liveClassId,
+                    participants: participantList,
+                    totalOnline,
+                });
+
+                try {
+                    const historyDoc = await LiveClass.findById(liveClassId).select("chatMessages").lean();
+                    const messages = Array.isArray(historyDoc?.chatMessages)
+                        ? historyDoc.chatMessages.slice(-50)
+                        : [];
+                    socket.emit("chat_history_snapshot", {
+                        liveClassId,
+                        messages,
+                    });
+                } catch (error) {
+                    logger.warn(`Failed chat history snapshot for live:${liveClassId} - ${error.message}`);
+                }
+
                 // Notify the room about new participant
                 socket.to(`live:${liveClassId}`).emit("participant_joined", {
-                    userId, name, role,
-                    socketId: socket.id,
+                    ...participant,
+                    totalOnline,
                 });
                 logger.info(`Socket ${socket.id} joined live:${liveClassId} as ${role}`);
 
@@ -104,17 +236,16 @@ connectDB()
                 if (activeBroadcasts.has(liveClassId?.toString())) {
                     socket.emit("broadcast_started", { liveClassId });
                 }
+
+                emitParticipantCount(liveClassId);
             });
 
             // Leave a live class room
             socket.on("leave_live_class", ({ liveClassId }) => {
-                socket.leave(`live:${liveClassId}`);
-                socket.to(`live:${liveClassId}`).emit("participant_left", {
-                    userId: socket.liveUserId,
-                    name: socket.liveName,
-                    role: socket.liveRole,
-                });
-                logger.info(`Socket ${socket.id} left live:${liveClassId}`);
+                const targetLiveClassId = liveClassId || socket.liveClassId;
+                if (!targetLiveClassId) return;
+                logger.info(`Socket ${socket.id} left live:${targetLiveClassId}`);
+                removeSocketFromLiveRoom(socket, targetLiveClassId);
             });
 
             // Real-time chat message (low-latency broadcast)
@@ -147,6 +278,9 @@ connectDB()
 
             // Emoji reaction (real-time broadcast, no persistence)
             socket.on("emoji_reaction", ({ liveClassId, emoji }) => {
+                if (!LIVE_REACTION_WHITELIST.includes(emoji)) {
+                    return;
+                }
                 io.to(`live:${liveClassId}`).emit("emoji_reaction", {
                     userId: socket.liveUserId,
                     name: socket.liveName,
@@ -162,13 +296,6 @@ connectDB()
                     status, // "connected", "disconnected", "reconnecting"
                     timestamp: new Date(),
                 });
-            });
-
-            // Poll/quiz broadcast (instructor only)
-            socket.on("live_poll", ({ liveClassId, poll }) => {
-                if (socket.liveRole === "Instructor" || socket.liveRole === "Admin") {
-                    io.to(`live:${liveClassId}`).emit("live_poll", poll);
-                }
             });
 
             // Host mute/unmute participant
@@ -204,15 +331,9 @@ connectDB()
             // On disconnect, notify all live rooms this socket was in
             socket.on("disconnecting", () => {
                 if (socket.liveClassId) {
-                    socket.to(`live:${socket.liveClassId}`).emit("participant_left", {
-                        userId: socket.liveUserId,
-                        name: socket.liveName,
-                        role: socket.liveRole,
-                    });
-                    // Clean up broadcast state if host disconnects
-                    if (socket.liveRole === "Instructor") {
-                        activeBroadcasts.delete(socket.liveClassId?.toString());
-                    }
+                    removeSocketFromLiveRoom(socket, socket.liveClassId);
+                    // Do not clear active broadcast on instructor refresh/disconnect.
+                    // Broadcast state is cleared by explicit host end or stop_broadcast events.
                 }
             });
         });

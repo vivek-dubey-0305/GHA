@@ -69,9 +69,13 @@ export const searchInstructors = createAsyncThunk(
   async ({ query, ...params }, { rejectWithValue }) => {
     try {
       const queryParams = buildListQuery(params);
+      queryParams.append("type", "instructors");
       queryParams.append("q", query);
-      const response = await apiClient.get(`/public/instructors/search?${queryParams.toString()}`);
-      return response.data.data;
+      const response = await apiClient.get(`/search?${queryParams.toString()}`);
+      return {
+        instructors: response.data.data?.results || response.data.data?.instructors || [],
+        pagination: response.data.data?.pagination,
+      };
     } catch (error) {
       const message = error.response?.data?.message || error.message || "Instructor search failed";
       return rejectWithValue(message);

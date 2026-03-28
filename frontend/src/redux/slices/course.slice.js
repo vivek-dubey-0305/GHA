@@ -121,15 +121,26 @@ export const getInstructorById = createAsyncThunk(
  */
 export const searchCourses = createAsyncThunk(
   'course/searchCourses',
-  async ({ query, page = 1, limit = 12 }, { rejectWithValue }) => {
+  async ({ query, page = 1, limit = 12, sort, category, level, language, minPrice, maxPrice }, { rejectWithValue }) => {
     try {
       const queryParams = new URLSearchParams();
-      queryParams.append('search', query);
+      queryParams.append('type', 'courses');
+      queryParams.append('q', query);
       queryParams.append('page', page);
       queryParams.append('limit', limit);
+
+      if (sort) queryParams.append('sort', sort);
+      if (category) queryParams.append('category', category);
+      if (level) queryParams.append('level', level);
+      if (language) queryParams.append('language', language);
+      if (minPrice !== undefined) queryParams.append('minPrice', minPrice);
+      if (maxPrice !== undefined) queryParams.append('maxPrice', maxPrice);
       
-      const response = await apiClient.get(`/courses?${queryParams.toString()}`);
-      return response.data.data; // { courses, pagination }
+      const response = await apiClient.get(`/search?${queryParams.toString()}`);
+      return {
+        courses: response.data.data?.results || response.data.data?.courses || [],
+        pagination: response.data.data?.pagination,
+      };
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Search failed';
       return rejectWithValue(message);

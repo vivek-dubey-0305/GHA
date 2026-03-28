@@ -299,6 +299,7 @@ const submissionSchema = new mongoose.Schema({
         },
         files: [{
             name: String,
+            public_id: String,
             url: String, // R2 URL
             type: { type: String }, // Use explicit form to avoid Mongoose 'type' keyword conflict
             size: Number // in bytes
@@ -388,6 +389,45 @@ const submissionSchema = new mongoose.Schema({
         default: 0
     },
 
+    moderation: {
+        isReported: {
+            type: Boolean,
+            default: false
+        },
+        status: {
+            type: String,
+            enum: ["none", "under_review", "approved_ban", "rejected"],
+            default: "none"
+        },
+        reportReason: {
+            type: String,
+            trim: true,
+            maxlength: 2000
+        },
+        reportEvidence: [{
+            name: String,
+            public_id: String,
+            url: String,
+            type: String,
+            size: Number
+        }],
+        reportedAt: Date,
+        reportedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Instructor"
+        },
+        adminDecisionAt: Date,
+        adminDecisionBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Admin"
+        },
+        adminNote: {
+            type: String,
+            trim: true,
+            maxlength: 2000
+        }
+    },
+
     // Audit Fields
     submittedBy: {
         type: mongoose.Schema.Types.ObjectId,
@@ -448,7 +488,7 @@ submissionSchema.statics.getUserSubmissions = function(userId, options = {}) {
     if (status) query.status = status;
 
     return this.find(query)
-        .populate("assignment", "title dueDate maxScore")
+        .populate("assignment", "title dueDate maxScore type instructions")
         .populate("course", "title")
         .sort(sort)
         .limit(limit)

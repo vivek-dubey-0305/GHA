@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { useSearchParams } from "react-router-dom";
 import "../../components/InstructorPages/instructor-pages.css";
 import "../../components/InstructorPages/InstructorListing/instructor-listing.css";
 
@@ -156,6 +157,9 @@ const buildQueryFromFilters = ({ currentPage, sortMode, searchQuery, activeFilte
 };
 
 export default function Instructors() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlSearch = (searchParams.get("search") || "").trim();
+
   const dispatch = useDispatch();
   const { dotRef, ringRef } = useIPCursor();
   const canvasRef = useIPParticles();
@@ -168,19 +172,72 @@ export default function Instructors() {
     error,
   } = useSelector((state) => state.instructor);
 
-  const [searchQuery,   setSearchQuery]   = useState("");
+  const [searchQuery,   setSearchQuery]   = useState(urlSearch);
+  const [navSearchInput, setNavSearchInput] = useState(urlSearch);
   const [activeFilters, setActiveFilters] = useState({});
   const [expRange,      setExpRange]      = useState([0, 20]);
   const [sortMode,      setSortMode]      = useState("popular");
   const [viewMode,      setViewMode]      = useState("grid");
   const [currentPage,   setCurrentPage]   = useState(1);
+  const isSearchHydrated = searchQuery === urlSearch;
 
   const mappedInstructors = (instructors || []).map(mapInstructorForCard);
+
+  useEffect(() => {
+    setSearchQuery(urlSearch);
+    setNavSearchInput(urlSearch);
+  }, [urlSearch]);
+
+  const scrollToListing = () => {
+    window.requestAnimationFrame(() => {
+      document.getElementById("il-listingStart")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  const handleNavbarSearch = (query) => {
+    setNavSearchInput(query);
+  };
+
+  const handleNavbarSearchSubmit = (query) => {
+    const normalized = String(query || "").trim();
+    const committed = normalized.length >= 2 ? normalized : "";
+    setNavSearchInput(normalized);
+    setSearchQuery(committed);
+    scrollToListing();
+  };
+
+  const handleSidebarSearch = (query) => {
+    setNavSearchInput(query);
+  };
+
+  const handleSidebarSearchSubmit = (query) => {
+    const normalized = String(query || "").trim();
+    const committed = normalized.length >= 2 ? normalized : "";
+    setNavSearchInput(normalized);
+    setSearchQuery(committed);
+    scrollToListing();
+  };
+
+  useEffect(() => {
+    const current = (searchParams.get("search") || "").trim();
+    const desired = searchQuery.trim();
+    if (current === desired) return;
+
+    const next = new URLSearchParams(searchParams);
+    if (desired) {
+      next.set("search", desired);
+    } else {
+      next.delete("search");
+    }
+    setSearchParams(next, { replace: true });
+  }, [searchQuery, searchParams, setSearchParams]);
 
   // Reset page when filters change
   useEffect(() => { setCurrentPage(1); }, [searchQuery, activeFilters, expRange, sortMode]);
 
   useEffect(() => {
+    if (!isSearchHydrated) return;
+
     const params = buildQueryFromFilters({
       currentPage,
       sortMode,
@@ -189,13 +246,14 @@ export default function Instructors() {
       expRange,
     });
 
-    if (searchQuery.trim()) {
-      dispatch(searchInstructors({ query: searchQuery.trim(), ...params }));
+    const normalizedSearch = searchQuery.trim();
+    if (normalizedSearch.length >= 2) {
+      dispatch(searchInstructors({ query: normalizedSearch, ...params }));
       return;
     }
 
     dispatch(getAllInstructors(params));
-  }, [dispatch, currentPage, sortMode, searchQuery, activeFilters, expRange]);
+  }, [dispatch, currentPage, sortMode, searchQuery, activeFilters, expRange, isSearchHydrated]);
 
   // Toggle filter (checkbox + star rows)
   const toggleFilter = (type, val) => {
@@ -226,7 +284,11 @@ export default function Instructors() {
   };
 
   const removeFilter = (type, valStr) => {
-    if (type === "search") { setSearchQuery(""); return; }
+    if (type === "search") {
+      setSearchQuery("");
+      setNavSearchInput("");
+      return;
+    }
     const val = valStr.replace(/^"|"$/g, "");
     toggleFilter(type, val);
   };
@@ -234,6 +296,7 @@ export default function Instructors() {
   const clearAll = () => {
     setActiveFilters({});
     setSearchQuery("");
+    setNavSearchInput("");
     setExpRange([0, 20]);
   };
 
@@ -252,8 +315,9 @@ export default function Instructors() {
 
       {/* NAVBAR */}
       <ILNavbar
-        searchQuery={searchQuery}
-        onSearch={setSearchQuery}
+        searchQuery={navSearchInput}
+        onSearch={handleNavbarSearch}
+        onSearchSubmit={handleNavbarSearchSubmit}
         resultCount={totalInstructors}
       />
 
@@ -277,8 +341,9 @@ export default function Instructors() {
       <div className="il-layout">
         <ILSidebar
           activeFilters={activeFilters}
-          searchQuery={searchQuery}
-          onSearch={setSearchQuery}
+          searchQuery={navSearchInput}
+          onSearch={handleSidebarSearch}
+          onSearchSubmit={handleSidebarSearchSubmit}
           onToggleFilter={toggleFilter}
           onToggleTopic={toggleTopic}
           onClearAll={clearAll}
@@ -286,7 +351,7 @@ export default function Instructors() {
           onExpRange={setExpRange}
         />
 
-        <main className="il-main">
+        <main className="il-main" id="il-listingStart">
           <ILToolbar
             resultCount={totalInstructors}
             sortMode={sortMode}
@@ -296,11 +361,9 @@ export default function Instructors() {
           />
 
           {loadingInstructors ? (
-            <div style={{ padding: "1.2rem 0" }}>
-              <InstructorEmptyState
-                title="Loading Instructors"
-                description="Fetching top mentors and experts for you..."
-              />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.8rem", padding: "2rem", color: "#f4f3ee" }}>
+              <div style={{ width: "18px", height: "18px", border: "2px solid rgba(245,197,24,0.25)", borderTopColor: "#f5c518", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+              <span>Searching instructors...</span>
             </div>
           ) : error ? (
             <div style={{ padding: "1.2rem 0" }}>
@@ -316,8 +379,9 @@ export default function Instructors() {
                     activeFilters,
                     expRange,
                   });
-                  if (searchQuery.trim()) {
-                    dispatch(searchInstructors({ query: searchQuery.trim(), ...params }));
+                  const normalizedSearch = searchQuery.trim();
+                  if (normalizedSearch.length >= 2) {
+                    dispatch(searchInstructors({ query: normalizedSearch, ...params }));
                   } else {
                     dispatch(getAllInstructors(params));
                   }
@@ -351,6 +415,8 @@ export default function Instructors() {
         <a href="/" className="il-footer-logo">GHA</a>
         <span className="il-footer-copy">© 2025 GHA · All rights reserved</span>
       </footer>
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

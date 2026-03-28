@@ -11,6 +11,36 @@ import logger from "../configs/logger.config.js";
 // Use memory storage for R2 uploads
 const storage = multer.memoryStorage();
 
+const blockedExecutableExtensions = new Set([
+    ".bat", ".cmd", ".com", ".exe", ".msi", ".scr", ".pif", ".jar",
+    ".vbs", ".js", ".jse", ".ws", ".wsf", ".wsh", ".ps1", ".psm1",
+    ".sh", ".bash", ".zsh", ".ksh", ".php", ".py", ".rb", ".pl"
+]);
+
+const allowedSubmissionMimes = new Set([
+    // Documents
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "text/plain", "text/csv", "text/markdown",
+    // Images
+    "image/jpeg", "image/jpg", "image/png", "image/webp",
+    // Video
+    "video/mp4", "video/webm",
+    // Archives
+    "application/zip", "application/x-zip-compressed"
+]);
+
+const allowedSubmissionExtensions = new Set([
+    ".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx",
+    ".txt", ".csv", ".md", ".jpg", ".jpeg", ".png", ".webp",
+    ".mp4", ".webm", ".zip"
+]);
+
 // File filter for image uploads only
 const imageFilter = (req, file, cb) => {
     try {
@@ -69,6 +99,53 @@ const courseMediaFilter = (req, file, cb) => {
     }
 };
 
+const assignmentSubmissionFilter = (req, file, cb) => {
+    try {
+        const ext = path.extname(file.originalname || "").toLowerCase();
+        logger.info(`Assignment submission upload request: ${file.originalname} (${file.mimetype})`);
+
+        if (blockedExecutableExtensions.has(ext)) {
+            return cb(new Error(`Blocked file extension detected: ${ext}`));
+        }
+
+        if (!allowedSubmissionExtensions.has(ext)) {
+            return cb(new Error(`Unsupported file extension: ${ext || "unknown"}`));
+        }
+
+        if (!allowedSubmissionMimes.has(file.mimetype)) {
+            return cb(new Error(`Unsupported file type: ${file.mimetype}`));
+        }
+
+        cb(null, true);
+    } catch (error) {
+        logger.error(`Assignment submission filter error: ${error.message}`);
+        cb(error);
+    }
+};
+
+const doubtTicketFilter = (req, file, cb) => {
+    try {
+        const allowedMimes = new Set([
+            "image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif",
+            "video/mp4", "video/webm", "video/quicktime", "video/x-matroska"
+        ]);
+
+        const ext = path.extname(file.originalname || "").toLowerCase();
+        if (blockedExecutableExtensions.has(ext)) {
+            return cb(new Error(`Blocked file extension detected: ${ext}`));
+        }
+
+        if (!allowedMimes.has(file.mimetype)) {
+            return cb(new Error(`Invalid file type for doubt ticket: ${file.mimetype}. Allowed: image/video only`));
+        }
+
+        cb(null, true);
+    } catch (error) {
+        logger.error(`Doubt ticket filter error: ${error.message}`);
+        cb(error);
+    }
+};
+
 // Standard image upload configuration (profile pictures, etc.)
 export const upload = multer({
     storage,
@@ -86,6 +163,33 @@ export const courseMediaUpload = multer({
     limits: {
         fileSize: 500 * 1024 * 1024, // 500 MB limit for videos
         files: 50, // Allow many files for full course creation
+    },
+});
+
+export const assignmentSubmissionUpload = multer({
+    storage,
+    fileFilter: assignmentSubmissionFilter,
+    limits: {
+        fileSize: 100 * 1024 * 1024, // 100 MB per file
+        files: 50,
+    },
+});
+
+export const doubtTicketUpload = multer({
+    storage,
+    fileFilter: doubtTicketFilter,
+    limits: {
+        fileSize: 100 * 1024 * 1024,
+        files: 5,
+    },
+});
+
+export const doubtReplyImageUpload = multer({
+    storage,
+    fileFilter: imageFilter,
+    limits: {
+        fileSize: 10 * 1024 * 1024,
+        files: 6,
     },
 });
 
@@ -140,4 +244,4 @@ export const handleMulterError = (error, req, res, next) => {
     });
 };
 
-export default { upload, courseMediaUpload, handleMulterError };
+export default { upload, courseMediaUpload, assignmentSubmissionUpload, doubtTicketUpload, doubtReplyImageUpload, handleMulterError };

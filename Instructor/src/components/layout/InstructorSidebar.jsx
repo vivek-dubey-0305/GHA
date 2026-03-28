@@ -48,6 +48,7 @@ const navigationGroups = [
       { name: 'Enrolled Students', href: '/instructor/students', icon: Users },
       { name: 'Student Progress', href: '/instructor/student-progress', icon: BarChart3 },
       { name: 'Discussions & Q&A', href: '/instructor/discussions', icon: MessageCircle },
+      { name: 'Doubt Tickets', href: '/instructor/doubt-tickets', icon: MessageCircle },
     ],
   },
   {

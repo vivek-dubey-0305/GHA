@@ -1,3 +1,4 @@
+//instructor/src/pages/LiveClassPages/LiveRoom.jsx
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -5,7 +6,7 @@ import { io } from 'socket.io-client';
 import Hls from 'hls.js';
 import {
   ArrowLeft, Send, Hand, Users, MessageSquare, Radio,
-  X, Smile, ChevronDown, MicOff,
+  X, Smile, ChevronDown, MicOff, Eye, EyeOff, Gauge, Maximize2, Minimize2,
 } from 'lucide-react';
 import { InstructorLayout } from '../../components/layout/InstructorLayout';
 import {
@@ -18,6 +19,19 @@ import apiClient from '../../utils/api.utils';
 
 // const SOCKET_URL = 'http://localhost:5000';
 const SOCKET_URL = 'https://gha-1b4t.onrender.com';
+const LIVE_REACTIONS = ['👏', '👍', '🔥', '❤️', '🎉', '🙌'];
+
+const dedupeParticipants = (list = []) => {
+  const map = new Map();
+  list.forEach((item) => {
+    if (!item) return;
+    const key = item.userId ? `${item.role || 'User'}:${item.userId}` : `${item.role || 'User'}:${item.socketId || item.name}`;
+    if (!map.has(key)) {
+      map.set(key, item);
+    }
+  });
+  return Array.from(map.values());
+};
 
 export default function LiveRoom() {
   const { id } = useParams();
@@ -33,6 +47,8 @@ export default function LiveRoom() {
   const socketRef = useRef(null);
   const joinStartedRef = useRef(false);
   const retryCountRef = useRef(0);
+  const roomRootRef = useRef(null);
+  const uiHideTimerRef = useRef(null);
 
   // State
   const [joined, setJoined] = useState(false);
@@ -41,6 +57,7 @@ export default function LiveRoom() {
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const [participants, setParticipants] = useState([]);
+  const [totalOnline, setTotalOnline] = useState(1);
   const [showChat, setShowChat] = useState(true);
   const [showParticipants, setShowParticipants] = useState(false);
   const [sessionEnded, setSessionEnded] = useState(false);
@@ -51,8 +68,72 @@ export default function LiveRoom() {
   const [raisedHands, setRaisedHands] = useState([]);
   const [mutedParticipants, setMutedParticipants] = useState(new Set());
   const [broadcastStarted, setBroadcastStarted] = useState(false);
+  const [enableSelfPreview, setEnableSelfPreview] = useState(false);
+  const [qualityLevels, setQualityLevels] = useState([]);
+  const [selectedQualityLevel, setSelectedQualityLevel] = useState(-1); // -1 => auto
+  const [reactionBursts, setReactionBursts] = useState([]);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showUiChrome, setShowUiChrome] = useState(true);
+  const [hasUnreadChat, setHasUnreadChat] = useState(false);
+  const [hasUnreadUsers, setHasUnreadUsers] = useState(false);
+  const [floatingCards, setFloatingCards] = useState([]);
   // add this near other states
   const [socketId, setSocketId] = useState(null);
+  const showChatRef = useRef(showChat);
+  const showParticipantsRef = useRef(showParticipants);
+
+  useEffect(() => {
+    showChatRef.current = showChat;
+    showParticipantsRef.current = showParticipants;
+  }, [showChat, showParticipants]);
+
+  const pingUiChrome = useCallback(() => {
+    if (!isFullscreen) return;
+    setShowUiChrome(true);
+    if (uiHideTimerRef.current) {
+      clearTimeout(uiHideTimerRef.current);
+    }
+    uiHideTimerRef.current = setTimeout(() => {
+      setShowUiChrome(false);
+    }, 2200);
+  }, [isFullscreen]);
+
+  const spawnReactionBurst = useCallback((emoji) => {
+    const base = Date.now() + Math.floor(Math.random() * 1000);
+    const particles = Array.from({ length: 3 }).map((_, idx) => ({
+      id: `${base}-${idx}`,
+      emoji,
+      left: `${10 + Math.floor(Math.random() * 80)}%`,
+      delayMs: idx * 100,
+      durationMs: 1500 + Math.floor(Math.random() * 700),
+      sizePx: 18 + Math.floor(Math.random() * 10),
+    }));
+
+    setReactionBursts((prev) => [...prev, ...particles]);
+
+    particles.forEach((particle) => {
+      setTimeout(() => {
+        setReactionBursts((prev) => prev.filter((item) => item.id !== particle.id));
+      }, particle.durationMs + particle.delayMs + 200);
+    });
+  }, []);
+
+  const pushFloatingCard = useCallback((payload) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const card = {
+      id,
+      type: payload.type,
+      title: payload.title,
+      subtitle: payload.subtitle,
+      durationMs: payload.durationMs,
+    };
+
+    setFloatingCards((prev) => [...prev.slice(-3), card]);
+
+    setTimeout(() => {
+      setFloatingCards((prev) => prev.filter((item) => item.id !== id));
+    }, payload.durationMs);
+  }, []);
 
   useProtectedRoute();
   useTokenRefreshOnActivity();
@@ -84,8 +165,10 @@ export default function LiveRoom() {
         setSessionInfo(data);
         setJoined(true);
         setIsHost(data.isHost || false);
+        setBroadcastStarted(!!data.broadcastStarted);
+        setTotalOnline(Math.max(1, Number(data.totalOnline || 1)));
         setMyName(data.instructorName || 'Instructor');
-        setMyUserId(data.liveClassId ? '' : '');
+        setMyUserId(data.instructorId || data.userId || '');
       })
       .catch((err) => {
         console.error('[LiveRoom] joinAsInstructor FAILED:', err);
@@ -93,14 +176,15 @@ export default function LiveRoom() {
       });
   }, [id, dispatch]);
 
-  // Initialize HLS.js for guest participants — gated behind broadcastStarted
-  // Host never plays the HLS stream (prevents OBS "infinite mirror" feedback loop)
+  // Initialize HLS.js for guest participants and optional host self-preview
   useEffect(() => {
-    if (isHost) return;
+    const shouldAttachPlayer = !isHost || enableSelfPreview;
+    if (!shouldAttachPlayer) return;
+
     const hlsUrl = signedPlayback?.hls;
 
     if (!hlsUrl || !videoRef.current || !broadcastStarted) {
-      console.log('[LiveRoom:Video] Skipping — isHost:', isHost, 'hasHls:', !!hlsUrl, 'broadcastStarted:', broadcastStarted);
+      console.log('[LiveRoom:Video] Skipping — isHost:', isHost, 'selfPreview:', enableSelfPreview, 'hasHls:', !!hlsUrl, 'broadcastStarted:', broadcastStarted);
       return;
     }
 
@@ -133,15 +217,14 @@ export default function LiveRoom() {
         retryCountRef.current = 0;
         console.log('[LiveRoom:Video] ✅ Manifest parsed — snapping to live edge');
 
-        // Force highest available quality initially
-        // if (hls.levels && hls.levels.length > 0) {
-        //   hls.currentLevel = hls.levels.length - 1;
-        // }
-        if (hls.levels && hls.levels.length > 0) {
-          const highestLevel = hls.levels.length - 1;
-          hls.nextLevel = highestLevel;
-          hls.currentLevel = highestLevel;
-        }
+        // Build quality options dynamically from the manifest (no hardcoded levels).
+        const levels = (hls.levels || []).map((level, index) => ({
+          index,
+          height: level.height || 0,
+          label: level.height ? `${level.height}p` : `Level ${index + 1}`,
+        }));
+        setQualityLevels(levels);
+        setSelectedQualityLevel(-1);
 
         // Jump to live edge so late joiners don't see buffered start-of-stream segments
         if (hls.liveSyncPosition != null) {
@@ -242,9 +325,34 @@ export default function LiveRoom() {
         hlsRef.current = null;
       }
     };
-  }, [signedPlayback?.hls, broadcastStarted, isHost]);
+  }, [signedPlayback?.hls, broadcastStarted, isHost, enableSelfPreview]);
 
   // Socket.IO — create connection & join live room
+  useEffect(() => {
+    const onFullScreenChange = () => {
+      const active = document.fullscreenElement === roomRootRef.current;
+      setIsFullscreen(active);
+      if (!active) {
+        setShowUiChrome(true);
+        if (uiHideTimerRef.current) {
+          clearTimeout(uiHideTimerRef.current);
+          uiHideTimerRef.current = null;
+        }
+      } else {
+        pingUiChrome();
+      }
+    };
+
+    document.addEventListener('fullscreenchange', onFullScreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFullScreenChange);
+      if (uiHideTimerRef.current) {
+        clearTimeout(uiHideTimerRef.current);
+        uiHideTimerRef.current = null;
+      }
+    };
+  }, [pingUiChrome]);
+
   useEffect(() => {
     if (!joined || !id) return;
     console.log('[LiveRoom:Socket] Creating socket connection to', SOCKET_URL);
@@ -273,18 +381,48 @@ export default function LiveRoom() {
       });
     });
 
+    socket.on('session_snapshot', (payload) => {
+      if (String(payload?.liveClassId) !== String(id)) return;
+      setBroadcastStarted(!!payload.broadcastStarted);
+      setTotalOnline(Math.max(1, Number(payload?.totalOnline || 1)));
+    });
+
+    socket.on('participant_list_snapshot', (payload) => {
+      if (String(payload?.liveClassId) !== String(id)) return;
+      const list = Array.isArray(payload?.participants) ? payload.participants : [];
+      setParticipants(dedupeParticipants(list));
+      setTotalOnline(Math.max(1, Number(payload?.totalOnline || list.length || 1)));
+    });
+
     // Real-time chat messages
     socket.on('chat_message', (msg) => {
       setChatMessages(prev => [...prev, msg]);
+      if (!showChatRef.current && msg?.senderName !== myName) {
+        setHasUnreadChat(true);
+      }
+      if (msg?.senderName !== myName) {
+        pushFloatingCard({
+          type: 'chat',
+          title: msg?.senderName || 'New chat message',
+          subtitle: msg?.message || msg?.text || '',
+          durationMs: 5000,
+        });
+      }
     });
 
     // Participant join/leave
     socket.on('participant_joined', (data) => {
-      setParticipants(prev => {
-        if (prev.find(p => p.userId === data.userId)) return prev;
-        return [...prev, data];
-      });
+      setParticipants(prev => dedupeParticipants([...prev, data]));
       setChatMessages(prev => [...prev, { type: 'system', text: `${data.name} joined`, timestamp: new Date() }]);
+      if (!showParticipantsRef.current) {
+        setHasUnreadUsers(true);
+      }
+      pushFloatingCard({
+        type: 'user',
+        title: 'New participant joined',
+        subtitle: data?.name || 'Participant',
+        durationMs: 3000,
+      });
     });
 
     socket.on('participant_left', (data) => {
@@ -292,6 +430,11 @@ export default function LiveRoom() {
       if (data.name) {
         setChatMessages(prev => [...prev, { type: 'system', text: `${data.name} left`, timestamp: new Date() }]);
       }
+    });
+
+    socket.on('participant_count_updated', (payload) => {
+      if (String(payload?.liveClassId) !== String(id)) return;
+      setTotalOnline(Math.max(1, Number(payload?.totalOnline || 1)));
     });
 
     // Session ended by host
@@ -317,8 +460,10 @@ export default function LiveRoom() {
     });
 
     // Emoji reaction
-    socket.on('emoji_reaction', () => {
-      // Could add floating emojis — for now just acknowledge
+    socket.on('emoji_reaction', (payload) => {
+      if (payload?.emoji) {
+        spawnReactionBurst(payload.emoji);
+      }
     });
 
     // Host mute control
@@ -357,7 +502,22 @@ export default function LiveRoom() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [joined, id, myName, myUserId]);
+  }, [joined, id, myName, myUserId, pushFloatingCard, spawnReactionBurst]);
+
+  const toggleFullscreen = useCallback(async () => {
+    const container = roomRootRef.current;
+    if (!container) return;
+
+    try {
+      if (document.fullscreenElement === container) {
+        await document.exitFullscreen();
+      } else {
+        await container.requestFullscreen();
+      }
+    } catch (err) {
+      console.warn('Fullscreen toggle failed:', err?.message || err);
+    }
+  }, []);
 
   // Load existing chat history
   useEffect(() => {
@@ -455,6 +615,28 @@ export default function LiveRoom() {
     setBroadcastStarted(false);
   }, [id]);
 
+  const handleQualityChange = useCallback((event) => {
+    const value = Number(event.target.value);
+    const hls = hlsRef.current;
+    if (!hls) return;
+
+    if (value === -1) {
+      hls.currentLevel = -1;
+      hls.nextLevel = -1;
+      hls.loadLevel = -1;
+      setSelectedQualityLevel(-1);
+      return;
+    }
+
+    hls.nextLevel = value;
+    hls.currentLevel = value;
+    setSelectedQualityLevel(value);
+
+    if (hls.liveSyncPosition != null && videoRef.current) {
+      videoRef.current.currentTime = hls.liveSyncPosition;
+    }
+  }, []);
+
   // Leave room
   const handleLeave = useCallback(() => {
     navigate('/instructor/live-classes');
@@ -496,17 +678,22 @@ export default function LiveRoom() {
 
   return (
     <InstructorLayout>
-      <div className="h-[calc(100vh-64px)] flex flex-col lg:flex-row">
+      <div
+        ref={roomRootRef}
+        className="h-[calc(100vh-64px)] flex flex-col lg:flex-row bg-black"
+        onMouseMove={pingUiChrome}
+        onTouchStart={pingUiChrome}
+      >
         {/* ── Video Area ── */}
         <div className="flex-1 flex flex-col bg-black min-h-0">
           {/* Top bar */}
-          <div className="flex items-center justify-between px-4 py-2 bg-[#0a0a0a] border-b border-gray-800">
+          <div className={`flex items-center justify-between px-4 py-2 bg-[#0a0a0a] border-b border-gray-800 transition-opacity duration-300 ${isFullscreen && !showUiChrome ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
             <div className="flex items-center gap-3">
               <button onClick={handleLeave} className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">
                 <ArrowLeft className="w-4 h-4" />
               </button>
               <div>
-                <h2 className="text-white text-sm font-semibold truncate max-w-[300px]">
+                <h2 className="text-white text-sm font-semibold truncate max-w-75">
                   {sessionInfo?.title || 'Live Session'}
                 </h2>
                 <div className="flex items-center gap-2">
@@ -515,16 +702,52 @@ export default function LiveRoom() {
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
                   </span>
                   <span className="text-red-400 text-[10px] font-medium uppercase">Live</span>
-                  <span className="text-gray-600 text-[10px]">{participants.length} watching</span>
+                    <span className="text-gray-600 text-[10px]">{totalOnline} watching</span>
                 </div>
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {broadcastStarted && (!isHost || enableSelfPreview) && (
+                <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-gray-900 border border-gray-700">
+                  <Gauge className="w-3.5 h-3.5 text-blue-300" />
+                  <select
+                    value={selectedQualityLevel}
+                    onChange={handleQualityChange}
+                    className="bg-transparent text-[11px] text-gray-200 outline-none"
+                    title="Switch playback quality"
+                    disabled={qualityLevels.length === 0}
+                  >
+                    <option value={-1}>Auto</option>
+                    {qualityLevels.length === 0 && (
+                      <option value={-1}>Loading qualities...</option>
+                    )}
+                    {qualityLevels
+                      .slice()
+                      .sort((a, b) => b.height - a.height)
+                      .map((level) => (
+                        <option key={level.index} value={level.index}>
+                          {level.label}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
+
               <button
-                onClick={() => { setShowParticipants(!showParticipants); if (!showParticipants) setShowChat(false); }}
+                onClick={() => {
+                  const next = !showParticipants;
+                  setShowParticipants(next);
+                  if (next) {
+                    setHasUnreadUsers(false);
+                    setShowChat(false);
+                  }
+                }}
                 className={`p-2 rounded-lg transition-colors text-sm relative ${showParticipants ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
               >
                 <Users className="w-4 h-4" />
+                {hasUnreadUsers && !showParticipants ? (
+                  <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500" />
+                ) : null}
                 {raisedHands.length > 0 && (
                   <span className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 text-black text-[9px] font-bold rounded-full flex items-center justify-center">
                     {raisedHands.length}
@@ -532,10 +755,27 @@ export default function LiveRoom() {
                 )}
               </button>
               <button
-                onClick={() => { setShowChat(!showChat); if (!showChat) setShowParticipants(false); }}
-                className={`p-2 rounded-lg transition-colors text-sm ${showChat ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
+                onClick={() => {
+                  const next = !showChat;
+                  setShowChat(next);
+                  if (next) {
+                    setHasUnreadChat(false);
+                    setShowParticipants(false);
+                  }
+                }}
+                className={`p-2 rounded-lg transition-colors text-sm relative ${showChat ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
               >
                 <MessageSquare className="w-4 h-4" />
+                {hasUnreadChat && !showChat ? (
+                  <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500" />
+                ) : null}
+              </button>
+              <button
+                onClick={toggleFullscreen}
+                className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+              >
+                {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
               </button>
               {isHost ? (
                 <button
@@ -558,8 +798,50 @@ export default function LiveRoom() {
 
           {/* Broadcast / Video Area */}
           <div className="flex-1 flex items-center justify-center bg-black min-h-0 relative">
+            {floatingCards.length > 0 ? (
+              <div className="absolute top-3 left-3 z-40 space-y-2 pointer-events-none">
+                {floatingCards.map((card) => (
+                  <div key={card.id} className="pointer-events-auto w-72 rounded-lg border border-gray-700 bg-[#121212]/95 backdrop-blur px-3 py-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-xs text-yellow-300 capitalize">{card.type}</p>
+                        <p className="text-sm text-gray-100 truncate">{card.title}</p>
+                        {card.subtitle ? <p className="text-xs text-gray-400 truncate">{card.subtitle}</p> : null}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFloatingCards((prev) => prev.filter((item) => item.id !== card.id))}
+                        className="h-6 w-6 rounded-md border border-gray-700 text-gray-300 inline-flex items-center justify-center"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {reactionBursts.length > 0 && (
+              <div className="absolute inset-0 pointer-events-none z-30 overflow-hidden">
+                {reactionBursts.map((burst) => (
+                  <span
+                    key={burst.id}
+                    className="absolute bottom-6 live-reaction-float"
+                    style={{
+                      left: burst.left,
+                      fontSize: `${burst.sizePx}px`,
+                      animationDelay: `${burst.delayMs}ms`,
+                      animationDuration: `${burst.durationMs}ms`,
+                    }}
+                  >
+                    {burst.emoji}
+                  </span>
+                ))}
+              </div>
+            )}
+
             {isHost ? (
-              /* Host panel — never display HLS stream to avoid OBS infinite mirror feedback */
+              /* Host panel with optional delayed self-preview for quality monitoring */
               <div className="flex flex-col items-center justify-center gap-6 p-8 text-center w-full h-full">
                 <div className="flex items-center gap-2">
                   <span className="relative flex h-3 w-3">
@@ -571,6 +853,18 @@ export default function LiveRoom() {
                 <p className="text-gray-400 text-sm max-w-sm leading-relaxed">
                   Your OBS stream is connected and encoding. Click below when everyone has joined and you're ready to start.
                 </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setEnableSelfPreview((prev) => !prev)}
+                    className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded-lg transition-colors flex items-center gap-2"
+                  >
+                    {enableSelfPreview ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {enableSelfPreview ? 'Hide Self Preview' : 'Enable Self Preview'}
+                  </button>
+                  <span className="text-[11px] text-gray-500">
+                    Preview helps verify stream quality (2-5s delayed)
+                  </span>
+                </div>
                 {!broadcastStarted ? (
                   <button
                     onClick={handleStartBroadcast}
@@ -593,6 +887,51 @@ export default function LiveRoom() {
                     </button>
                   </div>
                 )}
+
+                {broadcastStarted && enableSelfPreview && (
+                  <div className="w-full max-w-3xl rounded-xl border border-gray-800 overflow-hidden bg-black">
+                    <div className="px-3 py-2 bg-[#111] border-b border-gray-800 text-left">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs text-gray-300 font-medium">HLS Self Preview</p>
+                          <p className="text-[11px] text-gray-500">If quality drops, restart OBS stream from Go Live setup.</p>
+                        </div>
+                        <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-gray-900 border border-gray-700">
+                          <Gauge className="w-3.5 h-3.5 text-blue-300" />
+                          <select
+                            value={selectedQualityLevel}
+                            onChange={handleQualityChange}
+                            className="bg-transparent text-[11px] text-gray-200 outline-none"
+                            title="Switch self-preview quality"
+                            disabled={qualityLevels.length === 0}
+                          >
+                            <option value={-1}>Auto</option>
+                            {qualityLevels.length === 0 && (
+                              <option value={-1}>Loading qualities...</option>
+                            )}
+                            {qualityLevels
+                              .slice()
+                              .sort((a, b) => b.height - a.height)
+                              .map((level) => (
+                                <option key={`preview-${level.index}`} value={level.index}>
+                                  {level.label}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                    <video
+                      ref={videoRef}
+                      className="w-full aspect-video"
+                      controls
+                      controlsList="nofullscreen noremoteplayback"
+                      autoPlay
+                      muted
+                      playsInline
+                    />
+                  </div>
+                )}
               </div>
             ) : (
               /* Guest: HLS player — only active after host starts broadcast */
@@ -601,6 +940,7 @@ export default function LiveRoom() {
                   ref={videoRef}
                   className="w-full h-full"
                   controls
+                  controlsList="nofullscreen noremoteplayback"
                   autoPlay
                   playsInline
                 />
@@ -615,7 +955,7 @@ export default function LiveRoom() {
           </div>
 
           {/* Bottom actions */}
-          <div className="flex items-center justify-center gap-3 px-4 py-2 bg-[#0a0a0a] border-t border-gray-800">
+          <div className={`flex items-center justify-center gap-3 px-4 py-2 bg-[#0a0a0a] border-t border-gray-800 transition-opacity duration-300 ${isFullscreen && !showUiChrome ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
             <button
               onClick={handleRaiseHand}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
@@ -626,22 +966,30 @@ export default function LiveRoom() {
             >
               <Hand className="w-3.5 h-3.5" /> {handRaised ? 'Lower Hand' : 'Raise Hand'}
             </button>
-            <button
-              onClick={() => handleReaction('👏')}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 text-gray-400 text-xs font-medium rounded-lg hover:bg-gray-700 transition-colors"
-            >
-              <Smile className="w-3.5 h-3.5" /> React
-            </button>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-gray-500 flex items-center gap-1">
+                <Smile className="w-3.5 h-3.5" /> React
+              </span>
+              {LIVE_REACTIONS.map((emoji) => (
+                <button
+                  key={emoji}
+                  onClick={() => handleReaction(emoji)}
+                  className="px-2.5 py-1.5 bg-gray-800 text-gray-300 text-xs font-medium rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
         {/* ── Side Panel (Chat / Participants) ── */}
         {(showChat || showParticipants) && (
-          <div className="w-full lg:w-80 flex flex-col bg-[#0f0f0f] border-l border-gray-800 h-64 lg:h-auto">
+          <div className={`w-full lg:w-80 flex flex-col bg-[#0f0f0f] border-l border-gray-800 h-64 lg:h-auto transition-opacity duration-300 ${isFullscreen && !showUiChrome ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
             {/* Panel Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
               <h3 className="text-white text-sm font-semibold">
-                {showParticipants ? `Participants (${participants.length})` : 'Live Chat'}
+                {showParticipants ? `Participants (${totalOnline})` : 'Live Chat'}
               </h3>
               <button onClick={() => { setShowChat(false); setShowParticipants(false); }} className="p-1 rounded text-gray-500 hover:text-white">
                 <ChevronDown className="w-4 h-4 lg:hidden" />
@@ -658,7 +1006,7 @@ export default function LiveRoom() {
                     <p className="text-yellow-400 text-[10px] font-semibold uppercase px-2 mb-1">Raised Hands</p>
                     {raisedHands.map((h, i) => (
                       <div key={h.userId || i} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-yellow-600/10 border border-yellow-600/20 mb-1">
-                        <Hand className="w-3.5 h-3.5 text-yellow-400 flex-shrink-0" />
+                        <Hand className="w-3.5 h-3.5 text-yellow-400 shrink-0" />
                         <p className="text-yellow-300 text-xs truncate flex-1">{h.name}</p>
                         {isHost && (
                           <button onClick={() => handleLowerHand(h.userId)} className="text-gray-500 hover:text-white text-[10px]">
@@ -710,7 +1058,7 @@ export default function LiveRoom() {
                     ) : (
                       <div key={i} className="group">
                         <div className="flex items-start gap-2">
-                          <div className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-[10px] text-white font-medium flex-shrink-0 mt-0.5">
+                          <div className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-[10px] text-white font-medium shrink-0 mt-0.5">
                             {(msg.senderName || msg.sender?.name || '?')[0]?.toUpperCase()}
                           </div>
                           <div className="min-w-0">
@@ -720,7 +1068,7 @@ export default function LiveRoom() {
                                 {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                               </span>
                             </div>
-                            <p className="text-gray-400 text-xs break-words">{msg.message || msg.text}</p>
+                            <p className="text-gray-400 text-xs wrap-break-word">{msg.message || msg.text}</p>
                           </div>
                         </div>
                       </div>
@@ -755,6 +1103,33 @@ export default function LiveRoom() {
           </div>
         )}
       </div>
+
+      <style>{`
+        .live-reaction-float {
+          animation-name: liveReactionFloat;
+          animation-timing-function: ease-out;
+          animation-fill-mode: forwards;
+          opacity: 0;
+          filter: drop-shadow(0 2px 8px rgba(0,0,0,0.45));
+        }
+
+        @keyframes liveReactionFloat {
+          0% {
+            transform: translateY(0) scale(0.7);
+            opacity: 0;
+          }
+
+          15% {
+            opacity: 1;
+          }
+
+          100% {
+            transform: translateY(-240px) scale(1.2);
+            opacity: 0;
+          }
+        }
+      `}</style>
+
     </InstructorLayout>
   );
 }

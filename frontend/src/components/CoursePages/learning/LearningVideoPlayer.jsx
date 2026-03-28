@@ -12,6 +12,7 @@ import {
   RotateCw,
   ChevronDown,
   Check,
+  Gauge,
 } from "lucide-react";
 
 const PLAYBACK_RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 5];
@@ -23,6 +24,13 @@ export default function LearningVideoPlayer({
   startAt = 0,
   onProgress,
   onEnded,
+  isLive = false,
+  topOverlay = null,
+  floatingOverlay = null,
+  effectsOverlay = null,
+  fullscreenSidePanel = null,
+  fullscreenOverlay = null,
+  onFullscreenChange,
 }) {
   const containerRef = useRef(null);
   const videoRef = useRef(null);
@@ -30,6 +38,7 @@ export default function LearningVideoPlayer({
   const startAppliedRef = useRef(false);
   const hideControlsTimerRef = useRef(null);
   const speedMenuRef = useRef(null);
+  const qualityMenuRef = useRef(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -40,6 +49,9 @@ export default function LearningVideoPlayer({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
+  const [isQualityMenuOpen, setIsQualityMenuOpen] = useState(false);
+  const [qualityLevels, setQualityLevels] = useState([]);
+  const [selectedQualityLevel, setSelectedQualityLevel] = useState(-1); // -1 = Auto
 
 
   //New userffect for auto rotate and fullscreen change detection
@@ -54,12 +66,14 @@ export default function LearningVideoPlayer({
 }, [isFullscreen]);
   useEffect(() => {
     const onFullScreenChange = () => {
-      setIsFullscreen(Boolean(document.fullscreenElement));
+      const nextIsFullscreen = Boolean(document.fullscreenElement);
+      setIsFullscreen(nextIsFullscreen);
+      onFullscreenChange?.(nextIsFullscreen);
     };
 
     document.addEventListener("fullscreenchange", onFullScreenChange);
     return () => document.removeEventListener("fullscreenchange", onFullScreenChange);
-  }, []);
+  }, [onFullscreenChange]);
 
 //   useEffect(() => {
 //     const container = containerRef.current;
@@ -166,9 +180,26 @@ export default function LearningVideoPlayer({
     const isHls = /\.m3u8(\?|$)/i.test(sourceUrl);
 
     if (isHls && Hls.isSupported()) {
-      const hls = new Hls({ enableWorker: true, autoStartLoad: true });
+      const hls = new Hls({
+        enableWorker: true,
+        autoStartLoad: true,
+        lowLatencyMode: isLive,
+        backBufferLength: isLive ? 0 : undefined,
+      });
       hls.loadSource(sourceUrl);
       hls.attachMedia(video);
+
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        const levels = (hls.levels || []).map((level, index) => ({
+          index,
+          height: level.height,
+          bitrate: level.bitrate,
+          label: level.height ? `${level.height}p` : `Level ${index + 1}`,
+        }));
+        setQualityLevels(levels);
+        setSelectedQualityLevel(-1);
+      });
+
       hlsRef.current = hls;
     } else {
       video.src = sourceUrl;
@@ -180,7 +211,7 @@ export default function LearningVideoPlayer({
         hlsRef.current = null;
       }
     };
-  }, [sourceUrl]);
+  }, [sourceUrl, isLive]);
 
   useEffect(() => {
     if (!videoRef.current) return;
@@ -210,6 +241,58 @@ export default function LearningVideoPlayer({
       document.removeEventListener("keydown", handleEscape);
     };
   }, [isSpeedMenuOpen]);
+
+  useEffect(() => {
+    if (!isQualityMenuOpen) return;
+
+    const handleOutsidePress = (event) => {
+      if (!qualityMenuRef.current?.contains(event.target)) {
+        setIsQualityMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        setIsQualityMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handleOutsidePress);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("pointerdown", handleOutsidePress);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isQualityMenuOpen]);
+
+  const handleQualityChange = useCallback((levelIndex) => {
+    const hls = hlsRef.current;
+    const video = videoRef.current;
+    if (!hls) return;
+
+    if (levelIndex === -1) {
+      hls.currentLevel = -1;
+      hls.nextLevel = -1;
+      hls.loadLevel = -1;
+      setSelectedQualityLevel(-1);
+      return;
+    }
+
+    hls.nextLevel = levelIndex;
+    hls.currentLevel = levelIndex;
+    setSelectedQualityLevel(levelIndex);
+
+    if (isLive && video && hls.liveSyncPosition != null) {
+      video.currentTime = hls.liveSyncPosition;
+    }
+  }, [isLive]);
+
+  const selectedQualityLabel = useMemo(() => {
+    if (selectedQualityLevel === -1) return "Auto";
+    const selected = qualityLevels.find((q) => q.index === selectedQualityLevel);
+    return selected?.label || "Auto";
+  }, [qualityLevels, selectedQualityLevel]);
 
   const applyStartTime = useCallback(() => {
     const video = videoRef.current;
@@ -356,20 +439,29 @@ export default function LearningVideoPlayer({
       ref={containerRef}
     //   className="group relative rounded-2xl overflow-hidden border border-gray-800 bg-black w-full"
     className={`group relative overflow-hidden bg-black w-full 
-  ${isFullscreen ? "fixed inset-0 z-9999 rounded-none" : "rounded-2xl border border-gray-800"}`}
-      style={{ maxWidth: "100%" }}
+  ${isFullscreen ? "fixed inset-0 rounded-none" : "rounded-2xl border border-gray-800"}`}
+      style={{ maxWidth: "100%", zIndex: isFullscreen ? 9999 : "auto" }}
     >
       {/* <div className="relative w-full bg-black aspect-video"> */}
       <div
-  className={`relative bg-black flex items-center justify-center overflow-hidden 
+  className={`relative bg-black flex items-center overflow-hidden 
+  ${isFullscreen && fullscreenSidePanel ? "justify-start" : "justify-center"}
   ${isFullscreen ? "h-screen w-screen" : "aspect-video w-full"}`}
 >
+        
+        {/** keep container full-width and only shrink the video box when side panel is open */}
         <video
           ref={videoRef}
         //   className="w-full h-full"
         //   className="w-full h-full object-contain"
-        className={`w-full h-full transition-[object-fit] duration-200 
-${isFullscreen ? "object-cover" : "object-contain"}`}
+        className={`h-full transition-[object-fit,width] duration-200 
+      ${isFullscreen && fullscreenSidePanel ? "w-auto" : "w-full"}
+      ${isFullscreen ? "object-contain" : "object-contain"}`}
+          style={
+            isFullscreen && fullscreenSidePanel
+              ? { width: "calc(100% - min(42vw, 330px) - 16px)" }
+              : undefined
+          }
           poster={poster}
           playsInline
           onLoadedMetadata={handleLoadedMetadata}
@@ -396,6 +488,43 @@ ${isFullscreen ? "object-cover" : "object-contain"}`}
             )}
           </div>
         </button>
+
+        {topOverlay && (
+          <div
+            className={`absolute top-0 left-0 right-0 z-20 px-3 sm:px-4 py-3 transition-all duration-300 ${
+              showControls ? "translate-y-0 opacity-100" : "-translate-y-full opacity-0"
+            }`}
+          >
+            {topOverlay}
+          </div>
+        )}
+
+        {floatingOverlay && (
+          <div
+            className={`absolute left-0 right-0 z-20 px-3 sm:px-4 pb-2 transition-all duration-300 ${
+              showControls ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
+            }`}
+            style={{ bottom: "78px" }}
+          >
+            {floatingOverlay}
+          </div>
+        )}
+
+        {effectsOverlay && (
+          <div className="absolute inset-0 z-25 pointer-events-none overflow-hidden">
+            {effectsOverlay}
+          </div>
+        )}
+
+        {isFullscreen && fullscreenSidePanel && (
+          <div className="absolute right-3 top-16 bottom-24 z-30 w-82.5 max-w-[42vw] pointer-events-auto">
+            {fullscreenSidePanel}
+          </div>
+        )}
+
+        {isFullscreen && fullscreenOverlay && (
+          <div className="absolute inset-0 z-40 pointer-events-auto">{fullscreenOverlay}</div>
+        )}
       </div>
 {/* 
       <div
@@ -481,6 +610,85 @@ ${isFullscreen ? "object-cover" : "object-contain"}`}
 
           {/* Secondary Controls */}
           <div className="flex items-center gap-1.5 sm:gap-3 w-full sm:w-auto sm:ml-auto">
+            {qualityLevels.length > 0 && (
+              <div ref={qualityMenuRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsQualityMenuOpen((prev) => !prev)}
+                  className={`group flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs sm:text-sm font-semibold transition-all duration-200 ease-out active:scale-95 active:translate-y-px touch-manipulation ${
+                    isQualityMenuOpen
+                      ? "border-blue-300 bg-blue-400/20 text-blue-100"
+                      : "border-blue-400/70 bg-blue-500/15 text-blue-100 hover:bg-blue-500/25"
+                  }`}
+                  aria-label="Playback quality"
+                  aria-haspopup="listbox"
+                  aria-expanded={isQualityMenuOpen}
+                >
+                  <Gauge className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Quality</span>
+                  <span className="min-w-11 text-left">{selectedQualityLabel}</span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 transition-transform duration-200 ${isQualityMenuOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+
+                <div
+                  className={`absolute bottom-full right-0 mb-2 w-44 rounded-2xl border border-blue-300/30 bg-black/95 shadow-[0_18px_42px_rgba(0,0,0,0.6)] backdrop-blur-sm transition-all duration-200 origin-bottom-right z-30 ${
+                    isQualityMenuOpen
+                      ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
+                      : "opacity-0 translate-y-2 scale-95 pointer-events-none"
+                  }`}
+                >
+                  <div className="p-1.5" role="listbox" aria-label="Playback quality options">
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={selectedQualityLevel === -1}
+                      onClick={() => {
+                        handleQualityChange(-1);
+                        setIsQualityMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition-all duration-150 ease-out active:scale-[0.98] active:translate-y-px ${
+                        selectedQualityLevel === -1
+                          ? "bg-blue-500/30 text-blue-100"
+                          : "text-white hover:bg-blue-500/20 cursor-pointer"
+                      }`}
+                    >
+                      <span>Auto (Adaptive)</span>
+                      <Check className={`w-3.5 h-3.5 transition-opacity duration-150 ${selectedQualityLevel === -1 ? "opacity-100" : "opacity-0"}`} />
+                    </button>
+
+                    {qualityLevels
+                      .slice()
+                      .sort((a, b) => b.height - a.height)
+                      .map((level) => {
+                        const isSelected = selectedQualityLevel === level.index;
+                        return (
+                          <button
+                            key={level.index}
+                            type="button"
+                            role="option"
+                            aria-selected={isSelected}
+                            onClick={() => {
+                              handleQualityChange(level.index);
+                              setIsQualityMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition-all duration-150 ease-out active:scale-[0.98] active:translate-y-px ${
+                              isSelected
+                                ? "bg-blue-500/30 text-blue-100"
+                                : "text-white hover:bg-blue-500/20 cursor-pointer"
+                            }`}
+                          >
+                            <span>{level.label}</span>
+                            <Check className={`w-3.5 h-3.5 transition-opacity duration-150 ${isSelected ? "opacity-100" : "opacity-0"}`} />
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div ref={speedMenuRef} className="relative">
               <button
                 type="button"

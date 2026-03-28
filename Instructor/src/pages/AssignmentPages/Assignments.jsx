@@ -1,16 +1,21 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
-  ClipboardList, Search, RefreshCw, AlertTriangle, ChevronLeft, ChevronRight,
-  BookOpen, Clock, Users, Filter, Send,
+  ClipboardList, RefreshCw, AlertTriangle, ChevronLeft, ChevronRight,
+  BookOpen, Clock, Send, X, Link as LinkIcon, FileText,
 } from 'lucide-react';
 import { InstructorLayout } from '../../components/layout/InstructorLayout';
 import {
   getMyAssignments, getPendingSubmissions,
+  getAssignmentSubmissions, gradeSubmission, returnSubmissionForRevision, reportSuspiciousSubmission,
   selectAssignments, selectAssignmentPagination, selectAssignmentsLoading, selectAssignmentsError,
   selectPendingSubmissions, selectPendingSubmissionsLoading,
+  selectAssignmentSubmissions, selectAssignmentSubmissionsLoading, selectAssignmentSubmissionsError,
+  selectAssignmentActionLoading, selectAssignmentActionError, selectAssignmentActionSuccess,
+  clearAssignmentActionState,
 } from '../../redux/slices/assignment.slice';
 import { useProtectedRoute, useTokenRefreshOnActivity } from '../../hooks/useProtectedRoute';
+import apiClient from '../../utils/api.utils';
 
 export default function Assignments() {
   const dispatch = useDispatch();
@@ -20,9 +25,21 @@ export default function Assignments() {
   const error = useSelector(selectAssignmentsError);
   const pendingSubmissions = useSelector(selectPendingSubmissions);
   const pendingLoading = useSelector(selectPendingSubmissionsLoading);
+  const assignmentSubmissions = useSelector(selectAssignmentSubmissions);
+  const assignmentSubmissionsLoading = useSelector(selectAssignmentSubmissionsLoading);
+  const assignmentSubmissionsError = useSelector(selectAssignmentSubmissionsError);
+  const actionLoading = useSelector(selectAssignmentActionLoading);
+  const actionError = useSelector(selectAssignmentActionError);
+  const actionSuccess = useSelector(selectAssignmentActionSuccess);
 
   const [page, setPage] = useState(1);
   const [tab, setTab] = useState('assignments'); // 'assignments' | 'submissions'
+  const [selectedAssignment, setSelectedAssignment] = useState(null);
+  const [selectedSubmission, setSelectedSubmission] = useState(null);
+  const [gradeScore, setGradeScore] = useState('');
+  const [gradeNote, setGradeNote] = useState('');
+  const [reportReason, setReportReason] = useState('');
+  const [reportFiles, setReportFiles] = useState([]);
 
   useProtectedRoute();
   useTokenRefreshOnActivity();
@@ -35,6 +52,103 @@ export default function Assignments() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (!actionSuccess && !actionError) return;
+    console.debug('[InstructorAssignments] submission action result', { actionSuccess, actionError });
+  }, [actionError, actionSuccess]);
+
+  const openAssignmentSubmissions = useCallback((assignment) => {
+    setSelectedAssignment(assignment);
+    setSelectedSubmission(null);
+    dispatch(clearAssignmentActionState());
+    console.debug('[InstructorAssignments] loading submissions for assignment', assignment?._id);
+    dispatch(getAssignmentSubmissions({ assignmentId: assignment._id }));
+  }, [dispatch]);
+
+  const openSubmissionReview = useCallback(async (submission) => {
+    dispatch(clearAssignmentActionState());
+    console.debug('[InstructorAssignments] opening submission review', submission?._id);
+
+    try {
+      const needsDetails = !submission?.content;
+      const detail = needsDetails
+        ? (await apiClient.get(`/submissions/instructor/${submission._id}`))?.data?.data
+        : submission;
+
+      setSelectedSubmission(detail);
+      setGradeScore(detail?.score ?? '');
+      setGradeNote(detail?.instructorFeedback || '');
+      setReportReason('');
+      setReportFiles([]);
+    } catch (err) {
+      console.error('[InstructorAssignments] failed to load submission detail', err);
+    }
+  }, [dispatch]);
+
+  const closeSubmissionReview = () => {
+    setSelectedSubmission(null);
+    setGradeScore('');
+    setGradeNote('');
+    setReportReason('');
+    setReportFiles([]);
+  };
+
+  const refreshSelectedAssignmentSubmissions = useCallback(() => {
+    if (!selectedAssignment?._id) return;
+    dispatch(getAssignmentSubmissions({ assignmentId: selectedAssignment._id }));
+  }, [dispatch, selectedAssignment]);
+
+  const onGradeSubmit = async () => {
+    if (!selectedSubmission?._id) return;
+    const score = Number(gradeScore);
+    if (!Number.isFinite(score) || score < 0 || score > 100) return;
+
+    const result = await dispatch(gradeSubmission({
+      submissionId: selectedSubmission._id,
+      payload: {
+        score,
+        feedback: gradeNote,
+      },
+    }));
+
+    if (!result.error) {
+      refreshSelectedAssignmentSubmissions();
+      fetchData();
+      closeSubmissionReview();
+    }
+  };
+
+  const onReturnForRevision = async () => {
+    if (!selectedSubmission?._id) return;
+    const result = await dispatch(returnSubmissionForRevision({
+      submissionId: selectedSubmission._id,
+      feedback: gradeNote || 'Please revise and resubmit.',
+    }));
+
+    if (!result.error) {
+      refreshSelectedAssignmentSubmissions();
+      fetchData();
+      closeSubmissionReview();
+    }
+  };
+
+  const onReportSuspicious = async () => {
+    if (!selectedSubmission?._id) return;
+    if (!reportReason.trim() || reportReason.trim().length < 10) return;
+
+    const result = await dispatch(reportSuspiciousSubmission({
+      submissionId: selectedSubmission._id,
+      reason: reportReason.trim(),
+      evidenceFiles: reportFiles,
+    }));
+
+    if (!result.error) {
+      refreshSelectedAssignmentSubmissions();
+      fetchData();
+      closeSubmissionReview();
+    }
+  };
 
   if (error && !assignments.length) {
     return (
@@ -105,7 +219,7 @@ export default function Assignments() {
           loading && !assignments.length ? (
             <div className="space-y-3">
               {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="bg-[#111] border border-gray-800 rounded-xl p-5 animate-pulse h-[100px]" />
+                <div key={i} className="bg-[#111] border border-gray-800 rounded-xl p-5 animate-pulse h-25" />
               ))}
             </div>
           ) : assignments.length > 0 ? (
@@ -122,6 +236,12 @@ export default function Assignments() {
                         {assignment.maxScore && <span>Max Score: {assignment.maxScore}</span>}
                       </div>
                     </div>
+                    <button
+                      onClick={() => openAssignmentSubmissions(assignment)}
+                      className="px-3 py-2 rounded-lg border border-gray-700 text-gray-200 text-xs hover:border-gray-500"
+                    >
+                      View Submissions
+                    </button>
                   </div>
                 </div>
               ))}
@@ -140,7 +260,7 @@ export default function Assignments() {
           pendingLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="bg-[#111] border border-gray-800 rounded-xl p-5 animate-pulse h-[90px]" />
+                <div key={i} className="bg-[#111] border border-gray-800 rounded-xl p-5 animate-pulse h-22.5" />
               ))}
             </div>
           ) : pendingSubmissions.length > 0 ? (
@@ -161,13 +281,19 @@ export default function Assignments() {
                         </p>
                       </div>
                     </div>
-                    <div className="text-right flex-shrink-0">
+                    <div className="text-right shrink-0">
                       <span className="text-xs text-gray-500">
                         {sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '—'}
                       </span>
                       {sub.assignment?.maxScore && (
                         <p className="text-xs text-gray-600 mt-0.5">Max: {sub.assignment.maxScore}</p>
                       )}
+                      <button
+                        onClick={() => openSubmissionReview(sub)}
+                        className="mt-2 px-3 py-1.5 rounded-lg text-xs border border-gray-700 text-gray-200 hover:border-gray-500"
+                      >
+                        Review
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -192,6 +318,169 @@ export default function Assignments() {
             <button onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))} disabled={page >= pagination.totalPages} className="p-2 rounded-lg bg-[#111] border border-gray-800 text-gray-400 hover:text-white hover:border-gray-600 transition-colors disabled:opacity-30">
               <ChevronRight className="w-4 h-4" />
             </button>
+          </div>
+        )}
+
+        {selectedAssignment && (
+          <div className="fixed inset-0 z-40 bg-black/70 flex items-center justify-center p-4">
+            <div className="w-full max-w-5xl max-h-[85vh] overflow-hidden rounded-xl border border-gray-800 bg-[#0f0f10]">
+              <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-500">Submissions</p>
+                  <h3 className="text-white font-semibold">{selectedAssignment.title}</h3>
+                </div>
+                <button onClick={() => setSelectedAssignment(null)} className="p-2 rounded-lg hover:bg-gray-800 text-gray-300">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-3 overflow-y-auto max-h-[70vh]">
+                {assignmentSubmissionsLoading && <p className="text-sm text-gray-400">Loading submissions...</p>}
+                {!assignmentSubmissionsLoading && assignmentSubmissionsError && (
+                  <p className="text-sm text-red-400">{assignmentSubmissionsError}</p>
+                )}
+                {!assignmentSubmissionsLoading && !assignmentSubmissionsError && assignmentSubmissions.length === 0 && (
+                  <p className="text-sm text-gray-500">No submissions available for this assignment.</p>
+                )}
+
+                {assignmentSubmissions.map((sub) => (
+                  <div key={sub._id} className="rounded-xl border border-gray-800 p-4 bg-[#131316] flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm text-white font-medium">{sub.user?.firstName} {sub.user?.lastName}</p>
+                      <p className="text-xs text-gray-500 mt-1">Status: {sub.status} | Attempt: {sub.attemptNumber || 1}</p>
+                    </div>
+                    <button
+                      onClick={() => openSubmissionReview(sub)}
+                      className="px-3 py-1.5 rounded-lg text-xs border border-gray-700 text-gray-200 hover:border-gray-500"
+                    >
+                      Review
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {selectedSubmission && (
+          <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+            <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-xl border border-gray-800 bg-[#0e0f10]">
+              <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-500">Submission Review</p>
+                  <h3 className="text-white font-semibold">{selectedSubmission.assignment?.title || 'Assignment'}</h3>
+                </div>
+                <button onClick={closeSubmissionReview} className="p-2 rounded-lg hover:bg-gray-800 text-gray-300">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-5 grid gap-5">
+                {actionError && <p className="text-sm text-red-400">{actionError}</p>}
+                {actionSuccess && <p className="text-sm text-green-400">{actionSuccess}</p>}
+
+                <div className="rounded-xl border border-gray-800 p-4 bg-[#151517]">
+                  <p className="text-xs text-gray-500 mb-2">Student</p>
+                  <p className="text-sm text-white">{selectedSubmission.user?.firstName} {selectedSubmission.user?.lastName} ({selectedSubmission.user?.email})</p>
+                  <p className="text-xs text-gray-500 mt-2">Status: {selectedSubmission.status} | Submitted: {selectedSubmission.submittedAt ? new Date(selectedSubmission.submittedAt).toLocaleString() : 'N/A'}</p>
+                </div>
+
+                <div className="rounded-xl border border-gray-800 p-4 bg-[#151517]">
+                  <p className="text-xs text-gray-500 mb-2">Text</p>
+                  <p className="text-sm text-gray-200 whitespace-pre-wrap">{selectedSubmission.content?.text || 'No text submitted.'}</p>
+                </div>
+
+                <div className="rounded-xl border border-gray-800 p-4 bg-[#151517]">
+                  <p className="text-xs text-gray-500 mb-2">Links</p>
+                  {(selectedSubmission.content?.links || []).length === 0 && <p className="text-sm text-gray-500">No links submitted.</p>}
+                  {(selectedSubmission.content?.links || []).map((link, index) => (
+                    <a
+                      key={`${link.url}-${index}`}
+                      href={link.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-2 text-sm text-blue-300 hover:text-blue-200"
+                    >
+                      <LinkIcon className="w-3.5 h-3.5" /> {link.title || link.url}
+                    </a>
+                  ))}
+                </div>
+
+                <div className="rounded-xl border border-gray-800 p-4 bg-[#151517]">
+                  <p className="text-xs text-gray-500 mb-2">Files</p>
+                  {(selectedSubmission.content?.files || []).length === 0 && <p className="text-sm text-gray-500">No files submitted.</p>}
+                  {(selectedSubmission.content?.files || []).map((file, index) => (
+                    <a
+                      key={`${file.url}-${index}`}
+                      href={file.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-2 text-sm text-yellow-300 hover:text-yellow-200"
+                    >
+                      <FileText className="w-3.5 h-3.5" /> {file.name || `File ${index + 1}`}
+                    </a>
+                  ))}
+                </div>
+
+                <div className="rounded-xl border border-gray-800 p-4 bg-[#151517] grid gap-3">
+                  <p className="text-xs text-gray-500">Grading</p>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <input
+                      value={gradeScore}
+                      onChange={(e) => setGradeScore(e.target.value)}
+                      placeholder="Score (0-100)"
+                      className="px-3 py-2 rounded-lg bg-black/40 border border-gray-700 text-sm text-gray-200"
+                    />
+                    <input
+                      value={gradeNote}
+                      onChange={(e) => setGradeNote(e.target.value)}
+                      placeholder="Feedback note"
+                      className="px-3 py-2 rounded-lg bg-black/40 border border-gray-700 text-sm text-gray-200"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      disabled={actionLoading}
+                      onClick={onGradeSubmit}
+                      className="px-4 py-2 rounded-lg bg-white text-black text-xs font-semibold disabled:opacity-60"
+                    >
+                      {actionLoading ? 'Saving...' : 'Save Grade'}
+                    </button>
+                    <button
+                      disabled={actionLoading}
+                      onClick={onReturnForRevision}
+                      className="px-4 py-2 rounded-lg border border-gray-700 text-gray-100 text-xs disabled:opacity-60"
+                    >
+                      Return For Revision
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-red-900/50 p-4 bg-red-950/20 grid gap-3">
+                  <p className="text-xs text-red-300">Suspicious Content Report</p>
+                  <textarea
+                    value={reportReason}
+                    onChange={(e) => setReportReason(e.target.value)}
+                    rows={3}
+                    placeholder="Describe why this submission is suspicious..."
+                    className="px-3 py-2 rounded-lg bg-black/40 border border-red-900/50 text-sm text-gray-200"
+                  />
+                  <input
+                    type="file"
+                    multiple
+                    onChange={(e) => setReportFiles(Array.from(e.target.files || []))}
+                    className="text-xs text-gray-300"
+                  />
+                  <button
+                    disabled={actionLoading || reportReason.trim().length < 10}
+                    onClick={onReportSuspicious}
+                    className="w-fit px-4 py-2 rounded-lg bg-red-500 text-white text-xs font-semibold disabled:opacity-60"
+                  >
+                    Report And Temporary Lock
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

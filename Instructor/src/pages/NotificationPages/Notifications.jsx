@@ -2,7 +2,7 @@ import { useEffect, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   Bell, RefreshCw, Check, CheckCheck, Trash2, MessageCircle, BookOpen, DollarSign,
-  Award, Star, Users, Video, Megaphone
+  Award, Star, Users, Video, Megaphone, AlertTriangle, Shield
 } from 'lucide-react';
 import { InstructorLayout } from '../../components/layout/InstructorLayout';
 import {
@@ -14,12 +14,18 @@ const typeIcons = {
   new_enrollment: Users,
   new_review: Star,
   assignment_submission: BookOpen,
+  assignment_reported: AlertTriangle,
+  assignment_moderation_update: Shield,
   discussion_reply: MessageCircle,
   announcement: Megaphone,
   payout_update: DollarSign,
   course_published: BookOpen,
   certificate_issued: Award,
   live_class_reminder: Video,
+  doubt_ticket_created: MessageCircle,
+  doubt_ticket_accepted: MessageCircle,
+  doubt_ticket_resolved: Check,
+  doubt_saturday_session_reminder: Bell,
   general: Bell,
 };
 
@@ -27,9 +33,15 @@ const typeColors = {
   new_enrollment: 'text-blue-400 bg-blue-400/10',
   new_review: 'text-yellow-400 bg-yellow-400/10',
   assignment_submission: 'text-purple-400 bg-purple-400/10',
+  assignment_reported: 'text-red-400 bg-red-400/10',
+  assignment_moderation_update: 'text-cyan-400 bg-cyan-400/10',
   discussion_reply: 'text-green-400 bg-green-400/10',
   announcement: 'text-orange-400 bg-orange-400/10',
   payout_update: 'text-emerald-400 bg-emerald-400/10',
+  doubt_ticket_created: 'text-amber-400 bg-amber-400/10',
+  doubt_ticket_accepted: 'text-blue-400 bg-blue-400/10',
+  doubt_ticket_resolved: 'text-green-400 bg-green-400/10',
+  doubt_saturday_session_reminder: 'text-violet-400 bg-violet-400/10',
   general: 'text-gray-400 bg-gray-400/10',
 };
 

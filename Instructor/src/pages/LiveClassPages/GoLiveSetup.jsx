@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Radio, Copy, CheckCircle, AlertTriangle, Wifi, WifiOff,
-  ArrowLeft, Play, Settings, Monitor, RefreshCw,
+  ArrowLeft, Play, Settings, Monitor, RefreshCw, Zap, Video,
 } from 'lucide-react';
 import { InstructorLayout } from '../../components/layout/InstructorLayout';
 import {
@@ -14,6 +14,7 @@ import {
   selectMutationLoading, selectMutationSuccess, selectMutationError,
 } from '../../redux/slices/liveclass.slice';
 import { useProtectedRoute, useTokenRefreshOnActivity } from '../../hooks/useProtectedRoute';
+import { MINIMUM_QUALITY, OBS_RECOMMENDED_SETTINGS } from '../../constants/liveclass';
 
 const POLL_INTERVAL = 4000; // 4 seconds
 
@@ -78,6 +79,16 @@ export default function GoLiveSetup() {
   }, [mutSuccess, id, navigate, dispatch]);
 
   const connected = streamStatus?.connected || false;
+  const cfState = streamStatus?.cfStatus || 'unknown';
+
+  const disconnectedReason = (() => {
+    if (connected) return '';
+    if (cfState === 'idle' || cfState === 'disconnected') return 'OBS is not streaming yet. Start stream in OBS and keep this page open.';
+    if (cfState === 'reconnecting') return 'Stream is reconnecting. Hold for a few seconds.';
+    if (cfState === 'no_input') return 'No Cloudflare live input is configured for this session.';
+    if (cfState === 'error') return streamStatus?.error || 'Could not read stream status from Cloudflare.';
+    return 'Waiting for OBS connection...';
+  })();
 
   const copyText = useCallback((text, key) => {
     navigator.clipboard.writeText(text);
@@ -129,6 +140,8 @@ export default function GoLiveSetup() {
                     <p className="text-gray-600 text-xs">
                       {streamStatusLoading && pollCount <= 1 ? 'Checking...' : `Polling every ${POLL_INTERVAL / 1000}s • Check #${pollCount}`}
                     </p>
+                    <p className="text-gray-500 text-xs mt-1">State: {cfState}</p>
+                    {disconnectedReason ? <p className="text-amber-300/80 text-xs mt-1">{disconnectedReason}</p> : null}
                   </div>
                 </>
               )}
@@ -200,6 +213,56 @@ export default function GoLiveSetup() {
               <li>Click <span className="text-white font-medium">Go Live</span> below to notify viewers</li>
             </ol>
           </div>
+
+          {/* Quality Requirements Banner */}
+          <div className="mt-4 p-3 bg-blue-500/10 rounded-lg border border-blue-500/30 space-y-3">
+            <div className="flex items-start gap-2">
+              <Video className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <h4 className="text-blue-400 text-xs font-semibold mb-2">Minimum Quality Requirements</h4>
+                <p className="text-gray-400 text-[11px] mb-2">
+                  Your stream must meet these minimum standards for optimal student experience:
+                </p>
+                <div className="grid grid-cols-2 gap-2 text-[11px] text-gray-300">
+                  <div className="flex items-center gap-1">
+                    <span className="text-green-400">✓</span>
+                    <span><strong>Resolution:</strong> {MINIMUM_QUALITY.resolution}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-green-400">✓</span>
+                    <span><strong>Frame Rate:</strong> {MINIMUM_QUALITY.fps} fps</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-green-400">✓</span>
+                    <span><strong>Bitrate:</strong> {MINIMUM_QUALITY.minBitrate}+ kbps</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-green-400">✓</span>
+                    <span><strong>Recommended:</strong> {MINIMUM_QUALITY.recommendedBitrate} kbps</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* OBS Recommended Settings */}
+          <div className="mt-4 p-3 bg-[#0a0a0a] rounded-lg border border-gray-800/50 space-y-2">
+            <div className="flex items-center gap-2 mb-2">
+              <Zap className="w-4 h-4 text-yellow-500" />
+              <h4 className="text-gray-400 text-xs font-semibold">OBS Quality Settings</h4>
+            </div>
+            <div className="space-y-2">
+              {OBS_RECOMMENDED_SETTINGS.map((setting, idx) => (
+                <div key={idx} className="flex flex-col gap-0.5 pb-2 border-b border-gray-800/30 last:border-b-0 last:pb-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400 text-[11px] font-medium">{setting.label}</span>
+                    <span className="text-green-400 text-[11px] font-mono">{setting.value}</span>
+                  </div>
+                  <p className="text-gray-600 text-[10px]">{setting.note}</p>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Error */}
@@ -231,6 +294,11 @@ export default function GoLiveSetup() {
         <p className="text-center text-gray-600 text-[11px]">
           Clicking "Go Live" will mark the session as live, notify all enrolled students, and start the live room.
         </p>
+        {!connected && streamStatus?.troubleshooting ? (
+          <p className="text-center text-gray-500 text-[11px]">
+            {streamStatus.troubleshooting}
+          </p>
+        ) : null}
       </div>
     </InstructorLayout>
   );

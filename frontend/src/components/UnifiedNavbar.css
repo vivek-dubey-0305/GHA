@@ -57,8 +57,27 @@
   position: relative;
   display: flex;
   align-items: center;
+  gap: 8px;
   flex: 1;
   max-width: 500px;
+}
+
+.un-search-scope {
+  flex-shrink: 0;
+  background: var(--un-surface);
+  border: 1px solid var(--un-border-dim);
+  color: var(--un-white);
+  padding: 9px 10px;
+  font-size: 0.72rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  font-family: 'DM Sans', sans-serif;
+  outline: none;
+  clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
+}
+
+.un-search-scope:focus {
+  border-color: var(--un-yellow);
 }
 
 .un-search-ico {
@@ -70,6 +89,7 @@
 }
 
 .un-search {
+  flex: 1;
   width: 100%;
   background: var(--un-surface);
   border: 1px solid var(--un-border-dim);
@@ -107,6 +127,25 @@
   color: var(--un-yellow);
 }
 
+.un-search-submit {
+  flex-shrink: 0;
+  background: var(--un-yellow);
+  color: var(--un-black);
+  border: none;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  padding: 10px 12px;
+  cursor: pointer;
+  clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
+  transition: background 0.2s;
+}
+
+.un-search-submit:hover {
+  background: #fff;
+}
+
 /* ── NAVIGATION LINKS ── */
 .un-nav-links {
   display: flex;
@@ -137,22 +176,6 @@
 
 .un-nav-link.active {
   color: var(--un-yellow);
-}
-
-/* ── RESULT COUNT ── */
-.un-result-count {
-  font-family: 'Space Mono', monospace;
-  font-size: 0.65rem;
-  color: var(--un-grey);
-  letter-spacing: 2px;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.un-result-count em {
-  color: var(--un-yellow);
-  font-style: normal;
-  font-weight: 700;
 }
 
 /* ── BACK BUTTON ── */
@@ -313,6 +336,16 @@
     min-width: 0;
   }
 
+  .un-search-scope {
+    padding: 8px 8px;
+    font-size: 0.66rem;
+    max-width: 124px;
+  }
+
+  .un-search-submit {
+    padding: 8px 10px;
+  }
+
   .un-nav-links {
     display: none;
   }
@@ -320,10 +353,6 @@
   .un-mobile-toggle {
     display: flex;
     margin-left: auto;
-  }
-
-  .un-result-count {
-    display: none;
   }
 
   .un-back-btn {
@@ -354,6 +383,11 @@
   .un-search {
     font-size: 0.75rem;
     padding: 8px 12px 8px 36px;
+  }
+
+  .un-search-scope,
+  .un-search-submit {
+    font-size: 0.62rem;
   }
 
   .un-search-ico {

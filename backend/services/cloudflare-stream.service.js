@@ -12,6 +12,7 @@
 
 import { SignJWT, importJWK } from "jose";
 import logger from "../configs/logger.config.js";
+import { MINIMUM_VIDEO_QUALITY, CLOUDFLARE_QUALITY_META } from "../constants/liveclass.constant.js";
 
 // ═══════════════════════════════════════════
 // CONFIGURATION
@@ -30,6 +31,8 @@ const cfHeaders = {
     "Content-Type": "application/json",
 };
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 // ═══════════════════════════════════════════
 // LIVE INPUT CRUD
 // ═══════════════════════════════════════════
@@ -42,7 +45,13 @@ export async function createLiveInput(label, options = {}) {
     logger.info(`[createLiveInput] Creating live input: "${label}"`);
 
     const body = {
-        meta: { name: label },
+        meta: {
+            name: label,
+            // Quality requirements metadata
+            minQuality: CLOUDFLARE_QUALITY_META.minResolution,
+            minFPS: CLOUDFLARE_QUALITY_META.minFPS,
+            qualityDescription: CLOUDFLARE_QUALITY_META.description,
+        },
         recording: {
             mode: "automatic",           // Auto-record every session
             requireSignedURLs: true,     // Signed tokens for playback
@@ -82,6 +91,15 @@ export async function createLiveInput(label, options = {}) {
         thumbnailUrl: `https://${STREAM_SUBDOMAIN}/${input.uid}/thumbnails/thumbnail.jpg`,
         status: input.status,
         created: input.created,
+        // Quality requirements for this input
+        minimumQuality: {
+            resolution: MINIMUM_VIDEO_QUALITY.resolution,
+            height: MINIMUM_VIDEO_QUALITY.height,
+            width: MINIMUM_VIDEO_QUALITY.width,
+            fps: MINIMUM_VIDEO_QUALITY.fps,
+            minBitrate: MINIMUM_VIDEO_QUALITY.minBitrate,
+            recommendedBitrate: MINIMUM_VIDEO_QUALITY.recommendedBitrate,
+        },
     };
 }
 
@@ -123,11 +141,39 @@ export async function getLiveInputStatus(liveInputId) {
  * Returns { connected: boolean, status: string }
  */
 export async function isLiveInputConnected(liveInputId) {
-    const details = await getLiveInputDetails(liveInputId);
-    // CF status is an object: { current: { state: "connected" | "reconnecting" | ... } } or null
-    const state = details.status?.current?.state;
-    const connected = state === "connected" || state === "reconnecting";
-    return { connected, status: state || "disconnected" };
+    const maxAttempts = 3;
+    const baseDelayMs = 350;
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+            const details = await getLiveInputDetails(liveInputId);
+            // CF status is an object: { current: { state: "connected" | "reconnecting" | ... } } or null
+            const state = details.status?.current?.state || "disconnected";
+            const connected = state === "connected" || state === "reconnecting";
+
+            return {
+                connected,
+                status: state,
+                providerState: state,
+                attempts: attempt,
+                error: null,
+            };
+        } catch (error) {
+            lastError = error;
+            if (attempt < maxAttempts) {
+                await sleep(baseDelayMs * attempt);
+            }
+        }
+    }
+
+    return {
+        connected: false,
+        status: "error",
+        providerState: "error",
+        attempts: maxAttempts,
+        error: lastError?.message || "Unknown Cloudflare status check error",
+    };
 }
 
 /**

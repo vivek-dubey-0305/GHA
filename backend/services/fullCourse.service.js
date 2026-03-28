@@ -23,9 +23,13 @@ import {
 } from "./r2.service.js";
 import {
     uploadVideo, uploadCourseTrailer,
-    deleteVideo as deleteBunnyVideo, createLiveStream,
+    deleteVideo as deleteBunnyVideo,
     deleteLiveStream, getVideoThumbnail
 } from "./bunny.service.js";
+import {
+    createLiveInput,
+    getLiveInputDetails,
+} from "./cloudflare-stream.service.js";
 import logger from "../configs/logger.config.js";
 
 const DRAFT_THUMBNAIL_PLACEHOLDER = {
@@ -102,6 +106,52 @@ const rollbackUploadedMedia = async (rollbackCtx) => {
             logger.warn(`Rollback image delete failed for ${publicId}: ${err.message}`);
         }
     }
+};
+
+const ensureInstructorCloudflareInput = async (instructorId) => {
+    const instructor = await Instructor.findById(instructorId).select("+cfRtmpKey");
+    if (!instructor) {
+        throw new Error("Instructor not found for live class setup");
+    }
+
+    if (instructor.cfLiveInputId) {
+        if (!instructor.cfRtmpUrl || !instructor.cfRtmpKey) {
+            const details = await getLiveInputDetails(instructor.cfLiveInputId);
+            instructor.cfRtmpUrl = details.rtmps?.url || `rtmps://live.cloudflare.com:443/live/`;
+            instructor.cfRtmpKey = details.rtmps?.streamKey || "";
+            instructor.cfSrtUrl = details.srt?.url || "";
+            instructor.cfWebRTCUrl = details.webRTC?.url || "";
+            await instructor.save({ validateBeforeSave: false });
+        }
+
+        return {
+            cfLiveInputId: instructor.cfLiveInputId,
+            rtmpUrl: instructor.cfRtmpUrl || "",
+            rtmpKey: instructor.cfRtmpKey || "",
+            srtUrl: instructor.cfSrtUrl || "",
+            webRTCUrl: instructor.cfWebRTCUrl || "",
+            playbackUrl: `https://${process.env.CLOUDFLARE_STREAM_SUBDOMAIN}/${instructor.cfLiveInputId}/manifest/video.m3u8`,
+        };
+    }
+
+    const label = `${instructor.firstName} ${instructor.lastName} - Live Input`;
+    const created = await createLiveInput(label, { requireSignedURLs: true });
+
+    instructor.cfLiveInputId = created.liveInputId;
+    instructor.cfRtmpUrl = created.rtmpUrl;
+    instructor.cfRtmpKey = created.rtmpKey;
+    instructor.cfSrtUrl = created.srtUrl;
+    instructor.cfWebRTCUrl = created.webRTCUrl;
+    await instructor.save({ validateBeforeSave: false });
+
+    return {
+        cfLiveInputId: created.liveInputId,
+        rtmpUrl: created.rtmpUrl,
+        rtmpKey: created.rtmpKey,
+        srtUrl: created.srtUrl,
+        webRTCUrl: created.webRTCUrl,
+        playbackUrl: created.playbackUrl,
+    };
 };
 
 /**
@@ -425,18 +475,20 @@ const createLinkedModel = async ({
     // ── LIVE CLASS ──
     if (lessonType === "live" && lesInfo.liveClass) {
         try {
-            const streamTitle = lesInfo.liveClass.title || lesInfo.title || `Live_${mi}_${li}`;
-            const bunnyStream = await createLiveStream(streamTitle);
+            const cfCreds = await ensureInstructorCloudflareInput(instructorId);
 
             const lcData = {
                 ...lesInfo.liveClass,
                 instructor: instructorId,
                 course: courseId,
                 createdBy: instructorId,
-                bunnyVideoId: bunnyStream.videoId,
-                rtmpUrl: bunnyStream.rtmpUrl,
-                rtmpKey: bunnyStream.rtmpKey,
-                playbackUrl: bunnyStream.playbackUrl,
+                cfLiveInputId: cfCreds.cfLiveInputId,
+                rtmpUrl: cfCreds.rtmpUrl,
+                rtmpKey: cfCreds.rtmpKey,
+                srtUrl: cfCreds.srtUrl,
+                webRTCUrl: cfCreds.webRTCUrl,
+                playbackUrl: cfCreds.playbackUrl,
+                requireSignedURLs: true,
             };
             delete lcData.zoomMeetingId;
             delete lcData.zoomJoinUrl;
