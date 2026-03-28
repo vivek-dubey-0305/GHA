@@ -3,17 +3,214 @@ import { Assignment } from "../models/assignment.model.js";
 import { Course } from "../models/course.model.js";
 import { Enrollment } from "../models/enrollment.model.js";
 import { Lesson } from "../models/lesson.model.js";
+import { Notification } from "../models/notification.model.js";
+import { Admin } from "../models/admin.model.js";
+import { User } from "../models/user.model.js";
 import { asyncHandler } from "../middlewares/async.middleware.js";
 import { errorResponse, successResponse } from "../utils/response.utils.js";
 import { getPagination, createPaginationResponse } from "../utils/pagination.utils.js";
 import logger from "../configs/logger.config.js";
 import { upsertLessonProgress } from "../services/progress.service.js";
 import { reconcileSubmittedAssignmentProgress } from "../services/assignment-progress-reconcile.service.js";
+import { uploadAssignmentFile } from "../services/r2.service.js";
+import { sendEmail } from "../services/mail.service.js";
 
 /**
  * Submission Controller
  * Handles assignment submissions for users and grading for instructors
  */
+
+const toObjectIdString = (value) => String(value || "");
+
+const getWordCount = (text = "") => {
+    return text
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
+        .length;
+};
+
+const parseArrayField = (rawValue) => {
+    if (!rawValue) return [];
+    if (Array.isArray(rawValue)) return rawValue;
+    if (typeof rawValue === "string") {
+        const trimmed = rawValue.trim();
+        if (!trimmed) return [];
+        try {
+            const parsed = JSON.parse(trimmed);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [trimmed];
+        }
+    }
+    return [];
+};
+
+const isPrivateHost = (host = "") => {
+    const lowerHost = String(host).toLowerCase();
+    if (!lowerHost) return true;
+    if (lowerHost === "localhost" || lowerHost.endsWith(".localhost")) return true;
+    if (lowerHost.endsWith(".local")) return true;
+
+    const ipv4Match = lowerHost.match(/^(\d{1,3})(\.(\d{1,3})){3}$/);
+    if (ipv4Match) {
+        const [a, b] = lowerHost.split(".").map(Number);
+        if (a === 10) return true;
+        if (a === 127) return true;
+        if (a === 0) return true;
+        if (a === 169 && b === 254) return true;
+        if (a === 172 && b >= 16 && b <= 31) return true;
+        if (a === 192 && b === 168) return true;
+    }
+
+    if (lowerHost === "::1" || lowerHost.startsWith("fc") || lowerHost.startsWith("fd") || lowerHost.startsWith("fe80")) {
+        return true;
+    }
+
+    return false;
+};
+
+const normalizeLinks = (rawLinks = []) => {
+    const list = Array.isArray(rawLinks) ? rawLinks : [];
+    const normalized = [];
+
+    for (const link of list) {
+        const candidate = typeof link === "string" ? { url: link } : (link || {});
+        const rawUrl = String(candidate.url || "").trim();
+        if (!rawUrl) continue;
+
+        let parsed;
+        try {
+            parsed = new URL(rawUrl);
+        } catch {
+            throw new Error(`Invalid URL provided: ${rawUrl}`);
+        }
+
+        if (!["http:", "https:"].includes(parsed.protocol)) {
+            throw new Error(`Only http/https URLs are allowed: ${rawUrl}`);
+        }
+
+        if (isPrivateHost(parsed.hostname)) {
+            throw new Error(`Private or local URLs are not allowed: ${rawUrl}`);
+        }
+
+        normalized.push({
+            title: String(candidate.title || parsed.hostname || "Reference Link").trim().slice(0, 120),
+            url: parsed.toString(),
+        });
+    }
+
+    return normalized;
+};
+
+const parseContentPayload = (req) => {
+    let content = req.body?.content;
+
+    if (typeof content === "string") {
+        try {
+            content = JSON.parse(content);
+        } catch {
+            content = { text: content };
+        }
+    }
+
+    if (!content || typeof content !== "object") content = {};
+
+    const directText = typeof req.body?.text === "string" ? req.body.text : undefined;
+    const directLinks = parseArrayField(req.body?.links);
+
+    const text = String(content.text ?? directText ?? "").trim();
+    const links = normalizeLinks(content.links ?? directLinks);
+
+    return { text, links };
+};
+
+const validateByAssignmentType = ({ assignment, content }) => {
+    const type = assignment.type || "text";
+    const hasText = Boolean(content.text?.trim());
+    const hasFiles = Array.isArray(content.files) && content.files.length > 0;
+    const hasLinks = Array.isArray(content.links) && content.links.length > 0;
+
+    if (type === "text") {
+        if (!hasText) throw new Error("This assignment accepts text only. Please provide text content.");
+        if (hasFiles || hasLinks) throw new Error("This assignment accepts text only. Remove files and links.");
+    }
+
+    if (type === "file") {
+        if (!hasFiles) throw new Error("This assignment requires file upload.");
+        if (hasText || hasLinks) throw new Error("This assignment accepts files only. Remove text and links.");
+    }
+
+    if (type === "url") {
+        if (!hasLinks) throw new Error("This assignment requires at least one valid URL.");
+        if (hasText || hasFiles) throw new Error("This assignment accepts URLs only. Remove text and files.");
+    }
+
+    if (type === "mixed") {
+        if (!hasText && !hasFiles && !hasLinks) {
+            throw new Error("Mixed assignment requires at least one of text, file, or URL.");
+        }
+    }
+
+    if (assignment.wordLimit && hasText) {
+        const count = getWordCount(content.text);
+        if (assignment.wordLimit.min && count < assignment.wordLimit.min) {
+            throw new Error(`Submission text must have at least ${assignment.wordLimit.min} words.`);
+        }
+        if (assignment.wordLimit.max && count > assignment.wordLimit.max) {
+            throw new Error(`Submission text cannot exceed ${assignment.wordLimit.max} words.`);
+        }
+    }
+};
+
+const uploadSubmissionFiles = async ({ files = [], assignment, course }) => {
+    if (!Array.isArray(files) || files.length === 0) return [];
+
+    const uploaded = [];
+    const courseName = course?.title || "course";
+    const assignmentName = assignment?.title || "assignment";
+
+    for (const file of files) {
+        const result = await uploadAssignmentFile(
+            file.buffer,
+            courseName,
+            "assignment_submissions",
+            assignmentName,
+            file.originalname
+        );
+
+        uploaded.push({
+            name: file.originalname,
+            public_id: result.public_id,
+            url: result.secure_url,
+            type: file.mimetype,
+            size: file.size,
+        });
+    }
+
+    return uploaded;
+};
+
+const createNotificationAndEmit = async ({ req, recipient, recipientRole, type, title, message, data }) => {
+    const notification = await Notification.createNotification({
+        recipient,
+        recipientRole,
+        type,
+        title,
+        message,
+        data,
+    });
+
+    const io = req.app.get("io");
+    if (io) {
+        io.to(`notifications:${recipientRole}:${recipient}`).emit(type, {
+            notification,
+            data,
+        });
+    }
+
+    return notification;
+};
 
 // @route   POST /api/v1/assignments/:assignmentId/submissions
 // @desc    Submit an assignment
@@ -25,20 +222,65 @@ export const createSubmission = asyncHandler(async (req, res) => {
     const assignment = await Assignment.findById(assignmentId);
     if (!assignment) return errorResponse(res, 404, "Assignment not found");
 
-    // Verify enrollment
-    const isEnrolled = await Enrollment.isUserEnrolled(req.user.id, assignment.course);
-    if (!isEnrolled) return errorResponse(res, 403, "You must be enrolled in the course");
+    const course = await Course.findById(assignment.course).select("_id title");
+    if (!course) return errorResponse(res, 404, "Course not found for assignment");
 
-    // Check for existing submission
-    const existing = await Submission.findOne({ user: req.user.id, assignment: assignmentId });
-    if (existing && existing.status !== "returned") {
-        return errorResponse(res, 400, "You have already submitted this assignment");
+    const enrollment = await Enrollment.findOne({
+        user: req.user.id,
+        course: assignment.course,
+        status: { $in: ["active", "completed"] }
+    });
+
+    if (!enrollment) return errorResponse(res, 403, "You must be enrolled in the course");
+    if (enrollment.moderationLock?.isLocked) {
+        return errorResponse(res, 403, "Your course access is temporarily locked due to moderation review");
     }
 
-    // Check if overdue
+    const existing = await Submission.findOne({ user: req.user.id, assignment: assignmentId });
+
+    if (existing?.moderation?.status === "approved_ban") {
+        return errorResponse(res, 403, "Your submission is banned for policy violation and cannot be updated");
+    }
+
+    if (existing?.moderation?.status === "under_review") {
+        return errorResponse(res, 403, "This submission is under moderation review and cannot be updated");
+    }
+
+    if (existing && existing.status === "graded") {
+        return errorResponse(res, 400, "This submission is graded and cannot be updated");
+    }
+
     const isLate = new Date() > assignment.dueDate;
     if (isLate && !assignment.allowLateSubmission) {
         return errorResponse(res, 400, "Assignment submission deadline has passed");
+    }
+
+    const parsed = parseContentPayload(req);
+    const uploadedFiles = await uploadSubmissionFiles({
+        files: req.files || [],
+        assignment,
+        course,
+    });
+
+    const mergedContent = {
+        text: parsed.text,
+        links: parsed.links,
+        files: uploadedFiles,
+    };
+
+    if (existing) {
+        mergedContent.text = parsed.text || existing.content?.text || "";
+        mergedContent.links = parsed.links.length > 0 ? parsed.links : (existing.content?.links || []);
+        mergedContent.files = [
+            ...(existing.content?.files || []),
+            ...uploadedFiles,
+        ];
+    }
+
+    try {
+        validateByAssignmentType({ assignment, content: mergedContent });
+    } catch (validationError) {
+        return errorResponse(res, 400, validationError.message);
     }
 
     const lesson = assignment.lesson
@@ -49,7 +291,7 @@ export const createSubmission = asyncHandler(async (req, res) => {
         user: req.user.id,
         assignment: assignmentId,
         course: assignment.course,
-        content: req.body.content,
+        content: mergedContent,
         maxScore: assignment.maxScore,
         status: "submitted",
         submittedAt: new Date(),
@@ -58,9 +300,8 @@ export const createSubmission = asyncHandler(async (req, res) => {
         latePenalty: isLate ? assignment.lateSubmissionPenalty : 0
     };
 
-    // If resubmitting
-    if (existing && existing.status === "returned") {
-        const updated = await existing.resubmit(req.body.content);
+    if (existing) {
+        const updated = await existing.resubmit(mergedContent);
 
         if (lesson) {
             await upsertLessonProgress({
@@ -76,7 +317,7 @@ export const createSubmission = asyncHandler(async (req, res) => {
             });
         }
 
-        return successResponse(res, 200, "Assignment resubmitted successfully", updated);
+        return successResponse(res, 200, "Assignment submission updated successfully", updated);
     }
 
     const submission = await Submission.create(submissionData);
@@ -209,7 +450,7 @@ export const gradeSubmission = asyncHandler(async (req, res) => {
 
     if (score === undefined) return errorResponse(res, 400, "Score is required");
 
-    const graded = await submission.grade(
+    const graded = await submission.assignGrade(
         score,
         feedback || "",
         req.instructor.id,
@@ -218,6 +459,42 @@ export const gradeSubmission = asyncHandler(async (req, res) => {
 
     // Update assignment analytics
     await assignment.updateAnalytics();
+
+    const lesson = assignment.lesson
+        ? await Lesson.findById(assignment.lesson).select("_id type course")
+        : await Lesson.findOne({ assignmentId: assignment._id }).select("_id type course");
+
+    if (lesson) {
+        await upsertLessonProgress({
+            userId: submission.user,
+            lesson,
+            payload: {
+                assignmentSubmitted: true,
+                assignmentScore: score,
+                assignmentFeedback: feedback || "",
+                activityProgress: {
+                    assignmentStarted: true,
+                    assignmentSubmitted: true,
+                },
+            },
+        });
+    }
+
+    await createNotificationAndEmit({
+        req,
+        recipient: toObjectIdString(submission.user),
+        recipientRole: "User",
+        type: "assignment_graded",
+        title: "Assignment graded",
+        message: `Your assignment \"${assignment.title}\" was graded. Score: ${score}/${submission.maxScore}`,
+        data: {
+            submissionId: submission._id,
+            assignmentId: assignment._id,
+            courseId: assignment.course,
+            score,
+            feedback: feedback || "",
+        },
+    });
 
     logger.info(`Instructor ${req.instructor.id} graded submission ${req.params.id} with score ${score}`);
 
@@ -243,4 +520,160 @@ export const returnSubmission = asyncHandler(async (req, res) => {
     );
 
     successResponse(res, 200, "Submission returned for revision", returned);
+});
+
+// @route   PATCH /api/v1/submissions/:id/report
+// @desc    Report suspicious submission and temporarily lock course access
+// @access  Private (Instructor - assignment owner)
+export const reportSubmission = asyncHandler(async (req, res) => {
+    const { reason } = req.body;
+    const submission = await Submission.findById(req.params.id);
+    if (!submission) return errorResponse(res, 404, "Submission not found");
+
+    const assignment = await Assignment.findById(submission.assignment);
+    if (!assignment || toObjectIdString(assignment.instructor) !== req.instructor.id) {
+        return errorResponse(res, 403, "You can only report submissions for your own assignments");
+    }
+
+    if (!reason || String(reason).trim().length < 10) {
+        return errorResponse(res, 400, "Detailed report reason is required (minimum 10 characters)");
+    }
+
+    const course = await Course.findById(submission.course).select("title");
+    const evidenceFiles = await uploadSubmissionFiles({
+        files: req.files || [],
+        assignment,
+        course,
+    });
+
+    submission.moderation = {
+        ...submission.moderation,
+        isReported: true,
+        status: "under_review",
+        reportReason: String(reason).trim(),
+        reportEvidence: evidenceFiles,
+        reportedAt: new Date(),
+        reportedBy: req.instructor.id,
+        adminDecisionAt: null,
+        adminDecisionBy: null,
+        adminNote: "",
+    };
+    await submission.save();
+
+    const enrollment = await Enrollment.findOne({
+        user: submission.user,
+        course: submission.course,
+        status: { $in: ["active", "completed"] }
+    });
+
+    if (enrollment) {
+        await enrollment.lockByModeration({
+            reason: "Temporarily locked while suspicious assignment report is reviewed",
+            lockedBy: req.instructor.id,
+            reportId: submission._id,
+        });
+    }
+
+    const admins = await Admin.find({ isActive: true }).select("_id");
+    for (const admin of admins) {
+        await createNotificationAndEmit({
+            req,
+            recipient: toObjectIdString(admin._id),
+            recipientRole: "Admin",
+            type: "assignment_reported",
+            title: "Suspicious assignment reported",
+            message: `A submission has been reported by instructor and needs moderation review.`,
+            data: {
+                submissionId: submission._id,
+                assignmentId: assignment._id,
+                courseId: assignment.course,
+                reportedBy: req.instructor.id,
+            },
+        });
+    }
+
+    successResponse(res, 200, "Submission reported and user access temporarily locked", submission);
+});
+
+// @route   PATCH /api/v1/submissions/:id/moderate
+// @desc    Admin moderation decision for reported submission
+// @access  Private (Admin)
+export const moderateSubmissionReport = asyncHandler(async (req, res) => {
+    const { action, adminNote } = req.body;
+    const submission = await Submission.findById(req.params.id);
+    if (!submission) return errorResponse(res, 404, "Submission not found");
+
+    if (!submission.moderation?.isReported || submission.moderation?.status !== "under_review") {
+        return errorResponse(res, 400, "Submission is not in report review state");
+    }
+
+    if (!["approve_ban", "reject_report"].includes(action)) {
+        return errorResponse(res, 400, "Invalid moderation action");
+    }
+
+    const assignment = await Assignment.findById(submission.assignment).select("title course");
+    const user = await User.findById(submission.user).select("firstName lastName email");
+    const enrollment = await Enrollment.findOne({ user: submission.user, course: submission.course });
+
+    const approvedBan = action === "approve_ban";
+    submission.moderation.status = approvedBan ? "approved_ban" : "rejected";
+    submission.moderation.adminNote = String(adminNote || "").trim().slice(0, 2000);
+    submission.moderation.adminDecisionAt = new Date();
+    submission.moderation.adminDecisionBy = req.admin.id;
+    await submission.save();
+
+    if (enrollment) {
+        if (approvedBan) {
+            enrollment.status = "cancelled";
+            enrollment.moderationLock = {
+                isLocked: true,
+                reason: "Banned from course due to malicious assignment submission",
+                lockedAt: new Date(),
+                lockedBy: submission.moderation.reportedBy,
+                reportId: submission._id,
+            };
+            await enrollment.save();
+        } else {
+            await enrollment.unlockByModeration();
+        }
+    }
+
+    const decisionMessage = approvedBan
+        ? "Your submission violated policy. You are banned from this course and the fee is non-refundable."
+        : "Your submission report was reviewed and access has been restored.";
+
+    await createNotificationAndEmit({
+        req,
+        recipient: toObjectIdString(submission.user),
+        recipientRole: "User",
+        type: "assignment_moderation_update",
+        title: approvedBan ? "Course ban approved" : "Report cleared",
+        message: decisionMessage,
+        data: {
+            submissionId: submission._id,
+            assignmentId: submission.assignment,
+            action,
+        },
+    });
+
+    if (user?.email && approvedBan) {
+        const fullName = `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Learner";
+        try {
+            await sendEmail({
+                to: user.email,
+                subject: "Course access removed due to policy violation",
+                html: `
+                    <p>Hello ${fullName},</p>
+                    <p>Your assignment submission for <strong>${assignment?.title || "your course"}</strong> was found to violate platform policy.</p>
+                    <p>You have been banned from this course. As per policy, your course fee is non-refundable.</p>
+                    <p>If you believe this decision is incorrect, please contact support.</p>
+                    <p>Regards,<br/>GHA Compliance Team</p>
+                `,
+            });
+        } catch (mailError) {
+            logger.error(`Failed to send moderation email to user ${submission.user}: ${mailError.message}`);
+        }
+    }
+
+    successResponse(res, 200, "Moderation decision saved successfully", submission);
 });

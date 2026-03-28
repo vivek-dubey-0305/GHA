@@ -1,7 +1,6 @@
 import express from "express";
 import {
   getAllInstructorsPublic,
-  searchInstructorsPublic,
   getInstructorByIdPublic,
   getInstructorReviewsPublic
 } from "../controllers/instructor.public.controller.js";
@@ -14,11 +13,6 @@ const router = express.Router();
 // @desc    Get all instructors with filters and pagination
 // @access  Public
 router.get("/", getAllInstructorsPublic);
-
-// @route   GET /api/v1/public/instructors/search
-// @desc    Search instructors publicly
-// @access  Public
-router.get("/search", searchInstructorsPublic);
 
 // @route   GET /api/v1/public/instructors/:id
 // @desc    Get single instructor by ID

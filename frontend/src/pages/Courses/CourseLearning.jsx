@@ -21,6 +21,7 @@ import { getCourseById } from "../../redux/slices/course.slice";
 import { getMyEnrollments } from "../../redux/slices/enrollment.slice";
 import { apiClient } from "../../utils/api.utils";
 import LearningVideoPlayer from "../../components/CoursePages/learning/LearningVideoPlayer";
+import StudentLiveSessionRoom from "../../components/CoursePages/live/StudentLiveSessionRoom";
 
 const getLessonIcon = (type) => {
   if (type === "video") return <PlayCircle className="w-4 h-4" />;
@@ -44,6 +45,7 @@ export default function CourseLearning() {
 
   const { currentCourse, loadingCourseDetail } = useSelector((state) => state.course);
   const { myEnrollments } = useSelector((state) => state.enrollment);
+  const { user } = useSelector((state) => state.auth);
 
   const [activeLessonId, setActiveLessonId] = useState("");
   const [expandedModules, setExpandedModules] = useState({});
@@ -51,7 +53,9 @@ export default function CourseLearning() {
   const [savingProgress, setSavingProgress] = useState(false);
   const [joiningLiveId, setJoiningLiveId] = useState("");
   const [livePlaybackByLesson, setLivePlaybackByLesson] = useState({});
+  const [liveSessionStateByLesson, setLiveSessionStateByLesson] = useState({});
   const [mobileCurriculumOpen, setMobileCurriculumOpen] = useState(false);
+  const liveProgressMarkedRef = useRef(new Set());
   const saveMetaRef = useRef({ lastSavedAt: 0, lastSavedTime: 0, lastSeenTime: 0 });
   const saveInFlightRef = useRef(false);
 
@@ -269,26 +273,60 @@ export default function CourseLearning() {
     setJoiningLiveId(String(liveId));
     try {
       const res = await apiClient.post(`/live-classes/${liveId}/join`);
+      const responseData = res?.data?.data || {};
       const hls =
-        res?.data?.data?.signedPlayback?.hls ||
+        responseData?.signedPlayback?.hls ||
         lesson?.liveClassId?.signedPlayback?.hls ||
         lesson?.liveClassId?.playbackUrl ||
         "";
 
+      setLiveSessionStateByLesson((prev) => ({
+        ...prev,
+        [lesson._id]: {
+          joined: true,
+          broadcastStarted: !!responseData.broadcastStarted,
+          waitingForHost: !!responseData.waitingForHost,
+          sessionEnded: responseData.status === "completed",
+          attendanceEligibleNow: !!responseData.attendanceEligibleNow,
+          totalOnline: Number(responseData.totalOnline || 0),
+          summary: responseData.summary || null,
+        },
+      }));
+
       if (hls) {
         setLivePlaybackByLesson((prev) => ({ ...prev, [lesson._id]: hls }));
-        setActiveLessonId(String(lesson._id));
+      }
 
+      setActiveLessonId(String(lesson._id));
+
+      if (responseData.attendanceEligibleNow && !liveProgressMarkedRef.current.has(String(lesson._id))) {
         await persistProgress({
           force: true,
           progressPercentage: 40,
           activityProgress: { liveJoined: true },
         });
+        liveProgressMarkedRef.current.add(String(lesson._id));
       }
     } finally {
       setJoiningLiveId("");
     }
   };
+
+  const activeLessonLiveState = useMemo(() => {
+    if (!activeLesson?._id || activeLesson.type !== "live") return null;
+    return liveSessionStateByLesson[activeLesson._id] || null;
+  }, [activeLesson?._id, activeLesson?.type, liveSessionStateByLesson]);
+
+  const updateLessonLiveState = useCallback((lessonId, patch) => {
+    if (!lessonId || !patch) return;
+    setLiveSessionStateByLesson((prev) => ({
+      ...prev,
+      [lessonId]: {
+        ...(prev[lessonId] || {}),
+        ...patch,
+      },
+    }));
+  }, []);
 
   const handleOpenAssignment = useCallback(() => {
     persistProgress({
@@ -297,6 +335,34 @@ export default function CourseLearning() {
       activityProgress: { assignmentStarted: true },
     });
   }, [persistProgress]);
+
+  useEffect(() => {
+    if (!activeLesson?._id || activeLesson.type !== "live") return;
+
+    const state = liveSessionStateByLesson[activeLesson._id];
+    if (!state?.broadcastStarted || liveProgressMarkedRef.current.has(String(activeLesson._id))) return;
+
+    persistProgress({
+      force: true,
+      progressPercentage: 40,
+      activityProgress: { liveJoined: true },
+    }).finally(() => {
+      liveProgressMarkedRef.current.add(String(activeLesson._id));
+    });
+  }, [activeLesson?._id, activeLesson?.type, liveSessionStateByLesson, persistProgress]);
+
+  useEffect(() => {
+    if (!activeLesson?._id || activeLesson.type !== "live") return;
+
+    const state = liveSessionStateByLesson[activeLesson._id];
+    if (!state?.sessionEnded || !liveProgressMarkedRef.current.has(String(activeLesson._id))) return;
+
+    persistProgress({
+      force: true,
+      progressPercentage: 100,
+      activityProgress: { liveJoined: true, liveAttended: true },
+    });
+  }, [activeLesson?._id, activeLesson?.type, liveSessionStateByLesson, persistProgress]);
 
   const handleMarkArticleComplete = useCallback(async () => {
     if (!activeLesson?._id || activeLesson.type !== "article") return;
@@ -333,6 +399,8 @@ export default function CourseLearning() {
 
     return "";
   }, [activeLesson, livePlaybackByLesson]);
+
+  const activeLiveState = activeLessonLiveState;
 
   if (loadingCourseDetail || !course) {
     return (
@@ -505,16 +573,49 @@ export default function CourseLearning() {
                     className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-yellow-400 text-black font-semibold text-sm hover:bg-yellow-300 disabled:opacity-70"
                   >
                     <Radio className="w-4 h-4" />
-                    {joiningLiveId === String(activeLesson?.liveClassId?._id) ? "Joining..." : "Join Live Class"}
+                    {joiningLiveId === String(activeLesson?.liveClassId?._id)
+                      ? "Joining..."
+                      : activeLiveState?.joined
+                      ? "Rejoin Live Class"
+                      : "Join Live Class"}
                   </button>
 
-                  {activeSourceUrl && (
+                  {!!activeLiveState?.joined && (
+                    <div className="mt-3 text-xs text-gray-400">
+                      {activeLiveState?.sessionEnded
+                        ? "This live session has ended."
+                        : activeLiveState?.waitingForHost
+                        ? "Waiting for instructor to start broadcasting..."
+                        : "Live now"}
+                      {Number.isFinite(activeLiveState?.totalOnline)
+                        ? ` • ${activeLiveState.totalOnline} joined`
+                        : ""}
+                    </div>
+                  )}
+
+                  {activeLiveState?.joined && activeLiveState?.waitingForHost && !activeLiveState?.sessionEnded && (
+                    <div className="mt-5 rounded-xl border border-dashed border-gray-700 bg-[#0f0f0f] p-6 text-sm text-gray-300">
+                      Instructor has not started the live broadcast yet. Keep this page open and the stream will start automatically.
+                    </div>
+                  )}
+
+                  {activeLiveState?.sessionEnded && (
+                    <div className="mt-5 rounded-xl border border-gray-700 bg-[#0f0f0f] p-6 text-sm text-gray-300">
+                      Live session ended.
+                      {activeLiveState?.summary?.durationSeconds
+                        ? ` Duration: ${Math.floor(activeLiveState.summary.durationSeconds / 60)} minutes.`
+                        : ""}
+                    </div>
+                  )}
+
+                  {activeSourceUrl && activeLiveState?.broadcastStarted && !activeLiveState?.sessionEnded && (
                     <div className="mt-5">
-                      <LearningVideoPlayer
+                      <StudentLiveSessionRoom
+                        lesson={activeLesson}
+                        user={user}
                         sourceUrl={activeSourceUrl}
-                        title={`${activeLesson.title} (Live Stream)`}
-                        startAt={0}
-                        onProgress={() => {}}
+                        liveState={activeLiveState}
+                        updateLessonLiveState={updateLessonLiveState}
                       />
                     </div>
                   )}

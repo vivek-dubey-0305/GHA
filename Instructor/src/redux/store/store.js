@@ -12,6 +12,7 @@ import announcementReducer from '../slices/announcement.slice.js';
 import discussionReducer from '../slices/discussion.slice.js';
 import notificationReducer from '../slices/notification.slice.js';
 import analyticsReducer from '../slices/analytics.slice.js';
+import doubtTicketReducer from '../slices/doubtTicket.slice.js';
 
 export const store = configureStore({
   reducer: {
@@ -28,6 +29,7 @@ export const store = configureStore({
     discussion: discussionReducer,
     notification: notificationReducer,
     analytics: analyticsReducer,
+    doubtTicket: doubtTicketReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

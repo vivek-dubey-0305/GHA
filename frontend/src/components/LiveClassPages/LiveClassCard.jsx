@@ -12,7 +12,7 @@ const STATUS_STYLES = {
   completed: "text-green-400 bg-green-400/10 border-green-400/20",
 };
 
-export default function LiveClassCard({ liveClass, delay = 0, onJoin, onWatch }) {
+export default function LiveClassCard({ liveClass, delay = 0, onJoin, onWatch, onSetReminder }) {
   const { title, instructor, course, sessionType, scheduledAt, duration, status,
           actualParticipants, maxParticipants, recordingAvailable } = liveClass;
 
@@ -67,7 +67,7 @@ export default function LiveClassCard({ liveClass, delay = 0, onJoin, onWatch })
       {/* Action */}
       {status === "scheduled" && (
         <button
-          onClick={onJoin}
+          onClick={onSetReminder}
           className="w-full flex items-center justify-center gap-2 py-2.5 bg-yellow-400 text-black
             font-semibold text-sm rounded-xl hover:bg-yellow-300 transition-colors active:scale-95"
         >

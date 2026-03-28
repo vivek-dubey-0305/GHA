@@ -1,11 +1,14 @@
+//liveclass.controller.js
 import { LiveClass } from "../models/liveclass.model.js";
 import { Course } from "../models/course.model.js";
 import { Instructor } from "../models/instructor.model.js";
 import { Enrollment } from "../models/enrollment.model.js";
 import { Notification } from "../models/notification.model.js";
+import { Lesson } from "../models/lesson.model.js";
 import { asyncHandler } from "../middlewares/async.middleware.js";
 import { errorResponse, successResponse } from "../utils/response.utils.js";
 import { getPagination, createPaginationResponse } from "../utils/pagination.utils.js";
+import { upsertLessonProgress } from "../services/progress.service.js";
 import {
     createLiveInput, deleteLiveInput, getLiveInputStatus,
     isLiveInputConnected, getLiveInputDetails,
@@ -13,6 +16,7 @@ import {
     getVideoDetails,
 } from "../services/cloudflare-stream.service.js";
 import logger from "../configs/logger.config.js";
+import { LIVE_SESSION_STATUS } from "../constants/liveclass.constant.js";
 
 /**
  * Live Class Controller — Cloudflare Stream Integration
@@ -39,6 +43,146 @@ import logger from "../configs/logger.config.js";
 // ════════════════════════════════════════════
 
 const SESSION_TYPES_COURSE_REQUIRED = ["lecture", "doubt"];
+
+function isUserInvitedToDoubtSession(liveClass, userId) {
+    if (!liveClass || liveClass.sessionType !== "doubt") return true;
+
+    const invited = Array.isArray(liveClass.invitedStudents)
+        ? liveClass.invitedStudents
+        : [];
+
+    if (!invited.length) return true;
+
+    return invited.some((entry) => {
+        if (!entry) return false;
+        if (typeof entry === "string") return entry === String(userId);
+        if (entry._id) return String(entry._id) === String(userId);
+        return String(entry) === String(userId);
+    });
+}
+
+function normalizeStreamStatusPayload(result, sessionStatus = null) {
+    const cfStatus = result?.status || "error";
+    const connected = !!result?.connected;
+
+    const troubleshooting = connected
+        ? null
+        : "1. Open OBS  2. Go to Settings -> Stream  3. Paste your RTMP URL & Key  4. Click Start Streaming  5. Wait for connected status";
+
+    return {
+        connected,
+        cfStatus,
+        providerState: result?.providerState || cfStatus,
+        retryAttempts: result?.attempts || 1,
+        error: result?.error || null,
+        sessionStatus,
+        troubleshooting,
+    };
+}
+
+function toHlsOnlyPlayback(signedUrls) {
+    if (!signedUrls?.hls) return null;
+
+    return {
+        hls: signedUrls.hls,
+        token: signedUrls.token,
+        thumbnail: signedUrls.thumbnail,
+    };
+}
+
+function isAttendanceEligibleNow(liveClass, broadcastStarted) {
+    return liveClass?.status === LIVE_SESSION_STATUS.LIVE && !!broadcastStarted;
+}
+
+function computeLiveSessionSummary(liveClass) {
+    const participants = Array.isArray(liveClass?.registeredParticipants)
+        ? liveClass.registeredParticipants
+        : [];
+
+    const uniqueJoined = participants.filter((p) => !!p.joinedAt).length;
+    const attendanceEligibleCount = participants.filter((p) => p.role === "User" && p.attended).length;
+    const durationSeconds =
+        liveClass?.startedAt && liveClass?.endedAt
+            ? Math.max(0, Math.floor((new Date(liveClass.endedAt).getTime() - new Date(liveClass.startedAt).getTime()) / 1000))
+            : 0;
+
+    return {
+        liveClassId: liveClass?._id,
+        uniqueJoined,
+        peakConcurrent: Number(liveClass?.peakParticipants || 0),
+        durationSeconds,
+        startedAt: liveClass?.startedAt || null,
+        endedAt: liveClass?.endedAt || null,
+        attendanceEligibleCount,
+        participantTimeline: participants.map((p) => ({
+            user: p.user,
+            role: p.role,
+            joinedAt: p.joinedAt || null,
+            leftAt: p.leftAt || null,
+            attended: !!p.attended,
+        })),
+    };
+}
+
+async function finalizeLiveLessonProgress(liveClass) {
+    if (!liveClass?.course) {
+        return { updated: 0 };
+    }
+
+    const lessonId = liveClass.lesson || null;
+    let lesson = null;
+
+    if (lessonId) {
+        lesson = await Lesson.findById(lessonId).select("_id course type");
+    }
+
+    if (!lesson) {
+        lesson = await Lesson.findOne({ liveClassId: liveClass._id, type: "live" }).select("_id course type");
+    }
+
+    if (!lesson || lesson.type !== "live") {
+        return { updated: 0 };
+    }
+
+    const participants = Array.isArray(liveClass.registeredParticipants)
+        ? liveClass.registeredParticipants
+        : [];
+
+    const eligibleParticipants = participants.filter((p) => p.role === "User" && p.attended);
+
+    const results = await Promise.allSettled(
+        eligibleParticipants.map(async (participant) => {
+            const joinedAt = participant.joinedAt ? new Date(participant.joinedAt).getTime() : null;
+            const leftAt = participant.leftAt
+                ? new Date(participant.leftAt).getTime()
+                : (liveClass.endedAt ? new Date(liveClass.endedAt).getTime() : null);
+            const watchSeconds = joinedAt && leftAt ? Math.max(0, Math.floor((leftAt - joinedAt) / 1000)) : 0;
+            const liveMinutes = Math.max(0, Math.floor(watchSeconds / 60));
+
+            await upsertLessonProgress({
+                userId: participant.user,
+                lesson,
+                payload: {
+                    progressPercentage: 100,
+                    activityProgress: {
+                        liveJoined: true,
+                        liveMinutes,
+                        liveAttended: true,
+                    },
+                    timeSpent: watchSeconds,
+                },
+            });
+        })
+    );
+
+    const updated = results.filter((result) => result.status === "fulfilled").length;
+    const failed = results.filter((result) => result.status === "rejected").length;
+    if (failed) {
+        logger.warn(`[finalizeLiveLessonProgress] ${failed} progress writes failed for liveClass=${liveClass._id}`);
+    }
+
+    return { updated };
+}
 
 /**
  * Ensure instructor has a Cloudflare Live Input.
@@ -103,6 +247,52 @@ async function ensureInstructorLiveInput(instructor) {
     };
 }
 
+async function ensureLiveClassCloudflareBinding(liveClass) {
+    if (liveClass.cfLiveInputId && liveClass.rtmpUrl && liveClass.rtmpKey) {
+        return liveClass;
+    }
+
+    const instructor = await Instructor.findById(liveClass.instructor).select("+cfRtmpKey");
+    if (!instructor) {
+        throw new Error("Instructor not found for live class binding");
+    }
+
+    const creds = await ensureInstructorLiveInput(instructor);
+    let changed = false;
+
+    if (!liveClass.cfLiveInputId) {
+        liveClass.cfLiveInputId = creds.cfLiveInputId;
+        changed = true;
+    }
+    if (!liveClass.rtmpUrl) {
+        liveClass.rtmpUrl = creds.rtmpUrl;
+        changed = true;
+    }
+    if (!liveClass.rtmpKey) {
+        liveClass.rtmpKey = creds.rtmpKey;
+        changed = true;
+    }
+    if (!liveClass.srtUrl && creds.srtUrl) {
+        liveClass.srtUrl = creds.srtUrl;
+        changed = true;
+    }
+    if (!liveClass.webRTCUrl && creds.webRTCUrl) {
+        liveClass.webRTCUrl = creds.webRTCUrl;
+        changed = true;
+    }
+    if (!liveClass.playbackUrl && creds.playbackUrl) {
+        liveClass.playbackUrl = creds.playbackUrl;
+        changed = true;
+    }
+
+    if (changed) {
+        await liveClass.save({ validateBeforeSave: false });
+        logger.info(`Live class ${liveClass._id} repaired with instructor CF live input ${liveClass.cfLiveInputId}`);
+    }
+
+    return liveClass;
+}
+
 /**
  * Verify playback access for a live class
  */
@@ -141,6 +331,11 @@ async function verifyPlaybackAccess(liveClass, req) {
     if (req.user && liveClass.course) {
         const courseId = liveClass.course._id || liveClass.course;
         const isEnrolled = await Enrollment.isUserEnrolled(req.user.id, courseId);
+
+        if (isEnrolled && !isUserInvitedToDoubtSession(liveClass, req.user.id)) {
+            return { allowed: false, reason: "You are not invited to this doubt session" };
+        }
+
         return isEnrolled
             ? { allowed: true }
             : { allowed: false, reason: "You must be enrolled in the course to join this session" };
@@ -283,6 +478,55 @@ export const getUpcomingClasses = asyncHandler(async (req, res) => {
 
     successResponse(res, 200, "Upcoming classes retrieved", {
         liveClasses: classes,
+        pagination: createPaginationResponse(total, page, limit),
+    });
+});
+
+// @route   GET /api/v1/live-classes/my-user
+// @desc    Get student's accessible live classes (includes invited doubt sessions)
+// @access  Private (User)
+export const getMyLiveClassesForUser = asyncHandler(async (req, res) => {
+    const { page, limit, skip } = getPagination(req.query, 20);
+    const { status } = req.query;
+
+    const enrollments = await Enrollment.find({
+        user: req.user.id,
+        status: { $in: ["active", "completed"] },
+    }).select("course");
+
+    const enrolledCourseIds = enrollments
+        .map((entry) => entry?.course)
+        .filter(Boolean);
+
+    const filter = {
+        sessionType: { $in: ["lecture", "doubt"] },
+        status: status || { $in: ["scheduled", "live", "completed"] },
+        $or: [
+            { course: { $in: enrolledCourseIds } },
+            { invitedStudents: req.user.id },
+        ],
+    };
+
+    const classes = await LiveClass.find(filter)
+        .populate("instructor", "firstName lastName profilePicture")
+        .populate("course", "title thumbnail")
+        .populate("lesson", "title type")
+        .sort({ scheduledAt: 1 })
+        .lean();
+
+    const visibleClasses = classes.filter((liveClass) => {
+        const courseId = String(liveClass?.course?._id || liveClass?.course || "");
+        const isEnrolledCourse = enrolledCourseIds.some((id) => String(id) === courseId);
+        const invitedAccess = isUserInvitedToDoubtSession(liveClass, req.user.id);
+
+        return (isEnrolledCourse || invitedAccess) && invitedAccess;
+    });
+
+    const total = visibleClasses.length;
+    const paged = visibleClasses.slice(skip, skip + limit);
+
+    successResponse(res, 200, "Student live classes retrieved", {
+        liveClasses: paged,
         pagination: createPaginationResponse(total, page, limit),
     });
 });
@@ -650,27 +894,27 @@ export const startLiveClass = asyncHandler(async (req, res) => {
         return errorResponse(res, 403, "You can only start your own live classes");
     }
 
-    if (liveClass.status !== "scheduled") {
+    if (liveClass.status !== LIVE_SESSION_STATUS.SCHEDULED) {
         return errorResponse(res, 400, `Cannot start a session with status "${liveClass.status}"`);
     }
+
+    await ensureLiveClassCloudflareBinding(liveClass);
 
     // ── Verify OBS is actually connected to Cloudflare ──
     if (!liveClass.cfLiveInputId) {
         return errorResponse(res, 400, "No Cloudflare live input configured for this session");
     }
 
-    let cfStatus;
-    try {
-        cfStatus = await isLiveInputConnected(liveClass.cfLiveInputId);
-    } catch (err) {
-        logger.error(`CF status check failed for ${liveClass.cfLiveInputId}: ${err.message}`);
-        return errorResponse(res, 502, "Could not verify stream connection with Cloudflare. Try again.");
-    }
+    const cfStatus = await isLiveInputConnected(liveClass.cfLiveInputId);
 
     if (!cfStatus.connected) {
+        const normalized = normalizeStreamStatusPayload(cfStatus, liveClass.status);
+        logger.warn(
+            `Live start blocked: liveClass=${liveClass._id} instructor=${req.instructor.id} input=${liveClass.cfLiveInputId} state=${normalized.cfStatus} attempts=${normalized.retryAttempts}`
+        );
         return errorResponse(res, 409, "OBS is not connected. Please start streaming in OBS first, then click Go Live.", {
-            cfStatus: cfStatus.status,
-            instructions: "1. Open OBS  2. Go to Settings → Stream  3. Paste your RTMP URL & Key  4. Click Start Streaming  5. Then click Go Live here",
+            ...normalized,
+            instructions: normalized.troubleshooting,
         });
     }
 
@@ -689,10 +933,16 @@ export const startLiveClass = asyncHandler(async (req, res) => {
                 const current = await LiveClass.findById(liveClass._id);
                 if (current && current.status === "live") {
                     await current.endClass();
+                    await finalizeLiveLessonProgress(current);
+                    const summary = computeLiveSessionSummary(current);
                     logger.info(`Auto-ended live class ${liveClass._id} after ${liveClass.duration}m`);
                     emitToLiveRoom(req, liveClass._id, "session_ended", {
                         liveClassId: liveClass._id,
                         reason: "auto_end",
+                        summary,
+                    });
+                    emitToLiveRoom(req, liveClass._id, "broadcast_stopped", {
+                        liveClassId: liveClass._id,
                     });
                 }
             } catch (err) {
@@ -744,10 +994,14 @@ export const endLiveClass = asyncHandler(async (req, res) => {
         return errorResponse(res, 400, e.message);
     }
 
+    const progressStats = await finalizeLiveLessonProgress(liveClass);
+    const summary = computeLiveSessionSummary(liveClass);
+
     // Notify participants
     emitToLiveRoom(req, liveClass._id, "session_ended", {
         liveClassId: liveClass._id,
         reason: "instructor_ended",
+        summary,
     });
 
     // Emit broadcast_stopped to update UI for all connected participants
@@ -761,7 +1015,11 @@ export const endLiveClass = asyncHandler(async (req, res) => {
         io.activeBroadcasts.delete(liveClass._id.toString());
     }
 
-    successResponse(res, 200, "Live class ended. Recording will be available shortly.", liveClass);
+    successResponse(res, 200, "Live class ended. Recording will be available shortly.", {
+        liveClass,
+        summary,
+        progress: progressStats,
+    });
 });
 
 // @route   GET /api/v1/live-classes/:id/rtmp
@@ -774,6 +1032,8 @@ export const getRtmpCredentials = asyncHandler(async (req, res) => {
     if (liveClass.instructor.toString() !== req.instructor.id) {
         return errorResponse(res, 403, "You can only view credentials for your own live classes");
     }
+
+    await ensureLiveClassCloudflareBinding(liveClass);
 
     successResponse(res, 200, "Ingest credentials retrieved", {
         rtmpUrl: liveClass.rtmpUrl,
@@ -828,7 +1088,7 @@ export const getRecordingStatus = asyncHandler(async (req, res) => {
                 recordingAvailable: readyToStream,
                 recordingDuration: latest.duration,
                 cfVideoUID: latest.uid,
-                signedPlayback: signedUrls,
+                signedPlayback: toHlsOnlyPlayback(signedUrls),
                 recordings: recordings.map(r => ({
                     uid: r.uid,
                     duration: r.duration,
@@ -861,6 +1121,13 @@ export const joinLiveClass = asyncHandler(async (req, res) => {
         .populate("course", "title");
     if (!liveClass) return errorResponse(res, 404, "Live class not found");
 
+    const io = req.app.get("io");
+    const broadcastMeta = io?.activeBroadcasts?.get(liveClass._id.toString());
+    const broadcastStarted = !!broadcastMeta;
+    const attendanceEligibleNow = isAttendanceEligibleNow(liveClass, broadcastStarted);
+    const room = io?.sockets?.adapter?.rooms?.get(`live:${liveClass._id}`);
+    const totalOnline = room ? room.size : 0;
+
     // Enrollment check for course-bound sessions
     if (SESSION_TYPES_COURSE_REQUIRED.includes(liveClass.sessionType) && !liveClass.isFreePreview) {
         if (!liveClass.course) {
@@ -869,6 +1136,10 @@ export const joinLiveClass = asyncHandler(async (req, res) => {
         const isEnrolled = await Enrollment.isUserEnrolled(req.user.id, liveClass.course._id);
         if (!isEnrolled) {
             return errorResponse(res, 403, "You must be enrolled in the course to join this live class");
+        }
+
+        if (!isUserInvitedToDoubtSession(liveClass, req.user.id)) {
+            return errorResponse(res, 403, "You are not invited to this doubt session");
         }
     }
 
@@ -882,13 +1153,13 @@ export const joinLiveClass = asyncHandler(async (req, res) => {
             return errorResponse(res, 400, "Session is at maximum capacity");
         }
         await LiveClass.findByIdAndUpdate(req.params.id, {
-            $push: { registeredParticipants: { user: req.user.id, role: "User", registeredAt: new Date(), joinedAt: new Date(), attended: true } },
+            $push: { registeredParticipants: { user: req.user.id, role: "User", registeredAt: new Date(), joinedAt: new Date(), attended: attendanceEligibleNow } },
             $inc: { actualParticipants: 1 },
         });
     } else {
         await LiveClass.updateOne(
             { _id: req.params.id, "registeredParticipants.user": req.user.id },
-            { $set: { "registeredParticipants.$.joinedAt": new Date(), "registeredParticipants.$.attended": true } }
+            { $set: { "registeredParticipants.$.joinedAt": new Date(), "registeredParticipants.$.attended": attendanceEligibleNow } }
         );
     }
 
@@ -910,11 +1181,96 @@ export const joinLiveClass = asyncHandler(async (req, res) => {
         liveClassId: liveClass._id,
         title: liveClass.title,
         status: liveClass.status,
+        broadcastStarted,
+        waitingForHost: !broadcastStarted,
+        attendanceEligibleNow,
+        totalOnline,
         scheduledAt: liveClass.scheduledAt,
         chatEnabled: liveClass.chatEnabled,
         raiseHandEnabled: liveClass.raiseHandEnabled,
         questionsEnabled: liveClass.questionsEnabled,
-        signedPlayback: signedUrls,
+        signedPlayback: toHlsOnlyPlayback(signedUrls),
+    });
+});
+
+// @route   POST /api/v1/live-classes/:id/reminders
+// @desc    Set reminder preference for a student on a scheduled live class
+// @access  Private (User)
+export const setLiveClassReminder = asyncHandler(async (req, res) => {
+    const { channel } = req.body || {};
+    if (!["email", "whatsapp"].includes(channel)) {
+        return errorResponse(res, 400, "Reminder channel must be email or whatsapp");
+    }
+
+    const liveClass = await LiveClass.findById(req.params.id)
+        .select("_id title status scheduledAt sessionType course isFreePreview reminderPreferences")
+        .populate("course", "_id title")
+        .lean(false);
+
+    if (!liveClass) return errorResponse(res, 404, "Live class not found");
+
+    if (liveClass.status !== "scheduled") {
+        return errorResponse(res, 400, "Reminders can only be set for scheduled classes");
+    }
+
+    // Enrollment check for course-bound sessions
+    if (SESSION_TYPES_COURSE_REQUIRED.includes(liveClass.sessionType) && !liveClass.isFreePreview) {
+        if (!liveClass.course) {
+            return errorResponse(res, 400, "This session has no associated course");
+        }
+        const isEnrolled = await Enrollment.isUserEnrolled(req.user.id, liveClass.course._id);
+        if (!isEnrolled) {
+            return errorResponse(res, 403, "You must be enrolled in the course to set reminders");
+        }
+
+        if (!isUserInvitedToDoubtSession(liveClass, req.user.id)) {
+            return errorResponse(res, 403, "You are not invited to this doubt session");
+        }
+    }
+
+    const existingIndex = (liveClass.reminderPreferences || []).findIndex(
+        (entry) => entry.user?.toString() === req.user.id
+    );
+
+    if (existingIndex >= 0) {
+        liveClass.reminderPreferences[existingIndex].channel = channel;
+        liveClass.reminderPreferences[existingIndex].createdAt = new Date();
+    } else {
+        liveClass.reminderPreferences.push({
+            user: req.user.id,
+            channel,
+            createdAt: new Date(),
+        });
+    }
+
+    await liveClass.save({ validateBeforeSave: false });
+
+    const reminderData = {
+        liveClassId: liveClass._id,
+        courseId: liveClass.course?._id || null,
+        scheduledAt: liveClass.scheduledAt,
+        preferredChannelPlaceholder: channel,
+        source: "user_set_reminder",
+    };
+
+    await Notification.createNotification({
+        recipient: req.user.id,
+        recipientRole: "User",
+        type: "live_class_reminder",
+        title: `Reminder set: ${liveClass.title}`,
+        message: `We'll remind you 30 and 5 minutes before this class. Channel selected: ${channel}.`,
+        data: reminderData,
+    });
+
+    const io = req.app.get("io");
+    if (io) {
+        io.to(`notifications:User:${req.user.id}`).emit("live_class_reminder", reminderData);
+    }
+
+    successResponse(res, 200, "Reminder preference saved", {
+        liveClassId: liveClass._id,
+        channel,
+        reminderOffsets: [30, 5],
     });
 });
 
@@ -1137,6 +1493,52 @@ export const getParticipants = asyncHandler(async (req, res) => {
     });
 });
 
+// @route   GET /api/v1/live-classes/:id/participants-user
+// @desc    Get participant list for enrolled users in a live class
+// @access  Private (User)
+export const getParticipantsForUser = asyncHandler(async (req, res) => {
+    const liveClass = await LiveClass.findById(req.params.id)
+        .populate("registeredParticipants.user", "name firstName lastName email profilePicture");
+    if (!liveClass) return errorResponse(res, 404, "Live class not found");
+
+    if (SESSION_TYPES_COURSE_REQUIRED.includes(liveClass.sessionType) && !liveClass.isFreePreview) {
+        if (!liveClass.course) {
+            return errorResponse(res, 400, "This session has no associated course");
+        }
+
+        const isEnrolled = await Enrollment.isUserEnrolled(req.user.id, liveClass.course);
+        if (!isEnrolled) {
+            return errorResponse(res, 403, "You must be enrolled to view participants");
+        }
+    }
+
+    const participants = Array.isArray(liveClass.registeredParticipants)
+        ? liveClass.registeredParticipants.map((item) => {
+            const userData = item.user || {};
+            return {
+                userId: userData._id || item.user,
+                name: userData.name || [userData.firstName, userData.lastName].filter(Boolean).join(" "),
+                firstName: userData.firstName || "",
+                lastName: userData.lastName || "",
+                profilePicture: userData.profilePicture || null,
+                role: item.role,
+                joinedAt: item.joinedAt || null,
+                leftAt: item.leftAt || null,
+                attended: !!item.attended,
+            };
+        })
+        : [];
+
+    const online = participants.filter((participant) => participant.joinedAt && !participant.leftAt);
+
+    successResponse(res, 200, "Participants retrieved", {
+        total: participants.length,
+        online: online.length,
+        peak: Number(liveClass.peakParticipants || 0),
+        participants,
+    });
+});
+
 // ════════════════════════════════════════════
 // TEST / DEBUG: Signed Playback URL
 // ════════════════════════════════════════════
@@ -1183,6 +1585,10 @@ export const joinAsInstructor = asyncHandler(async (req, res) => {
     const isInvited = liveClass.invitedInstructors?.some(
         id => id.toString() === req.instructor.id
     );
+    const io = req.app.get("io");
+    const broadcastStarted = !!io?.activeBroadcasts?.get(liveClass._id.toString());
+    const room = io?.sockets?.adapter?.rooms?.get(`live:${liveClass._id}`);
+    const totalOnline = room ? room.size : 0;
 
     if (!isOwner && !isInvited) {
         return errorResponse(res, 403, "You are not invited to this session");
@@ -1231,12 +1637,16 @@ export const joinAsInstructor = asyncHandler(async (req, res) => {
 
     const responseData = {
         liveClassId: liveClass._id,
+        instructorId: req.instructor.id,
         title: liveClass.title,
         status: liveClass.status,
+        broadcastStarted,
+        waitingForHost: !broadcastStarted,
+        totalOnline,
         chatEnabled: liveClass.chatEnabled,
         isHost: isOwner,
         instructorName: req.instructorData ? `${req.instructorData.firstName} ${req.instructorData.lastName}` : null,
-        signedPlayback: signedUrls,
+        signedPlayback: toHlsOnlyPlayback(signedUrls),
     };
     logger.info(`[joinAsInstructor] Response: hasSignedPlayback=${!!signedUrls}, hasHls=${!!signedUrls?.hls}, status=${liveClass.status}`);
 
@@ -1482,7 +1892,7 @@ export const joinAsAdmin = asyncHandler(async (req, res) => {
         title: liveClass.title,
         status: liveClass.status,
         chatEnabled: liveClass.chatEnabled,
-        signedPlayback: signedUrls,
+        signedPlayback: toHlsOnlyPlayback(signedUrls),
     });
 });
 
@@ -1613,32 +2023,35 @@ export const getObsConfig = asyncHandler(async (req, res) => {
 // @desc    Check if OBS/encoder is connected to Cloudflare for this session
 // @access  Private (Instructor - owner)
 export const checkStreamStatus = asyncHandler(async (req, res) => {
-    const liveClass = await LiveClass.findById(req.params.id).select("cfLiveInputId instructor status").lean();
+    const liveClass = await LiveClass.findById(req.params.id).select("cfLiveInputId instructor status +rtmpUrl +rtmpKey +srtUrl +webRTCUrl");
     if (!liveClass) return errorResponse(res, 404, "Live class not found");
 
     if (liveClass.instructor.toString() !== req.instructor.id) {
         return errorResponse(res, 403, "Access denied");
     }
 
+    await ensureLiveClassCloudflareBinding(liveClass);
+
     if (!liveClass.cfLiveInputId) {
-        return successResponse(res, 200, "No live input", { connected: false, cfStatus: "no_input" });
+        return successResponse(res, 200, "No live input", normalizeStreamStatusPayload({
+            connected: false,
+            status: "no_input",
+            providerState: "no_input",
+            attempts: 1,
+            error: null,
+        }, liveClass.status));
     }
 
-    try {
-        const result = await isLiveInputConnected(liveClass.cfLiveInputId);
-        return successResponse(res, 200, "Stream status checked", {
-            connected: result.connected,
-            cfStatus: result.status,
-            sessionStatus: liveClass.status,
-        });
-    } catch (err) {
-        logger.error(`Stream status check failed: ${err.message}`);
-        return successResponse(res, 200, "Status check failed", {
-            connected: false,
-            cfStatus: "error",
-            error: err.message,
-        });
+    const result = await isLiveInputConnected(liveClass.cfLiveInputId);
+    const normalized = normalizeStreamStatusPayload(result, liveClass.status);
+
+    if (!normalized.connected && normalized.cfStatus === "error") {
+        logger.warn(
+            `Stream status degraded: liveClass=${liveClass._id} instructor=${req.instructor.id} input=${liveClass.cfLiveInputId} attempts=${normalized.retryAttempts} error=${normalized.error}`
+        );
     }
+
+    return successResponse(res, 200, "Stream status checked", normalized);
 });
 
 // @route   GET /api/v1/live-classes/check-connection
@@ -1647,18 +2060,17 @@ export const checkStreamStatus = asyncHandler(async (req, res) => {
 export const checkInstructorConnection = asyncHandler(async (req, res) => {
     const instructor = await Instructor.findById(req.instructor.id).select("cfLiveInputId").lean();
     if (!instructor || !instructor.cfLiveInputId) {
-        return successResponse(res, 200, "No live input configured", { connected: false, cfStatus: "no_input" });
+        return successResponse(res, 200, "No live input configured", normalizeStreamStatusPayload({
+            connected: false,
+            status: "no_input",
+            providerState: "no_input",
+            attempts: 1,
+            error: null,
+        }));
     }
 
-    try {
-        const result = await isLiveInputConnected(instructor.cfLiveInputId);
-        return successResponse(res, 200, "Connection status", {
-            connected: result.connected,
-            cfStatus: result.status,
-        });
-    } catch (err) {
-        return successResponse(res, 200, "Check failed", { connected: false, cfStatus: "error" });
-    }
+    const result = await isLiveInputConnected(instructor.cfLiveInputId);
+    return successResponse(res, 200, "Connection status", normalizeStreamStatusPayload(result));
 });
 
 // ════════════════════════════════════════════

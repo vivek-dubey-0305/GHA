@@ -517,6 +517,7 @@ const CourseLearning   = lazy(() => import('../pages/Courses/CourseLearning'));
 const CourseProgress   = lazy(() => import('../pages/Courses/CourseProgress'));
 const Assignments      = lazy(() => import('../pages/Assignments/Assignments'));
 const LiveClasses      = lazy(() => import('../pages/LiveClasses/LiveClasses'));
+const DoubtTickets     = lazy(() => import('../pages/DoubtTickets/DoubtTickets'));
 const Discussions      = lazy(() => import('../pages/Community/Discussions'));
 const StudyGroups      = lazy(() => import('../pages/Community/StudyGroups'));
 const Certificates     = lazy(() => import('../pages/Achievements/Certificates'));
@@ -641,6 +642,7 @@ const router = createBrowserRouter([
       { path: 'dashboard/course-progress',    ...protectedRoute(CourseProgress)    },
       { path: 'dashboard/assignments',        ...protectedRoute(Assignments)       },
       { path: 'dashboard/live-classes',       ...protectedRoute(LiveClasses)       },
+      { path: 'dashboard/doubt-tickets',      ...protectedRoute(DoubtTickets)      },
       { path: 'dashboard/discussions',        ...protectedRoute(Discussions)       },
       { path: 'dashboard/study-groups',       ...protectedRoute(StudyGroups)       },
       { path: 'dashboard/certificates',       ...protectedRoute(Certificates)      },

@@ -165,6 +165,44 @@ const liveClassSchema = new mongoose.Schema({
         ref: "Admin",
     },
 
+    // ═══════════ REMINDERS ═══════════
+    reminderPreferences: [{
+        user: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+        },
+        channel: {
+            type: String,
+            enum: ["email", "whatsapp"],
+            default: "email",
+        },
+        createdAt: {
+            type: Date,
+            default: Date.now,
+        },
+    }],
+    reminderDispatches: [{
+        recipient: {
+            type: mongoose.Schema.Types.ObjectId,
+            required: true,
+            refPath: "reminderDispatches.recipientRole",
+        },
+        recipientRole: {
+            type: String,
+            enum: ["User", "Instructor"],
+            required: true,
+        },
+        offsetMinutes: {
+            type: Number,
+            enum: [30, 5],
+            required: true,
+        },
+        sentAt: {
+            type: Date,
+            default: Date.now,
+        },
+    }],
+
     // ═══════════ STATUS ═══════════
     status: {
         type: String,
@@ -304,15 +342,21 @@ liveClassSchema.index({ sessionType: 1, status: 1 });
 liveClassSchema.index({ "registeredParticipants.user": 1 });
 liveClassSchema.index({ createdAt: -1 });
 liveClassSchema.index({ cfLiveInputId: 1 });
+liveClassSchema.index({ "reminderPreferences.user": 1 });
+liveClassSchema.index({ "reminderDispatches.recipient": 1, "reminderDispatches.offsetMinutes": 1 });
 
 // ═══════════ PRE-SAVE ═══════════
 liveClassSchema.pre("save", function () {
     if (this.isModified("status") && this.status === "completed" && !this.endedAt) {
         this.endedAt = new Date();
     }
-    // Track peak participants
-    const currentCount = this.registeredParticipants.filter(p => p.joinedAt && !p.leftAt).length;
-    if (currentCount > this.peakParticipants) {
+
+    // Track peak participants safely even for partial-select saves.
+    const participants = Array.isArray(this.registeredParticipants) ? this.registeredParticipants : [];
+    const currentCount = participants.filter((p) => p.joinedAt && !p.leftAt).length;
+    const peak = Number(this.peakParticipants) || 0;
+
+    if (currentCount > peak) {
         this.peakParticipants = currentCount;
     }
 });

@@ -1,3 +1,4 @@
+//liveclass.routes.js
 import express from "express";
 import {
     // Public
@@ -23,8 +24,10 @@ import {
     requestAdminCall,
     testSignedPlayback,
     // User (Student)
+    getMyLiveClassesForUser,
     joinLiveClass,
     leaveLiveClass,
+    setLiveClassReminder,
     // Chat & Interactions
     sendChatMessage,
     getChatHistory,
@@ -33,6 +36,7 @@ import {
     pinMessage,
     toggleChat,
     getParticipants,
+    getParticipantsForUser,
     // Admin
     getAllLiveClassesAdmin,
     getLiveClassAdmin,
@@ -91,8 +95,11 @@ router.post("/:id/raise-hand-instructor", authenticateInstructor, raiseHand);
 // ══════════════════════════════════════
 // USER (STUDENT) ROUTES
 // ══════════════════════════════════════
+router.get("/my-user", authenticateUser, getMyLiveClassesForUser);
 router.post("/:id/join", authenticateUser, joinLiveClass);
 router.post("/:id/leave", authenticateUser, leaveLiveClass);
+router.post("/:id/reminders", authenticateUser, setLiveClassReminder);
+router.get("/:id/participants-user", authenticateUser, getParticipantsForUser);
 
 // ══════════════════════════════════════
 // CHAT & INTERACTION (Multi-role)

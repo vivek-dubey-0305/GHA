@@ -134,6 +134,8 @@ import announcementRouter from "./routes/announcement.routes.js";
 import discussionRouter from "./routes/discussion.routes.js";
 import notificationRouter from "./routes/notification.routes.js";
 import analyticsRouter from "./routes/analytics.routes.js";
+import searchRouter from "./routes/search.routes.js";
+import doubtTicketRouter from "./routes/doubt-ticket.routes.js";
 
 // Import models to register them with Mongoose
 import { User } from "./models/user.model.js";
@@ -158,6 +160,7 @@ import { Coupon } from "./models/coupon.model.js";
 import { Announcement } from "./models/announcement.model.js";
 import { Discussion } from "./models/discussion.model.js";
 import { Notification } from "./models/notification.model.js";
+import { DoubtTicket } from "./models/doubt-ticket.model.js";
 
 const app = express();
 
@@ -275,6 +278,8 @@ app.use("/api/v1/announcements", announcementRouter);
 app.use("/api/v1/discussions", discussionRouter);
 app.use("/api/v1/notifications", notificationRouter);
 app.use("/api/v1/analytics", analyticsRouter);
+app.use("/api/v1/search", searchRouter);
+app.use("/api/v1/doubt-tickets", doubtTicketRouter);
 
 // API routes - Public (no authentication required)
 app.use("/api/v1/public/instructors", instructorPublicRouter);

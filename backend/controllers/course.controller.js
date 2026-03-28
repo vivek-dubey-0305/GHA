@@ -47,7 +47,7 @@ const extractBunnyVideoId = (value) => {
 // @desc    Get all published courses (public)
 export const getPublicCourses = asyncHandler(async (req, res) => {
     const { page, limit, skip } = getPagination(req.query, 12);
-    const { category, level, language, sort: sortBy, search, minPrice, maxPrice } = req.query;
+    const { category, level, language, sort: sortBy, minPrice, maxPrice } = req.query;
 
     const filter = { status: "published", isPublished: true };
     if (category) filter.category = category;
@@ -58,14 +58,6 @@ export const getPublicCourses = asyncHandler(async (req, res) => {
         if (minPrice) filter.price.$gte = Number(minPrice);
         if (maxPrice) filter.price.$lte = Number(maxPrice);
     }
-    if (search) {
-        filter.$or = [
-            { title: { $regex: search, $options: "i" } },
-            { description: { $regex: search, $options: "i" } },
-            { tags: { $in: [new RegExp(search, "i")] } }
-        ];
-    }
-
     let sortOption = { createdAt: -1 };
     if (sortBy === "popular") sortOption = { enrolledCount: -1 };
     else if (sortBy === "rating") sortOption = { rating: -1 };

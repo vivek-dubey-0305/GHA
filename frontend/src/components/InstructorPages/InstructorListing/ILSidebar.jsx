@@ -42,7 +42,7 @@ function StarRow({ stars, label, checked, onChange }) {
   );
 }
 
-export default function ILSidebar({ activeFilters, searchQuery, onSearch, onToggleFilter, onToggleTopic, onClearAll, expRange, onExpRange }) {
+export default function ILSidebar({ activeFilters, searchQuery, onSearch, onSearchSubmit, onToggleFilter, onToggleTopic, onClearAll, expRange, onExpRange }) {
   const specs = ["Web Dev","Machine Learning","Design","Data Science","DevOps","Mobile","Cybersecurity","Business","Motion","Blockchain"];
 
   const isF  = (type, val) => Array.isArray(activeFilters[type]) && activeFilters[type].includes(val);
@@ -65,6 +65,14 @@ export default function ILSidebar({ activeFilters, searchQuery, onSearch, onTogg
               placeholder="Name, specialty…"
               value={searchQuery}
               onChange={(e) => onSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (typeof onSearchSubmit === "function") {
+                    onSearchSubmit(searchQuery);
+                  }
+                }
+              }}
             />
           </div>
         </div>

@@ -76,6 +76,28 @@ const enrollmentSchema = new mongoose.Schema({
         default: true
     },
 
+    // Moderation lock for temporary course access restriction
+    moderationLock: {
+        isLocked: {
+            type: Boolean,
+            default: false
+        },
+        reason: {
+            type: String,
+            trim: true,
+            maxlength: 500
+        },
+        lockedAt: Date,
+        lockedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Instructor"
+        },
+        reportId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Submission"
+        }
+    },
+
     // Certificate
     certificateIssued: {
         type: Boolean,
@@ -178,8 +200,31 @@ enrollmentSchema.statics.isUserEnrolled = function(userId, courseId) {
     return this.exists({
         user: userId,
         course: courseId,
-        status: { $in: ["active", "completed"] }
+        status: { $in: ["active", "completed"] },
+        "moderationLock.isLocked": { $ne: true }
     });
+};
+
+enrollmentSchema.methods.lockByModeration = function({ reason, lockedBy, reportId } = {}) {
+    this.moderationLock = {
+        isLocked: true,
+        reason: reason || "Temporarily locked due to moderation review",
+        lockedAt: new Date(),
+        lockedBy,
+        reportId,
+    };
+    return this.save();
+};
+
+enrollmentSchema.methods.unlockByModeration = function() {
+    this.moderationLock = {
+        isLocked: false,
+        reason: "",
+        lockedAt: null,
+        lockedBy: null,
+        reportId: null,
+    };
+    return this.save();
 };
 
 // Instance method to mark as completed
