@@ -193,6 +193,38 @@ export const doubtReplyImageUpload = multer({
     },
 });
 
+const studyGroupFilter = (req, file, cb) => {
+    try {
+        const ext = path.extname(file.originalname || "").toLowerCase();
+
+        if (blockedExecutableExtensions.has(ext)) {
+            return cb(new Error(`Blocked file extension detected: ${ext}`));
+        }
+
+        if (!allowedSubmissionExtensions.has(ext)) {
+            return cb(new Error(`Unsupported file extension: ${ext || "unknown"}`));
+        }
+
+        if (!allowedSubmissionMimes.has(file.mimetype)) {
+            return cb(new Error(`Unsupported file type: ${file.mimetype}`));
+        }
+
+        cb(null, true);
+    } catch (error) {
+        logger.error(`Study group filter error: ${error.message}`);
+        cb(error);
+    }
+};
+
+export const studyGroupUpload = multer({
+    storage,
+    fileFilter: studyGroupFilter,
+    limits: {
+        fileSize: 100 * 1024 * 1024,
+        files: 10,
+    },
+});
+
 /**
  * Custom error handler for multer errors
  */
@@ -244,4 +276,4 @@ export const handleMulterError = (error, req, res, next) => {
     });
 };
 
-export default { upload, courseMediaUpload, assignmentSubmissionUpload, doubtTicketUpload, doubtReplyImageUpload, handleMulterError };
+export default { upload, courseMediaUpload, assignmentSubmissionUpload, doubtTicketUpload, doubtReplyImageUpload, studyGroupUpload, handleMulterError };

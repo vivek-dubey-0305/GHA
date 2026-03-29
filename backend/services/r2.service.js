@@ -99,6 +99,29 @@ const uploadToR2 = async (fileBuffer, key, opts = {}) => {
     };
 };
 
+export const uploadStudyGroupAttachment = async (fileBuffer, groupId, fileName, contentType) => {
+    const safeGroup = sanitizeName(String(groupId || "group"));
+    const safeFileName = sanitizeName(fileName || "attachment");
+    const ext = fileName && fileName.includes(".")
+        ? fileName.split(".").pop()
+        : guessExtension(fileBuffer);
+    const key = `GHA/StudyGroups/${safeGroup}/attachments/${safeFileName}_${Date.now()}.${ext}`;
+
+    return uploadToR2(fileBuffer, key, { contentType });
+};
+
+export const uploadStudyGroupProfilePhoto = async (fileBuffer, groupId, fileName = "profile") => {
+    const safeGroup = sanitizeName(String(groupId || "group"));
+    const ext = fileName && fileName.includes(".")
+        ? fileName.split(".").pop()
+        : guessExtension(fileBuffer);
+    const key = `GHA/StudyGroups/${safeGroup}/profile/profile_${Date.now()}.${ext}`;
+
+    return uploadToR2(fileBuffer, key, {
+        contentType: `image/${ext === "jpg" ? "jpeg" : ext}`,
+    });
+};
+
 /**
  * Delete a single object from R2 by key.  Silently succeeds if the key doesn't exist.
  */
