@@ -9,6 +9,7 @@ import { asyncHandler } from "../middlewares/async.middleware.js";
 import { errorResponse, successResponse } from "../utils/response.utils.js";
 import { getPagination, createPaginationResponse } from "../utils/pagination.utils.js";
 import logger from "../configs/logger.config.js";
+import { syncEnrollmentToStudyGroup } from "../services/study-group.service.js";
 
 /**
  * Enrollment Controller
@@ -74,6 +75,12 @@ export const enrollInCourse = asyncHandler(async (req, res) => {
 
         await session.commitTransaction();
         session.endSession();
+
+        try {
+            await syncEnrollmentToStudyGroup({ courseId, userId: req.user.id });
+        } catch (syncError) {
+            logger.warn(`Study group enrollment sync failed for user ${req.user.id}, course ${courseId}: ${syncError.message}`);
+        }
 
         logger.info(`User ${req.user.id} enrolled in course ${courseId}`);
 

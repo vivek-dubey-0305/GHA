@@ -30,6 +30,7 @@ import {
     createLiveInput,
     getLiveInputDetails,
 } from "./cloudflare-stream.service.js";
+import { ensureCourseStudyGroupOnPublish } from "./study-group.service.js";
 import logger from "../configs/logger.config.js";
 
 const DRAFT_THUMBNAIL_PLACEHOLDER = {
@@ -1091,6 +1092,10 @@ export const createFullCourseService = async ({ data, files, instructorId }) => 
     // ── 7. UPDATE TOTALS ──
     await recalculateCourseTotals(course._id);
 
+    if ((course.status === "published" || course.isPublished) && !isResuming) {
+        await ensureCourseStudyGroupOnPublish({ courseId: course._id });
+    }
+
     // Add course to instructor (only on first creation)
     if (!isResuming) {
         await Instructor.findByIdAndUpdate(instructorId, {
@@ -1948,6 +1953,8 @@ export const updateFullCourseService = async ({ courseId, updateData, files }) =
             course.publishedAt = new Date();
         }
         await course.save();
+
+        await ensureCourseStudyGroupOnPublish({ courseId: course._id });
     }
 
     const updatedCourse = await Course.findById(courseId);

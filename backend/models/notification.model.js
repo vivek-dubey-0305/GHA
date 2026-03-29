@@ -22,6 +22,11 @@ const notificationSchema = new mongoose.Schema(
                 "course_published", "certificate_issued", "live_class_reminder",
                 "live_class_started", "live_class_invite",
                 "doubt_ticket_created", "doubt_ticket_accepted", "doubt_ticket_resolved", "doubt_saturday_session_reminder",
+                "study_group_mention",
+                "study_group_removed",
+                "study_group_rejoin_requested",
+                "study_group_rejoin_accepted",
+                "study_group_rejoin_rejected",
                 "general"
             ],
             required: true

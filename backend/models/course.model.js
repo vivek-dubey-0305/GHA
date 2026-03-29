@@ -30,6 +30,12 @@ const courseSchema = new mongoose.Schema({
         ref: "Instructor",
         required: [true, "Course must have an instructor"]
     },
+    studyGroup: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "StudyGroup",
+        default: null,
+        index: true,
+    },
 
     // Course Metadata
         category: {
@@ -259,6 +265,7 @@ courseSchema.index({ isPublished: 1, publishedAt: -1 });
 courseSchema.index({ price: 1, discountPrice: 1 });
 courseSchema.index({ enrolledCount: -1 });
 courseSchema.index({ createdAt: -1 });
+courseSchema.index({ studyGroup: 1 }, { sparse: true });
 
 // Virtual for current price (handles discounts)
 courseSchema.virtual("currentPrice").get(function() {

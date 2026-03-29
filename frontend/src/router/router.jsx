@@ -520,6 +520,7 @@ const LiveClasses      = lazy(() => import('../pages/LiveClasses/LiveClasses'));
 const DoubtTickets     = lazy(() => import('../pages/DoubtTickets/DoubtTickets'));
 const Discussions      = lazy(() => import('../pages/Community/Discussions'));
 const StudyGroups      = lazy(() => import('../pages/Community/StudyGroups'));
+const StudyGroupRoom   = lazy(() => import('../pages/Community/StudyGroupRoom'));
 const Certificates     = lazy(() => import('../pages/Achievements/Certificates'));
 const Badges           = lazy(() => import('../pages/Achievements/Badges'));
 const Leaderboard      = lazy(() => import('../pages/Achievements/Leaderboard'));
@@ -645,6 +646,7 @@ const router = createBrowserRouter([
       { path: 'dashboard/doubt-tickets',      ...protectedRoute(DoubtTickets)      },
       { path: 'dashboard/discussions',        ...protectedRoute(Discussions)       },
       { path: 'dashboard/study-groups',       ...protectedRoute(StudyGroups)       },
+      { path: 'dashboard/study-groups/:groupId', ...protectedRoute(StudyGroupRoom) },
       { path: 'dashboard/certificates',       ...protectedRoute(Certificates)      },
       { path: 'dashboard/badges',             ...protectedRoute(Badges)            },
       { path: 'dashboard/leaderboard',        ...protectedRoute(Leaderboard)       },

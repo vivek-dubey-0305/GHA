@@ -10,6 +10,12 @@ import { startLiveClassReminderScheduler, stopLiveClassReminderScheduler } from 
 import { startDoubtReminderScheduler, stopDoubtReminderScheduler } from "./services/doubt-reminder.service.js";
 import { LIVE_REACTION_WHITELIST } from "./constants/liveclass.constant.js";
 import { LiveClass } from "./models/liveclass.model.js";
+import {
+    createStudyGroupMessage,
+    getStudyGroupMembershipState,
+    toggleStudyGroupReaction,
+} from "./services/study-group.service.js";
+import { isMuteActive } from "./utils/study-group.utils.js";
 
 // Validate environment variables at startup
 validateEnvironment();
@@ -152,6 +158,118 @@ connectDB()
                 if (!ticketId) return;
                 socket.join(`doubt-ticket:${ticketId}`);
                 logger.info(`Socket ${socket.id} joined doubt-ticket:${ticketId}`);
+            });
+
+            socket.on("join_study_group", async ({ groupId, userId, role }) => {
+                if (!groupId || !userId || !role) return;
+
+                if (role === "User") {
+                    const member = await getStudyGroupMembershipState({ groupId, userId });
+                    if (!member) {
+                        socket.emit("study_group:error", { message: "You are not a member of this group" });
+                        return;
+                    }
+
+                    if (member.status !== "active") {
+                        socket.emit("study_group:removed", {
+                            groupId,
+                            removalReason: member.removalReason || "",
+                            permanentBan: Boolean(member.finalWarning),
+                        });
+                        return;
+                    }
+                }
+
+                socket.join(`study-group:${groupId}`);
+                socket.studyGroupId = groupId;
+                socket.studyGroupUserId = userId;
+                socket.studyGroupRole = role;
+                logger.info(`Socket ${socket.id} joined study-group:${groupId} as ${role}`);
+            });
+
+            socket.on("leave_study_group", ({ groupId }) => {
+                if (!groupId) return;
+                socket.leave(`study-group:${groupId}`);
+                logger.info(`Socket ${socket.id} left study-group:${groupId}`);
+            });
+
+            socket.on("study_group:typing", async ({ groupId, userId, name }) => {
+                if (!groupId || !userId) return;
+
+                const member = await getStudyGroupMembershipState({ groupId, userId });
+                if (!member || member.status !== "active") {
+                    socket.emit("study_group:error", { message: "You are not allowed to type in this group" });
+                    return;
+                }
+
+                socket.to(`study-group:${groupId}`).emit("study_group:typing", {
+                    groupId,
+                    userId,
+                    name,
+                    at: new Date().toISOString(),
+                });
+            });
+
+            socket.on("study_group:send_message", async (payload = {}) => {
+                try {
+                    const { groupId, content, replyTo, mentions, senderId, senderRole } = payload;
+                    if (!groupId || !senderId || !senderRole) return;
+
+                    if (senderRole === "User") {
+                        const member = await getStudyGroupMembershipState({ groupId, userId: senderId });
+                        if (!member) {
+                            socket.emit("study_group:error", { message: "You are not a member of this group" });
+                            return;
+                        }
+                        if (member.status !== "active") {
+                            socket.emit("study_group:removed", {
+                                groupId,
+                                removalReason: member.removalReason || "",
+                                permanentBan: Boolean(member.finalWarning),
+                            });
+                            return;
+                        }
+                        if (isMuteActive(member.mutedUntil)) {
+                            socket.emit("study_group:muted", {
+                                groupId,
+                                mutedUntil: member.mutedUntil,
+                                message: "You are blocked from sending messages. Please wait for ice break.",
+                            });
+                            return;
+                        }
+                    }
+
+                    const message = await createStudyGroupMessage({
+                        groupId,
+                        senderId,
+                        senderRole,
+                        content,
+                        replyTo,
+                        mentions,
+                        files: [],
+                    });
+
+                    io.to(`study-group:${groupId}`).emit("study_group:new_message", { groupId, message });
+                } catch (error) {
+                    socket.emit("study_group:error", { message: error.message || "Failed to send message" });
+                }
+            });
+
+            socket.on("study_group:react_message", async ({ groupId, messageId, userId, emoji }) => {
+                try {
+                    if (!groupId || !messageId || !userId || !emoji) return;
+
+                    const member = await getStudyGroupMembershipState({ groupId, userId });
+                    if (!member || member.status !== "active") {
+                        socket.emit("study_group:error", { message: "You are not allowed to react in this group" });
+                        return;
+                    }
+
+                    const message = await toggleStudyGroupReaction({ messageId, userId, emoji });
+                    io.to(`study-group:${groupId}`).emit("study_group:message_reacted", { groupId, message });
+                } catch (error) {
+                    socket.emit("study_group:error", { message: error.message || "Failed to react" });
+                }
             });
 
             // Leave a doubt ticket chat room
