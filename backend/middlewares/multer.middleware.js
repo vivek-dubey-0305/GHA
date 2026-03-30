@@ -156,12 +156,12 @@ export const upload = multer({
     },
 });
 
-// Course media upload - supports larger files (videos up to 500MB)
+// Course media upload - supports larger files (videos up to 10GB for 3-hour videos)
 export const courseMediaUpload = multer({
     storage,
     fileFilter: courseMediaFilter,
     limits: {
-        fileSize: 500 * 1024 * 1024, // 500 MB limit for videos
+        fileSize: 10 * 1024 * 1024 * 1024, // 10 GB limit for videos (supports ~3 hour 1080p videos)
         files: 50, // Allow many files for full course creation
     },
 });

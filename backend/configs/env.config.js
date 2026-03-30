@@ -28,6 +28,9 @@ const requiredEnvVars = [
     "R2_ACCESS_KEY",
     "R2_SECRET_KEY",
     "R2_PUBLIC_URL",
+    "BUNNY_LIBRARY_ID",
+    "BUNNY_API_KEY",
+    "BUNNY_STREAM_SECRET",
 ];
 
 // Optional environment variables with defaults

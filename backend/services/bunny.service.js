@@ -31,6 +31,22 @@ const headers = {
     AccessKey: BUNNY_API_KEY,
 };
 
+// Validate Bunny Stream configuration
+const validateBunnyConfig = () => {
+    if (!BUNNY_LIBRARY_ID) {
+        throw new Error("BUNNY_LIBRARY_ID environment variable is required");
+    }
+    if (!BUNNY_API_KEY) {
+        throw new Error("BUNNY_API_KEY environment variable is required");
+    }
+    if (!BUNNY_TOKEN_KEY) {
+        logger.warn("BUNNY_STREAM_SECRET not set — signed URLs will not be available");
+    }
+};
+
+// Initialize validation
+validateBunnyConfig();
+
 // ============================================
 // HELPERS
 // ============================================
@@ -131,7 +147,10 @@ export const uploadVideo = async (fileBuffer, courseName, moduleName, lessonName
         const videoData = await createRes.json();
         const videoId = videoData.guid;
 
-        // Step 2: Upload the actual file
+        // Step 2: Upload the actual file with timeout (30 minutes for large files)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30 * 60 * 1000); // 30 minutes
+
         const uploadRes = await fetch(`${BUNNY_STREAM_BASE}/videos/${videoId}`, {
             method: "PUT",
             headers: {
@@ -139,7 +158,10 @@ export const uploadVideo = async (fileBuffer, courseName, moduleName, lessonName
                 "Content-Type": "application/octet-stream",
             },
             body: fileBuffer,
+            signal: controller.signal,
         });
+
+        clearTimeout(timeoutId);
 
         if (!uploadRes.ok) {
             const errBody = await uploadRes.text();
@@ -195,6 +217,10 @@ export const uploadCourseTrailer = async (fileBuffer, courseName) => {
         const videoData = await createRes.json();
         const videoId = videoData.guid;
 
+        // Upload the actual file with timeout (30 minutes for large files)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30 * 60 * 1000); // 30 minutes
+
         const uploadRes = await fetch(`${BUNNY_STREAM_BASE}/videos/${videoId}`, {
             method: "PUT",
             headers: {
@@ -202,7 +228,10 @@ export const uploadCourseTrailer = async (fileBuffer, courseName) => {
                 "Content-Type": "application/octet-stream",
             },
             body: fileBuffer,
+            signal: controller.signal,
         });
+
+        clearTimeout(timeoutId);
 
         if (!uploadRes.ok) {
             const errBody = await uploadRes.text();
