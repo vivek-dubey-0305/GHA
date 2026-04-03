@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { HelpCircle, CheckCircle, Send, ArrowLeft, ImagePlus, X } from "lucide-react";
 import { io } from "socket.io-client";
@@ -10,6 +10,7 @@ import {
   acceptDoubtTicket,
   resolveDoubtTicket,
   addInstructorDoubtReply,
+  appendReplyToCurrentTicket,
 } from "../../redux/slices/doubtTicket.slice";
 
 export default function DoubtTickets() {
@@ -23,6 +24,8 @@ export default function DoubtTickets() {
   const [resolving, setResolving] = useState(false);
   const [replying, setReplying] = useState(false);
   const [toastState, setToastState] = useState({ visible: false, type: "success", title: "", message: "" });
+  const repliesEndRef = useRef(null);
+  const replyInputRef = useRef(null);
 
   const showToast = (type, title, message) => {
     setToastState({ visible: true, type, title, message });
@@ -49,8 +52,12 @@ export default function DoubtTickets() {
 
     const onNewReply = async (payload) => {
       if (String(payload?.ticketId || "") !== ticketId) return;
-      await dispatch(getAssignedDoubtTicketById(ticketId));
-      fetchTickets();
+      if (!payload?.reply) return;
+      dispatch(appendReplyToCurrentTicket({
+        ticketId,
+        reply: payload.reply,
+        nextStatus: payload?.senderRole === "Instructor" ? "accepted" : undefined,
+      }));
     };
 
     socket.on("doubt_ticket:new_reply", onNewReply);
@@ -129,11 +136,15 @@ export default function DoubtTickets() {
     }
     setReplyText("");
     setReplyImages([]);
-    await dispatch(getAssignedDoubtTicketById(currentTicket._id));
-    fetchTickets();
+    replyInputRef.current?.focus();
     setReplying(false);
     showToast("success", "Reply Sent", "Your reply was sent to the student.");
   };
+
+  useEffect(() => {
+    if (view !== "detail" || !currentTicket?._id) return;
+    repliesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [view, currentTicket?._id, currentTicket?.replies]);
 
   const onPickImages = (event) => {
     const selected = Array.from(event.target.files || []);
@@ -233,11 +244,13 @@ export default function DoubtTickets() {
                   </div>
                 );
               })}
+              <div ref={repliesEndRef} />
             </div>
           </div>
 
           <div className="bg-[#111] border border-gray-800 rounded-xl p-4">
             <textarea
+              ref={replyInputRef}
               value={replyText}
               onChange={(e) => setReplyText(e.target.value)}
               rows={3}

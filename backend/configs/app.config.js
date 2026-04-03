@@ -100,3 +100,11 @@ export const validateConfig = () => {
         throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
     }
 };
+
+// Redis configuration
+export const redisConfig = {
+    host: process.env.REDIS_HOST || null,
+    port: Number(process.env.REDIS_PORT || 6379),
+    username: process.env.REDIS_USERNAME || null,
+    password: process.env.REDIS_PASSWORD || null,
+};

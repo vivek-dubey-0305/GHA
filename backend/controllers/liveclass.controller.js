@@ -17,6 +17,13 @@ import {
 } from "../services/cloudflare-stream.service.js";
 import logger from "../configs/logger.config.js";
 import { LIVE_SESSION_STATUS } from "../constants/liveclass.constant.js";
+import { refreshLeaderboardAfterActivity } from "../services/leaderboard.service.js";
+import {
+    ACHIEVEMENT_CATEGORIES,
+    ACHIEVEMENT_POINTS,
+    ACHIEVEMENT_STATUS,
+} from "../constants/achievement.constant.js";
+import { createAchievementEvent } from "../services/achievement.service.js";
 
 /**
  * Live Class Controller — Cloudflare Stream Integration
@@ -352,6 +359,79 @@ function emitToLiveRoom(req, liveClassId, event, data) {
     if (io) {
         io.to(`live:${liveClassId}`).emit(event, data);
     }
+}
+
+async function refreshLeaderboardForLiveAttendees(req, liveClass, source = "liveclass.end") {
+    const participants = Array.isArray(liveClass?.registeredParticipants)
+        ? liveClass.registeredParticipants
+        : [];
+
+    const attendees = participants.filter((entry) => entry.role === "User" && entry.attended && entry.user);
+    const nonAttendees = participants.filter((entry) => entry.role === "User" && !entry.attended && entry.user);
+
+    const attendeeIds = attendees.map((entry) => entry.user).filter(Boolean);
+
+    const liveClassDate = liveClass?.scheduledAt || liveClass?.endedAt || new Date();
+
+    await Promise.all([
+        ...attendees.map((entry) =>
+            createAchievementEvent({
+                userId: entry.user,
+                category: ACHIEVEMENT_CATEGORIES.LIVE,
+                status: ACHIEVEMENT_STATUS.ACHIEVED,
+                title: "Joined live class",
+                description: `${liveClass?.title || "Live class"} attended`,
+                pointsAwarded: ACHIEVEMENT_POINTS.LIVE_JOINED,
+                pointsPossible: ACHIEVEMENT_POINTS.LIVE_JOINED,
+                source,
+                occurredAt: liveClassDate,
+                refs: {
+                    liveClass: liveClass?._id,
+                    course: liveClass?.course?._id || liveClass?.course || null,
+                },
+                metadata: {
+                    liveClassTitle: liveClass?.title || "Live class",
+                    scheduledAt: liveClassDate,
+                },
+                dedupeKey: `achievement:live-joined:${entry.user}:${liveClass?._id}`,
+            })
+        ),
+        ...nonAttendees.map((entry) =>
+            createAchievementEvent({
+                userId: entry.user,
+                category: ACHIEVEMENT_CATEGORIES.LIVE,
+                status: ACHIEVEMENT_STATUS.MISSED,
+                title: "Missed live class",
+                description: `Missed ${liveClass?.title || "live class"} held on ${new Date(liveClassDate).toLocaleDateString("en-GB")}`,
+                pointsAwarded: 0,
+                pointsPossible: ACHIEVEMENT_POINTS.LIVE_JOINED,
+                source,
+                occurredAt: liveClassDate,
+                refs: {
+                    liveClass: liveClass?._id,
+                    course: liveClass?.course?._id || liveClass?.course || null,
+                },
+                metadata: {
+                    liveClassTitle: liveClass?.title || "Live class",
+                    scheduledAt: liveClassDate,
+                    reason: "did_not_join",
+                },
+                dedupeKey: `achievement:live-missed:${entry.user}:${liveClass?._id}`,
+            })
+        ),
+    ]);
+
+    if (!attendeeIds.length) return;
+
+    await Promise.all(
+        attendeeIds.map((userId) =>
+            refreshLeaderboardAfterActivity({
+                userId,
+                io: req.app.get("io"),
+                source,
+            })
+        )
+    );
 }
 
 /**
@@ -934,6 +1014,7 @@ export const startLiveClass = asyncHandler(async (req, res) => {
                 if (current && current.status === "live") {
                     await current.endClass();
                     await finalizeLiveLessonProgress(current);
+                    await refreshLeaderboardForLiveAttendees(req, current, "liveclass.autoEnd");
                     const summary = computeLiveSessionSummary(current);
                     logger.info(`Auto-ended live class ${liveClass._id} after ${liveClass.duration}m`);
                     emitToLiveRoom(req, liveClass._id, "session_ended", {
@@ -995,6 +1076,7 @@ export const endLiveClass = asyncHandler(async (req, res) => {
     }
 
     const progressStats = await finalizeLiveLessonProgress(liveClass);
+    await refreshLeaderboardForLiveAttendees(req, liveClass, "liveclass.endByInstructor");
     const summary = computeLiveSessionSummary(liveClass);
 
     // Notify participants
@@ -1162,6 +1244,33 @@ export const joinLiveClass = asyncHandler(async (req, res) => {
             { $set: { "registeredParticipants.$.joinedAt": new Date(), "registeredParticipants.$.attended": attendanceEligibleNow } }
         );
     }
+
+    await createAchievementEvent({
+        userId: req.user.id,
+        category: ACHIEVEMENT_CATEGORIES.LIVE,
+        status: ACHIEVEMENT_STATUS.ACHIEVED,
+        title: "Joined live class",
+        description: `${liveClass?.title || "Live class"} attended`,
+        pointsAwarded: ACHIEVEMENT_POINTS.LIVE_JOINED,
+        pointsPossible: ACHIEVEMENT_POINTS.LIVE_JOINED,
+        source: "live.join",
+        occurredAt: new Date(),
+        refs: {
+            liveClass: liveClass?._id,
+            course: liveClass?.course?._id || liveClass?.course || null,
+        },
+        metadata: {
+            liveClassTitle: liveClass?.title || "Live class",
+            scheduledAt: liveClass?.scheduledAt || null,
+        },
+        dedupeKey: `achievement:live-joined:${req.user.id}:${liveClass?._id}`,
+    });
+
+    await refreshLeaderboardAfterActivity({
+        userId: req.user.id,
+        io,
+        source: "live.join",
+    });
 
     // Generate signed playback (8 hours)
     const playbackUid = liveClass.cfVideoUID || liveClass.cfLiveInputId;
@@ -1829,6 +1938,9 @@ export const endLiveClassByAdmin = asyncHandler(async (req, res) => {
     } catch (e) {
         return errorResponse(res, 400, e.message);
     }
+
+    await finalizeLiveLessonProgress(liveClass);
+    await refreshLeaderboardForLiveAttendees(req, liveClass, "liveclass.endByAdmin");
 
     emitToLiveRoom(req, liveClass._id, "session_ended", {
         liveClassId: liveClass._id,

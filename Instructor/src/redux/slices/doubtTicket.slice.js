@@ -82,6 +82,30 @@ const doubtTicketSlice = createSlice({
     clearDoubtTicketError: (state) => {
       state.error = null;
     },
+    appendReplyToCurrentTicket: (state, action) => {
+      const { ticketId, reply, nextStatus } = action.payload || {};
+      if (!ticketId || !reply) return;
+      if (String(state.currentTicket?._id || "") !== String(ticketId)) return;
+
+      state.currentTicket.replies = state.currentTicket.replies || [];
+      const exists = state.currentTicket.replies.some((item) => String(item?._id) === String(reply?._id));
+      if (!exists) {
+        state.currentTicket.replies.push(reply);
+      }
+
+      if (nextStatus) {
+        state.currentTicket.status = nextStatus;
+      }
+
+      const idx = state.tickets.findIndex((ticket) => String(ticket?._id) === String(ticketId));
+      if (idx !== -1) {
+        state.tickets[idx] = {
+          ...state.tickets[idx],
+          status: nextStatus || state.tickets[idx].status,
+          updatedAt: reply?.createdAt || state.tickets[idx].updatedAt,
+        };
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -120,11 +144,25 @@ const doubtTicketSlice = createSlice({
       .addCase(addInstructorDoubtReply.fulfilled, (state, action) => {
         if (state.currentTicket?._id === action.payload.id) {
           state.currentTicket.replies = state.currentTicket.replies || [];
-          state.currentTicket.replies.push(action.payload.reply);
+          const exists = state.currentTicket.replies.some((item) => String(item?._id) === String(action.payload.reply?._id));
+          if (!exists) {
+            state.currentTicket.replies.push(action.payload.reply);
+          }
+          if (state.currentTicket.status === "open") {
+            state.currentTicket.status = "accepted";
+          }
+        }
+
+        const idx = state.tickets.findIndex((ticket) => String(ticket?._id) === String(action.payload.id));
+        if (idx !== -1 && state.tickets[idx]?.status === "open") {
+          state.tickets[idx] = {
+            ...state.tickets[idx],
+            status: "accepted",
+          };
         }
       });
   },
 });
 
-export const { clearDoubtTicketError } = doubtTicketSlice.actions;
+export const { clearDoubtTicketError, appendReplyToCurrentTicket } = doubtTicketSlice.actions;
 export default doubtTicketSlice.reducer;

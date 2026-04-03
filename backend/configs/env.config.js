@@ -28,6 +28,9 @@ const requiredEnvVars = [
     "R2_ACCESS_KEY",
     "R2_SECRET_KEY",
     "R2_PUBLIC_URL",
+    "BUNNY_LIBRARY_ID",
+    "BUNNY_API_KEY",
+    "BUNNY_STREAM_SECRET",
 ];
 
 // Optional environment variables with defaults
@@ -44,6 +47,10 @@ const optionalEnvVars = {
     "CLOUDFLARE_STREAM_KEY_ID": null,
     "CLOUDFLARE_STREAM_JWK": null,
     "CLOUDFLARE_API_TOKEN": null,
+    "REDIS_HOST": null,
+    "REDIS_PORT": "6379",
+    "REDIS_USERNAME": null,
+    "REDIS_PASSWORD": null,
 };
 
 /**

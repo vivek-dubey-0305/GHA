@@ -13,8 +13,9 @@ import {
   MessageSquare,
   Users,
   Award,
-  Star,
+  Sparkles,
   Trophy,
+  Flame,
   BarChart2,
   Wallet,
   Receipt,
@@ -58,14 +59,9 @@ export const DASHBOARD_NAV_GROUPS = [
     label: "Achievements",
     items: [
       { name: "Certificates", href: "/dashboard/certificates", icon: Award },
-      { name: "Badges",       href: "/dashboard/badges",       icon: Star },
+      { name: "Achievements", href: "/dashboard/achievements", icon: Sparkles },
+      { name: "Streaks",      href: "/dashboard/streaks",      icon: Flame },
       { name: "Leaderboard",  href: "/dashboard/leaderboard",  icon: Trophy },
-    ],
-  },
-  {
-    label: "Analytics",
-    items: [
-      { name: "Learning Analytics", href: "/dashboard/analytics", icon: BarChart2 },
     ],
   },
   {

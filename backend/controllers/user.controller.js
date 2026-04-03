@@ -89,7 +89,7 @@ export const getMyEnrollments = asyncHandler(async (req, res) => {
 
     const total = await Enrollment.countDocuments(filter);
     const enrollments = await Enrollment.find(filter)
-        .populate("course", "title thumbnail instructor rating totalDuration price category level")
+        .populate("course", "title thumbnail instructor rating totalDuration totalModules totalLessons price category level")
         .populate("payment", "amount currency status")
         .sort({ enrolledAt: -1 })
         .skip(skip)
