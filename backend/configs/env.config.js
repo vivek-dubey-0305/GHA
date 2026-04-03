@@ -47,6 +47,10 @@ const optionalEnvVars = {
     "CLOUDFLARE_STREAM_KEY_ID": null,
     "CLOUDFLARE_STREAM_JWK": null,
     "CLOUDFLARE_API_TOKEN": null,
+    "REDIS_HOST": null,
+    "REDIS_PORT": "6379",
+    "REDIS_USERNAME": null,
+    "REDIS_PASSWORD": null,
 };
 
 /**

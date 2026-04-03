@@ -27,7 +27,15 @@ export default function AssignmentCard({ assignment, submission, delay = 0, onOp
         <div className="p-2.5 rounded-xl bg-white/5 shrink-0">
           <FileText className="w-5 h-5 text-gray-400" />
         </div>
-        <StatusBadge label={cfg.label} className={cfg.color} />
+        <div className="flex items-center gap-2">
+          {isOverdue && (
+            <StatusBadge
+              label="Overdue"
+              className="text-red-300 bg-red-500/15 border-red-500/35"
+            />
+          )}
+          <StatusBadge label={cfg.label} className={cfg.color} />
+        </div>
       </div>
 
       <h3 className="text-white font-semibold text-sm mb-1 leading-snug">{assignment.title}</h3>

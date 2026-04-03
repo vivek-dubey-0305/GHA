@@ -167,7 +167,11 @@ export default function Assignments() {
   const hasExistingSubmission = Boolean(selectedSubmission);
   const isSubmittedState = selectedSubmission?.status === "submitted";
   const isReturnedState = selectedSubmission?.status === "returned";
-  const canEditNow = !hasExistingSubmission || isEditMode || isReturnedState;
+  const selectedDueMs = selected?.dueDate ? new Date(selected.dueDate).getTime() : Number.NaN;
+  const isOverdueNow = Number.isFinite(selectedDueMs) && Date.now() > selectedDueMs;
+  const lateAllowed = Boolean(selected?.allowLateSubmission);
+  const isSubmissionLockedByDeadline = isOverdueNow && !lateAllowed;
+  const canEditNow = (!hasExistingSubmission || isEditMode || isReturnedState) && !isSubmissionLockedByDeadline;
 
   const validateUrl = (url) => {
     try {
@@ -318,6 +322,11 @@ export default function Assignments() {
                 <p className="text-xs text-gray-500 mt-3">
                   Due: {formatDateTime(selected?.dueDate)} | Max Score: {selected?.maxScore}
                 </p>
+                {isSubmissionLockedByDeadline && (
+                  <p className="text-xs text-red-400 mt-2">
+                    Submission is closed because the deadline has passed and late submission is disabled.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -423,6 +432,7 @@ export default function Assignments() {
                       </button>
                       <button
                         onClick={() => setIsEditMode(true)}
+                        disabled={isSubmissionLockedByDeadline}
                         className="px-4 py-2 rounded-lg border border-yellow-400/40 text-yellow-300 text-sm font-semibold"
                       >
                         Update Submission
@@ -431,10 +441,16 @@ export default function Assignments() {
                   ) : (
                   <button
                     onClick={handleSubmitAssignment}
-                    disabled={submitting}
+                    disabled={submitting || !canEditNow}
                     className="px-4 py-2 rounded-lg bg-yellow-400 text-black text-sm font-semibold disabled:opacity-50"
                   >
-                    {submitting ? "Submitting..." : hasExistingSubmission ? "Update Submission" : "Submit Assignment"}
+                    {isSubmissionLockedByDeadline
+                      ? "Submission Closed"
+                      : submitting
+                        ? "Submitting..."
+                        : hasExistingSubmission
+                          ? "Update Submission"
+                          : "Submit Assignment"}
                   </button>
                   )}
                 </div>

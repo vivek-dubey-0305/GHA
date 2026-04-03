@@ -35,6 +35,8 @@ export default function StudyGroupRoom() {
   const user = useSelector(selectUser);
 
   const socketRef = useRef(null);
+  const messagesEndRef = useRef(null);
+  const composerInputRef = useRef(null);
   const [group, setGroup] = useState(null);
   const [messages, setMessages] = useState([]);
   const [content, setContent] = useState("");
@@ -140,7 +142,10 @@ export default function StudyGroupRoom() {
     socket.on("study_group:new_message", ({ message, groupId: incomingGroupId }) => {
       if (String(incomingGroupId) !== String(groupId)) return;
       if (isRemoved) return;
-      setMessages((prev) => [...prev, message]);
+      setMessages((prev) => {
+        if (prev.some((item) => String(item?._id) === String(message?._id))) return prev;
+        return [...prev, message];
+      });
     });
 
     socket.on("study_group:message_updated", ({ message, groupId: incomingGroupId }) => {
@@ -210,12 +215,17 @@ export default function StudyGroupRoom() {
         content: clean,
       });
       setContent("");
+      composerInputRef.current?.focus();
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to send message");
     } finally {
       setSending(false);
     }
   }, [content, groupId, isMuted, sending, isRemoved]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, groupId]);
 
   const requestRejoin = useCallback(async () => {
     if (!groupId || !rejoinReason.trim()) return;
@@ -276,6 +286,7 @@ export default function StudyGroupRoom() {
                     );
                   })
                 )}
+                <div ref={messagesEndRef} />
               </div>
 
               <div className="border-t border-gray-800 p-3">
@@ -315,6 +326,7 @@ export default function StudyGroupRoom() {
 
                 <div className="flex gap-2">
                   <input
+                    ref={composerInputRef}
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
                     onKeyDown={(e) => {

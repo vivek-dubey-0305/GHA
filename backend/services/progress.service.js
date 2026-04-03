@@ -1,6 +1,12 @@
 import { Progress } from "../models/progress.model.js";
 import { Enrollment } from "../models/enrollment.model.js";
 import { Lesson } from "../models/lesson.model.js";
+import {
+    ACHIEVEMENT_CATEGORIES,
+    ACHIEVEMENT_POINTS,
+    ACHIEVEMENT_STATUS,
+} from "../constants/achievement.constant.js";
+import { createAchievementEvent } from "./achievement.service.js";
 
 const clampPercentage = (value) => {
     const num = Number(value);
@@ -13,6 +19,8 @@ const clampNonNegative = (value) => {
     if (!Number.isFinite(num)) return 0;
     return Math.max(0, Math.floor(num));
 };
+
+const toIdString = (value) => (value ? String(value) : null);
 
 const derivePercentageByType = ({ lessonType, payload, current }) => {
     if (payload.progressPercentage !== undefined) {
@@ -33,13 +41,13 @@ const derivePercentageByType = ({ lessonType, payload, current }) => {
         if (payload?.activityProgress?.articleCompleted) return 100;
         const ratio = Number(payload?.activityProgress?.articleReadRatio);
         if (Number.isFinite(ratio) && ratio >= 0) return clampPercentage(ratio * 100);
-        if (payload?.activityProgress?.articleOpened) return Math.max(20, current?.progressPercentage || 0);
+        if (payload?.activityProgress?.articleOpened) return current?.progressPercentage || 0;
         return current?.progressPercentage || 0;
     }
 
     if (lessonType === "material") {
         if (payload?.activityProgress?.materialDownloaded) return 100;
-        if (payload?.activityProgress?.materialViewed) return Math.max(60, current?.progressPercentage || 0);
+        if (payload?.activityProgress?.materialViewed) return current?.progressPercentage || 0;
         return current?.progressPercentage || 0;
     }
 
@@ -47,13 +55,13 @@ const derivePercentageByType = ({ lessonType, payload, current }) => {
         if (payload?.activityProgress?.liveAttended) return 100;
         const minutes = Number(payload?.activityProgress?.liveMinutes || 0);
         if (minutes >= 10) return 100;
-        if (payload?.activityProgress?.liveJoined) return Math.max(40, current?.progressPercentage || 0);
+        if (payload?.activityProgress?.liveJoined) return current?.progressPercentage || 0;
         return current?.progressPercentage || 0;
     }
 
     if (lessonType === "assignment") {
         if (payload?.assignmentSubmitted || payload?.activityProgress?.assignmentSubmitted) return 100;
-        if (payload?.activityProgress?.assignmentStarted) return Math.max(25, current?.progressPercentage || 0);
+        if (payload?.activityProgress?.assignmentStarted) return current?.progressPercentage || 0;
         return current?.progressPercentage || 0;
     }
 
@@ -94,7 +102,96 @@ export const syncEnrollmentProgress = async ({ userId, courseId }) => {
         ? clampPercentage((completedLessons / safeTotalLessons) * 100)
         : 0;
 
-    await Enrollment.findOneAndUpdate(
+    const existingEnrollment = await Enrollment.findOne({ user: userId, course: courseId })
+        .populate("course", "title")
+        .lean();
+
+    const previousProgressModules = Array.isArray(existingEnrollment?.progressModules)
+        ? existingEnrollment.progressModules
+        : [];
+
+    const [publishedModuleStats, completedLessonRows] = await Promise.all([
+        Lesson.aggregate([
+            {
+                $match: {
+                    course: courseId,
+                    isPublished: true,
+                },
+            },
+            {
+                $group: {
+                    _id: "$module",
+                    totalLessons: { $sum: 1 },
+                },
+            },
+        ]),
+        Progress.aggregate([
+            {
+                $match: {
+                    user: userId,
+                    course: courseId,
+                    status: "completed",
+                },
+            },
+            {
+                $lookup: {
+                    from: "lessons",
+                    localField: "lesson",
+                    foreignField: "_id",
+                    as: "lessonDoc",
+                },
+            },
+            { $unwind: "$lessonDoc" },
+            {
+                $group: {
+                    _id: "$lessonDoc.module",
+                    completedLessons: { $sum: 1 },
+                },
+            },
+        ]),
+    ]);
+
+    const moduleTotalMap = new Map(
+        publishedModuleStats
+            .filter((row) => !!row?._id)
+            .map((row) => [toIdString(row._id), Number(row.totalLessons || 0)])
+    );
+
+    const moduleCompletedMap = new Map(
+        completedLessonRows
+            .filter((row) => !!row?._id)
+            .map((row) => [toIdString(row._id), Number(row.completedLessons || 0)])
+    );
+
+    const previousModuleMap = new Map(
+        previousProgressModules
+            .filter((item) => !!item?.moduleId)
+            .map((item) => [toIdString(item.moduleId), item])
+    );
+
+    const nextProgressModules = Array.from(moduleTotalMap.entries()).map(([moduleId, totalLessonsInModule]) => {
+        const completedLessonsInModule = Number(moduleCompletedMap.get(moduleId) || 0);
+        const previousModule = previousModuleMap.get(moduleId);
+
+        const nextStatus = completedLessonsInModule >= totalLessonsInModule && totalLessonsInModule > 0
+            ? "completed"
+            : completedLessonsInModule > 0
+                ? "in-progress"
+                : "not-started";
+
+        return {
+            moduleId,
+            status: nextStatus,
+            completedAt: nextStatus === "completed"
+                ? previousModule?.completedAt || new Date()
+                : previousModule?.completedAt || null,
+        };
+    });
+
+    const nextStatus = completionPercentage >= 100 ? "completed" : "active";
+    const shouldSetCompletedAt = completionPercentage >= 100;
+
+    const updatedEnrollment = await Enrollment.findOneAndUpdate(
         { user: userId, course: courseId },
         {
             $set: {
@@ -102,9 +199,103 @@ export const syncEnrollmentProgress = async ({ userId, courseId }) => {
                 completedLessons,
                 lastAccessedAt: new Date(),
                 timeSpent: Number(totalTimeSpent?.[0]?.total || 0),
+                status: nextStatus,
+                progressModules: nextProgressModules,
+                ...(shouldSetCompletedAt ? { completedAt: new Date() } : {}),
             },
         }
+        ,
+        { new: true }
     );
+
+    const transitionedToCompleted =
+        completionPercentage >= 100 &&
+        existingEnrollment &&
+        existingEnrollment.status !== "completed";
+
+    const modulesTransitionedToCompleted = nextProgressModules.filter((item) => {
+        if (item.status !== "completed") return false;
+        const previousModule = previousModuleMap.get(toIdString(item.moduleId));
+        return previousModule?.status !== "completed";
+    });
+
+    const courseTitle = existingEnrollment?.course?.title || "Course";
+
+    if (modulesTransitionedToCompleted.length) {
+        await Promise.all(
+            modulesTransitionedToCompleted.map((moduleProgress) =>
+                createAchievementEvent({
+                    userId,
+                    category: ACHIEVEMENT_CATEGORIES.COURSE,
+                    status: ACHIEVEMENT_STATUS.ACHIEVED,
+                    title: "Module completed",
+                    description: `Completed a module in ${courseTitle}`,
+                    pointsAwarded: ACHIEVEMENT_POINTS.MODULE_COMPLETED,
+                    pointsPossible: ACHIEVEMENT_POINTS.MODULE_COMPLETED,
+                    source: "progress.syncEnrollmentProgress.module",
+                    refs: {
+                        course: courseId,
+                        module: moduleProgress.moduleId,
+                    },
+                    metadata: {
+                        courseTitle,
+                        moduleId: String(moduleProgress.moduleId),
+                        completedAt: moduleProgress.completedAt || new Date(),
+                    },
+                    dedupeKey: `achievement:module-complete:${userId}:${moduleProgress.moduleId}`,
+                })
+            )
+        );
+    }
+
+    if (transitionedToCompleted && updatedEnrollment) {
+        await createAchievementEvent({
+            userId,
+            category: ACHIEVEMENT_CATEGORIES.COURSE,
+            status: ACHIEVEMENT_STATUS.ACHIEVED,
+            title: "Course completed",
+            description: `Completed course ${courseTitle}`,
+            pointsAwarded: ACHIEVEMENT_POINTS.COURSE_COMPLETED,
+            pointsPossible: ACHIEVEMENT_POINTS.COURSE_COMPLETED,
+            source: "progress.syncEnrollmentProgress",
+            refs: {
+                course: courseId,
+            },
+            metadata: {
+                courseTitle,
+                completedAt: updatedEnrollment.completedAt || new Date(),
+                completionPercentage,
+            },
+            dedupeKey: `achievement:course-complete:${userId}:${courseId}`,
+        });
+
+        if (existingEnrollment?.enrolledAt) {
+            const completedAt = updatedEnrollment.completedAt || new Date();
+            const elapsedMs = new Date(completedAt).getTime() - new Date(existingEnrollment.enrolledAt).getTime();
+            const elapsedDays = Math.max(0, Math.floor(elapsedMs / (1000 * 60 * 60 * 24)));
+
+            if (elapsedDays <= 30) {
+                await createAchievementEvent({
+                    userId,
+                    category: ACHIEVEMENT_CATEGORIES.COURSE,
+                    status: ACHIEVEMENT_STATUS.ACHIEVED,
+                    title: "Fast completion bonus",
+                    description: `Completed ${courseTitle} in ${elapsedDays} day(s)`,
+                    pointsAwarded: ACHIEVEMENT_POINTS.COURSE_FAST_COMPLETION,
+                    pointsPossible: ACHIEVEMENT_POINTS.COURSE_FAST_COMPLETION,
+                    source: "progress.syncEnrollmentProgress.fast",
+                    refs: {
+                        course: courseId,
+                    },
+                    metadata: {
+                        courseTitle,
+                        elapsedDays,
+                    },
+                    dedupeKey: `achievement:course-fast:${userId}:${courseId}`,
+                });
+            }
+        }
+    }
 
     return {
         completedLessons,
@@ -159,6 +350,28 @@ export const upsertLessonProgress = async ({ userId, lesson, payload = {} }) => 
         runValidators: true,
         setDefaultsOnInsert: true,
     });
+
+    const justCompletedLesson = existing?.status !== "completed" && progress?.status === "completed";
+    if (justCompletedLesson) {
+        await createAchievementEvent({
+            userId,
+            category: ACHIEVEMENT_CATEGORIES.COURSE,
+            status: ACHIEVEMENT_STATUS.ACHIEVED,
+            title: "Lesson completed",
+            description: `Completed lesson ${lesson.title || ""}`.trim(),
+            pointsAwarded: ACHIEVEMENT_POINTS.LESSON_COMPLETED,
+            pointsPossible: ACHIEVEMENT_POINTS.LESSON_COMPLETED,
+            source: "progress.upsertLessonProgress",
+            refs: {
+                course: lesson.course,
+                lesson: lesson._id,
+            },
+            metadata: {
+                lessonTitle: lesson.title || "",
+            },
+            dedupeKey: `achievement:lesson-complete:${userId}:${lesson._id}`,
+        });
+    }
 
     await syncEnrollmentProgress({ userId, courseId: lesson.course });
     return progress;

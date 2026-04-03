@@ -378,6 +378,8 @@ export default function StudyGroups() {
   const socketRef = useRef(null);
   const joinedGroupRef = useRef("");
   const activeTabRef = useRef("groups");
+  const messagesEndRef = useRef(null);
+  const composerInputRef = useRef(null);
 
   const [activeTab, setActiveTab] = useState("groups");
   const [chatUnread, setChatUnread] = useState(false);
@@ -446,16 +448,13 @@ export default function StudyGroups() {
       const response = await apiClient.get("/study-groups/instructor/my");
       const rows = response?.data?.data || [];
       setGroups(Array.isArray(rows) ? rows : []);
-
-      if (!selectedGroupId && rows.length > 0) {
-        setSelectedGroupId(rows[0]._id);
-      }
+      setSelectedGroupId((prev) => prev || rows[0]?._id || "");
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to load study groups");
     } finally {
       setLoading(false);
     }
-  }, [selectedGroupId]);
+  }, []);
 
   const fetchMembers = useCallback(async () => {
     if (!selectedGroupId) {
@@ -557,7 +556,10 @@ export default function StudyGroups() {
 
     socket.on("study_group:new_message", ({ groupId, message }) => {
       if (String(groupId) !== String(selectedGroupId)) return;
-      setMessages((prev) => [...prev, message]);
+      setMessages((prev) => {
+        if (prev.some((item) => String(item?._id) === String(message?._id))) return prev;
+        return [...prev, message];
+      });
       if (activeTabRef.current !== "chat") {
         setChatUnread(true);
       }
@@ -798,12 +800,18 @@ export default function StudyGroups() {
       setReplyTo(null);
       setMentionIds([]);
       setShowMentionList(false);
+      composerInputRef.current?.focus();
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to send message");
     } finally {
       setSaving(false);
     }
   };
+
+  useEffect(() => {
+    if (activeTab !== "chat") return;
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, activeTab, selectedGroupId]);
 
   const appendEmoji = (emoji) => {
     setComposerText((prev) => `${prev}${emoji}`);
@@ -1236,6 +1244,7 @@ export default function StudyGroups() {
                           );
                         })
                       )}
+                      <div ref={messagesEndRef} />
                     </div>
 
                     <div className="border-t border-gray-800 p-3 space-y-2">
@@ -1262,6 +1271,7 @@ export default function StudyGroups() {
                           <input type="file" multiple className="hidden" onChange={onFileSelect} />
                         </label>
                         <input
+                          ref={composerInputRef}
                           value={composerText}
                           onChange={(e) => {
                             setComposerText(e.target.value);

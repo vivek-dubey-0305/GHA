@@ -523,8 +523,8 @@ const StudyGroups      = lazy(() => import('../pages/Community/StudyGroups'));
 const StudyGroupRoom   = lazy(() => import('../pages/Community/StudyGroupRoom'));
 const Certificates     = lazy(() => import('../pages/Achievements/Certificates'));
 const Badges           = lazy(() => import('../pages/Achievements/Badges'));
+const Streaks          = lazy(() => import('../pages/Achievements/Streaks'));
 const Leaderboard      = lazy(() => import('../pages/Achievements/Leaderboard'));
-const LearningAnalytics= lazy(() => import('../pages/Analytics/LearningAnalytics'));
 const Wallet           = lazy(() => import('../pages/Wallet/Wallet'));
 const Transactions     = lazy(() => import('../pages/Wallet/Transactions'));
 const Withdraw         = lazy(() => import('../pages/Wallet/Withdraw'));
@@ -648,9 +648,10 @@ const router = createBrowserRouter([
       { path: 'dashboard/study-groups',       ...protectedRoute(StudyGroups)       },
       { path: 'dashboard/study-groups/:groupId', ...protectedRoute(StudyGroupRoom) },
       { path: 'dashboard/certificates',       ...protectedRoute(Certificates)      },
+      { path: 'dashboard/achievements',       ...protectedRoute(Badges)            },
       { path: 'dashboard/badges',             ...protectedRoute(Badges)            },
+      { path: 'dashboard/streaks',            ...protectedRoute(Streaks)           },
       { path: 'dashboard/leaderboard',        ...protectedRoute(Leaderboard)       },
-      { path: 'dashboard/analytics',          ...protectedRoute(LearningAnalytics) },
       { path: 'dashboard/wallet',             ...protectedRoute(Wallet)            },
       { path: 'dashboard/transactions',       ...protectedRoute(Transactions)      },
       { path: 'dashboard/withdraw',           ...protectedRoute(Withdraw)          },

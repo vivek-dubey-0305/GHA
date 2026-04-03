@@ -168,6 +168,9 @@ const enrollmentSlice = createSlice({
       .addCase(getMyEnrollments.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+        state.myEnrollments = [];
+        state.myEnrollmentsPagination = null;
+        state.enrollmentByCourse = {};
       });
   },
 });

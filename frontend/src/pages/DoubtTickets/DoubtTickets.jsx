@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { HelpCircle, Send, ArrowRight, ArrowLeft, ImagePlus, X } from "lucide-react";
 import { io } from "socket.io-client";
 import { useDispatch, useSelector } from "react-redux";
@@ -29,6 +29,19 @@ export default function DoubtTickets() {
   const [replyText, setReplyText] = useState("");
   const [replyImages, setReplyImages] = useState([]);
   const [toastState, setToastState] = useState({ visible: false, type: "success", title: "", message: "" });
+  const repliesEndRef = useRef(null);
+  const replyInputRef = useRef(null);
+
+  const appendReplyUnique = useCallback((ticket, nextReply) => {
+    if (!ticket || !nextReply) return ticket;
+    const existingReplies = Array.isArray(ticket.replies) ? ticket.replies : [];
+    const hasReply = existingReplies.some((reply) => String(reply?._id) === String(nextReply?._id));
+    if (hasReply) return ticket;
+    return {
+      ...ticket,
+      replies: [...existingReplies, nextReply],
+    };
+  }, []);
 
   const showToast = (type, title, message) => {
     setToastState({ visible: true, type, title, message });
@@ -87,7 +100,15 @@ export default function DoubtTickets() {
 
     const onNewReply = async (payload) => {
       if (String(payload?.ticketId || "") !== String(selectedTicketId)) return;
-      await Promise.all([loadTicketDetail(selectedTicketId), loadTickets()]);
+      if (!payload?.reply) return;
+      setSelectedTicket((prev) => {
+        if (!prev || String(prev?._id) !== String(selectedTicketId)) return prev;
+        const updated = appendReplyUnique(prev, payload.reply);
+        if (payload?.senderRole === "Instructor" && updated?.status === "open") {
+          return { ...updated, status: "accepted" };
+        }
+        return updated;
+      });
     };
 
     socket.on("doubt_ticket:new_reply", onNewReply);
@@ -97,7 +118,7 @@ export default function DoubtTickets() {
       socket.off("doubt_ticket:new_reply", onNewReply);
       socket.disconnect();
     };
-  }, [activeTab, selectedTicketId, loadTicketDetail, loadTickets]);
+  }, [activeTab, selectedTicketId, appendReplyUnique]);
 
   const enrolledCourses = (myEnrollments || [])
     .filter((enrollment) => ["active", "completed"].includes(enrollment?.status))
@@ -147,12 +168,16 @@ export default function DoubtTickets() {
       if (replyText.trim()) formData.append("content", replyText.trim());
       replyImages.forEach((file) => formData.append("images", file));
 
-      await apiClient.post(`/doubt-tickets/user/${selectedTicketId}/replies`, formData, {
+      const res = await apiClient.post(`/doubt-tickets/user/${selectedTicketId}/replies`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
+      const createdReply = res?.data?.data || null;
       setReplyText("");
       setReplyImages([]);
-      await Promise.all([loadTicketDetail(selectedTicketId), loadTickets()]);
+      if (createdReply) {
+        setSelectedTicket((prev) => appendReplyUnique(prev, createdReply));
+      }
+      replyInputRef.current?.focus();
       showToast("success", "Reply Sent", "Your message was sent to the instructor.");
     } catch (err) {
       showToast("error", "Reply Failed", err?.response?.data?.message || "Failed to send reply");
@@ -160,6 +185,11 @@ export default function DoubtTickets() {
       setReplying(false);
     }
   };
+
+  useEffect(() => {
+    if (!selectedTicketId) return;
+    repliesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [selectedTicket?.replies, selectedTicketId]);
 
   const onPickReplyImages = (event) => {
     const selected = Array.from(event.target.files || []);
@@ -371,9 +401,11 @@ export default function DoubtTickets() {
                             );
                           })
                         )}
+                        <div ref={repliesEndRef} />
                       </div>
 
                       <textarea
+                        ref={replyInputRef}
                         rows={3}
                         value={replyText}
                         onChange={(event) => setReplyText(event.target.value)}
