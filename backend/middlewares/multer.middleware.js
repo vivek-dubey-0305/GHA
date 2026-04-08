@@ -163,6 +163,8 @@ export const courseMediaUpload = multer({
     limits: {
         fileSize: 10 * 1024 * 1024 * 1024, // 10 GB limit for videos (supports ~3 hour 1080p videos)
         files: 50, // Allow many files for full course creation
+        fieldSize: 30 * 1024 * 1024, // Allow rich JSON payloads (article/project rich content)
+        fields: 2000,
     },
 });
 
@@ -255,6 +257,24 @@ export const handleMulterError = (error, req, res, next) => {
             return res.status(400).json({
                 success: false,
                 message: `Unexpected file field: ${error.field}`,
+                error: error.message,
+            });
+        }
+
+        if (error.code === "LIMIT_FIELD_VALUE") {
+            logger.warn(`Multipart field too large: ${error.field || "unknown field"}`);
+            return res.status(400).json({
+                success: false,
+                message: "Request payload is too large. Reduce rich content size or image data in text fields.",
+                error: error.message,
+            });
+        }
+
+        if (error.code === "LIMIT_FIELD_COUNT" || error.code === "LIMIT_PART_COUNT") {
+            logger.warn(`Multipart part/field count exceeded for user: ${req.user?.id || req.instructor?.id || "unknown"}`);
+            return res.status(400).json({
+                success: false,
+                message: "Too many form fields/files in upload payload",
                 error: error.message,
             });
         }

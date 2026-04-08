@@ -34,7 +34,6 @@ const courseSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "StudyGroup",
         default: null,
-        index: true,
     },
 
     // Course Metadata
@@ -65,6 +64,34 @@ const courseSchema = new mongoose.Schema({
         required: [true, "Course language is required"],
         default: "English"
     },
+    type: {
+        type: String,
+        enum: ["recorded", "live"],
+        default: "recorded",
+        index: true,
+    },
+    gradingType: {
+        type: String,
+        enum: ["auto", "manual"],
+        default: "auto",
+    },
+    batchEnabled: {
+        type: Boolean,
+        default: false,
+    },
+    batches: [{
+        name: {
+            type: String,
+            trim: true,
+            maxlength: 120,
+        },
+        startDate: Date,
+        endDate: Date,
+        instructors: [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Instructor",
+        }],
+    }],
 
     // Pricing and Enrollment
     price: {
@@ -222,6 +249,12 @@ const courseSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    projectCount: {
+        type: Number,
+        min: 0,
+        max: 10,
+        default: 0,
+    },
     projects: [{
         title: {
             type: String,
@@ -231,9 +264,37 @@ const courseSchema = new mongoose.Schema({
         description: {
             type: String,
             trim: true,
-            maxlength: 700
-        }
+        },
+        descriptionRich: {
+            type: mongoose.Schema.Types.Mixed,
+            default: null,
+        },
     }],
+    liveFinalProjectReward: {
+        enabled: {
+            type: Boolean,
+            default: false,
+        },
+        title: {
+            type: String,
+            trim: true,
+            maxlength: 120,
+        },
+        description: {
+            type: String,
+            trim: true,
+            maxlength: 500,
+        },
+        amount: {
+            type: Number,
+            min: 0,
+        },
+        currency: {
+            type: String,
+            default: "INR",
+            enum: ["USD", "EUR", "GBP", "INR"],
+        },
+    },
 
 
     // Certificates (references to Certificate model)
@@ -266,6 +327,42 @@ courseSchema.index({ price: 1, discountPrice: 1 });
 courseSchema.index({ enrolledCount: -1 });
 courseSchema.index({ createdAt: -1 });
 courseSchema.index({ studyGroup: 1 }, { sparse: true });
+courseSchema.index({ type: 1, status: 1, createdAt: -1 });
+
+courseSchema.pre("validate", function() {
+    if (this.type === "live") {
+        this.batchEnabled = true;
+        this.gradingType = "manual";
+        if (!this.maxStudents || Number(this.maxStudents) < 1) {
+            this.maxStudents = 100;
+        }
+    } else {
+        this.batchEnabled = false;
+        this.gradingType = "auto";
+        this.batches = [];
+        this.maxStudents = undefined;
+    }
+
+    if (!this.projectBased) {
+        this.projectCount = 0;
+        this.projects = [];
+    } else {
+        const validProjects = (this.projects || []).filter((project) => project?.title?.trim() && project?.description?.trim());
+        const nextCount = Number(this.projectCount) || validProjects.length || 1;
+        this.projectCount = Math.max(1, Math.min(10, nextCount));
+    }
+
+    if (!this.liveFinalProjectReward?.enabled) {
+        this.liveFinalProjectReward = {
+            enabled: false,
+            title: "",
+            description: "",
+            amount: undefined,
+            currency: this.liveFinalProjectReward?.currency || "INR",
+        };
+    }
+    return
+});
 
 // Virtual for current price (handles discounts)
 courseSchema.virtual("currentPrice").get(function() {

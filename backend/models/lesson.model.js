@@ -1,5 +1,28 @@
 import mongoose from "mongoose";
 
+const extractPlainTextFromRichContent = (value) => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value !== "object" || Array.isArray(value)) return "";
+
+    const chunks = [];
+    const visit = (node) => {
+        if (!node || typeof node !== "object") return;
+        if (node.type === "text" && typeof node.text === "string") {
+            chunks.push(node.text);
+        }
+        if (Array.isArray(node.content)) {
+            node.content.forEach(visit);
+        }
+        if (["paragraph", "heading", "listItem", "blockquote"].includes(node.type)) {
+            chunks.push("\n");
+        }
+    };
+
+    visit(value);
+    return chunks.join(" ").replace(/\s+/g, " ").trim();
+};
+
 const lessonSchema = new mongoose.Schema({
     // Lesson Information
     title: {
@@ -59,11 +82,23 @@ const lessonSchema = new mongoose.Schema({
             type: String,
             validate: {
                 validator: function(value) {
-                    if (this.type === "article" && (!value || value.trim().length < 10)) return false;
+                    if (this.type !== "article") return true;
+                    const richText = extractPlainTextFromRichContent(this.content?.articleContentRich);
+                    const text = (value || richText || "").trim();
+                    if (!text || text.length < 10) return false;
                     return true;
                 },
                 message: "Article content must be at least 10 characters for article lessons"
             }
+        },
+        articleContentRich: {
+            type: mongoose.Schema.Types.Mixed,
+            default: null,
+        },
+        articleEstimatedDurationMinutes: {
+            type: Number,
+            min: 0,
+            default: 0,
         },
     },
 
@@ -198,9 +233,12 @@ lessonSchema.methods.getPreviousLesson = function() {
 
 // Virtual for estimated read time (for articles)
 lessonSchema.virtual("estimatedReadTime").get(function() {
-    if (this.type === "article" && this.content.articleContent) {
+    const articleText =
+        this.content?.articleContent ||
+        extractPlainTextFromRichContent(this.content?.articleContentRich || null);
+    if (this.type === "article" && articleText) {
         const wordsPerMinute = 200;
-        const wordCount = this.content.articleContent.split(/\s+/).length;
+        const wordCount = articleText.split(/\s+/).length;
         return Math.ceil(wordCount / wordsPerMinute);
     }
     return null;

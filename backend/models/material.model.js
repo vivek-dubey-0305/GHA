@@ -102,6 +102,11 @@ const materialSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    estimatedDurationMinutes: {
+        type: Number,
+        min: 0,
+        default: 0,
+    },
     tags: [String],
 
     // Status

@@ -5,6 +5,7 @@ import { Enrollment } from "../models/enrollment.model.js";
 import { User } from "../models/user.model.js";
 import { Instructor } from "../models/instructor.model.js";
 import { Wallet } from "../models/wallet.model.js";
+import { Batch } from "../models/batch.model.js";
 import mongoose from "mongoose";
 import { asyncHandler } from "../middlewares/async.middleware.js";
 import { errorResponse, successResponse } from "../utils/response.utils.js";
@@ -38,8 +39,7 @@ export const initiatePayment = asyncHandler(async (req, res) => {
     if (course.status !== "published" || !course.isPublished) {
         return errorResponse(res, 400, "Course is not available for enrollment");
     }
-    console.log("Over here")
-    if (course.maxStudents && course.enrolledCount >= course.maxStudents) {
+    if (course.type === "live" && course.maxStudents && course.enrolledCount >= course.maxStudents) {
         return errorResponse(res, 400, "Course is full");
     }
 
@@ -96,10 +96,62 @@ export const initiatePayment = asyncHandler(async (req, res) => {
                 }
             ], { session });
 
+            let assignedBatchId = null;
+            let assignedBatchStartDate = null;
+            let assignedBatchEndDate = null;
+            if (course.type === "live") {
+                let batch = await Batch.findOne({
+                    courseId,
+                    status: { $in: ["scheduled", "active"] },
+                }).sort({ startDate: 1 }).session(session);
+
+                if (!batch) {
+                    const embeddedBatch = Array.isArray(course.batches) && course.batches.length > 0 ? course.batches[0] : null;
+                    const now = new Date();
+                    const defaultStart = embeddedBatch?.startDate || now;
+                    const defaultEnd = embeddedBatch?.endDate || new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+                    const created = await Batch.create([{
+                        courseId,
+                        name: embeddedBatch?.name || `${course.title} Batch 1`,
+                        startDate: defaultStart,
+                        endDate: defaultEnd,
+                        instructorId: course.instructor,
+                        status: defaultStart > now ? "scheduled" : "active",
+                    }], { session });
+                    batch = created[0];
+                }
+
+                if (batch) {
+                    const now = new Date();
+                    if (batch.endDate && new Date(batch.endDate) <= now) {
+                        throw new Error("Live batch has ended. Enrollment is closed");
+                    }
+                    assignedBatchId = batch._id;
+                    assignedBatchStartDate = batch.startDate || null;
+                    assignedBatchEndDate = batch.endDate || null;
+                    await Batch.updateOne(
+                        { _id: batch._id },
+                        { $addToSet: { students: req.user.id } },
+                        { session }
+                    );
+                }
+            }
+
             const enrollment = await Enrollment.create([
                 {
                     user: req.user.id,
                     course: courseId,
+                    type: course.type === "live" ? "live" : "recorded",
+                    batchId: assignedBatchId,
+                    liveAccessStatus: course.type === "live" && assignedBatchId
+                        ? assignedBatchEndDate && assignedBatchEndDate <= new Date()
+                            ? "completed"
+                            : assignedBatchStartDate > new Date()
+                            ? "awaiting_start"
+                            : "active"
+                        : "not_applicable",
+                    isLifetime: course.type !== "live",
+                    expiryDate: course.type === "live" ? assignedBatchEndDate : undefined,
                     payment: payment[0]._id,
                     totalLessons: course.totalLessons || 0,
                     status: "active"
@@ -373,7 +425,7 @@ export const handleWebhook = asyncHandler(async (req, res) => {
                 }
 
                 const liveCourse = await Course.findById(livePayment.course)
-                    .select("instructor totalLessons maxStudents enrolledCount")
+                    .select("instructor totalLessons maxStudents enrolledCount type batches title")
                     .session(session);
 
                 if (!liveCourse) {
@@ -393,14 +445,66 @@ export const handleWebhook = asyncHandler(async (req, res) => {
                 }).session(session);
 
                 if (!existingEnrollment) {
-                    if (liveCourse.maxStudents && liveCourse.enrolledCount >= liveCourse.maxStudents) {
+                    if (liveCourse.type === "live" && liveCourse.maxStudents && liveCourse.enrolledCount >= liveCourse.maxStudents) {
                         throw new Error("Course is full while processing webhook");
+                    }
+
+                    let assignedBatchId = null;
+                    let assignedBatchStartDate = null;
+                    let assignedBatchEndDate = null;
+                    if (liveCourse.type === "live") {
+                        let batch = await Batch.findOne({
+                            courseId: livePayment.course,
+                            status: { $in: ["scheduled", "active"] },
+                        }).sort({ startDate: 1 }).session(session);
+
+                        if (!batch) {
+                            const embeddedBatch = Array.isArray(liveCourse.batches) && liveCourse.batches.length > 0 ? liveCourse.batches[0] : null;
+                            const now = new Date();
+                            const defaultStart = embeddedBatch?.startDate || now;
+                            const defaultEnd = embeddedBatch?.endDate || new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+                            const created = await Batch.create([{
+                                courseId: livePayment.course,
+                                name: embeddedBatch?.name || `${liveCourse.title} Batch 1`,
+                                startDate: defaultStart,
+                                endDate: defaultEnd,
+                                instructorId: liveCourse.instructor,
+                                status: defaultStart > now ? "scheduled" : "active",
+                            }], { session });
+                            batch = created[0];
+                        }
+
+                        if (batch) {
+                            const now = new Date();
+                            if (batch.endDate && new Date(batch.endDate) <= now) {
+                                throw new Error("Live batch has ended. Enrollment is closed");
+                            }
+                            assignedBatchId = batch._id;
+                            assignedBatchStartDate = batch.startDate || null;
+                            assignedBatchEndDate = batch.endDate || null;
+                            await Batch.updateOne(
+                                { _id: batch._id },
+                                { $addToSet: { students: livePayment.user } },
+                                { session }
+                            );
+                        }
                     }
 
                     await Enrollment.create([
                         {
                             user: livePayment.user,
                             course: livePayment.course,
+                            type: liveCourse.type === "live" ? "live" : "recorded",
+                            batchId: assignedBatchId,
+                            liveAccessStatus: liveCourse.type === "live" && assignedBatchId
+                                ? assignedBatchEndDate && assignedBatchEndDate <= new Date()
+                                    ? "completed"
+                                    : assignedBatchStartDate > new Date()
+                                    ? "awaiting_start"
+                                    : "active"
+                                : "not_applicable",
+                            isLifetime: liveCourse.type !== "live",
+                            expiryDate: liveCourse.type === "live" ? assignedBatchEndDate : undefined,
                             payment: livePayment._id,
                             totalLessons: liveCourse.totalLessons || 0,
                             status: "active"

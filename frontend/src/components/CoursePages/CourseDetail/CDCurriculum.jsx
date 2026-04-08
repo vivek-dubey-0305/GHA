@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { getIconByLessonType, IconPresets } from "../../../utils/iconRenderer";
 import { apiClient } from "../../../utils/api.utils.js";
+import { devError, devLog } from "../../../utils/devLogger.js";
+import { formatDuration, getLessonDurationMinutes, getModuleDurationMinutes } from "../../../utils/format.utils.js";
 import VideoPlayer from "./VideoPlayer";
 
 function ModuleItem({ 
@@ -45,16 +47,6 @@ function ModuleItem({
     }
   };
 
-  /**
-   * Format video duration from seconds
-   */
-  const formatDuration = (seconds) => {
-    if (!seconds) return "--:--";
-    const mins = Math.floor(seconds / 60);
-    const secs = String(seconds % 60).padStart(2, "0");
-    return `${mins}:${secs}`;
-  };
-
   return (
     <div className="cd-module">
       <div
@@ -67,7 +59,7 @@ function ModuleItem({
         <span className="cd-module-title-text">{mod.title}</span>
         <span className="cd-module-meta">
           {mod.totalLessons || lessons.length} lessons ·{" "}
-          {Math.round((mod.totalDuration || 0) / 60 * 10) / 10}h
+          {formatDuration(getModuleDurationMinutes(mod))}
         </span>
         <span className="cd-module-arrow">▶</span>
       </div>
@@ -113,17 +105,7 @@ function ModuleItem({
 
             {/* Duration or Action */}
             <div className="cd-lesson-action">
-              {lesson.type === "video" ? (
-                <span className="cd-lesson-dur">
-                  {lesson.videoId?.duration
-                    ? formatDuration(lesson.videoId.duration)
-                    : "--:--"}
-                </span>
-              ) : lesson.type === "material" ? (
-                <span className="cd-lesson-download">
-                  {IconPresets.downloadIcon({ size: 16 })}
-                </span>
-              ) : null}
+              <span className="cd-lesson-dur">{formatDuration(getLessonDurationMinutes(lesson))}</span>
             </div>
           </div>
         ))}
@@ -151,7 +133,7 @@ function ModuleItem({
 
               <div className="cd-lesson-action">
                 <span className="cd-lesson-dur">
-                  {Math.floor((mod.totalDuration || 30) / (mod.totalLessons || 1))}:00
+                  {formatDuration(Math.round((mod.totalDuration || 0) / (mod.totalLessons || 1)))}
                 </span>
               </div>
             </div>
@@ -170,8 +152,7 @@ export default function CDCurriculum({ course, modules }) {
   const totalModules = Number(course?.totalModules || 0);
   const totalLessons = Number(course?.totalLessons || 0);
   const totalDuration = Number(course?.totalDuration || 0);
-  const durationHours = Math.round(((totalDuration / 60) * 10)) / 10;
-  const durationLabel = totalDuration < 60 ? `${totalDuration}m` : `${durationHours}h`;
+  const durationLabel = formatDuration(totalDuration);
 
   const hasRenderableModules = Array.isArray(modules) && modules.some((m) => m && typeof m === "object" && !Array.isArray(m));
 
@@ -233,10 +214,10 @@ export default function CDCurriculum({ course, modules }) {
           ).length;
 
           setTotalMaterials(count);
-          console.log("-- Materials count fetched:", count);
+          devLog("Course materials count fetched", { courseId: course._id, count });
         }
       } catch (error) {
-        console.error("Error fetching materials count:", error);
+        devError("Course materials count fetch failed", { courseId: course._id, error: error?.message || error });
         setTotalMaterials(moduleMaterialCount || 0);
       }
     };
@@ -263,41 +244,6 @@ export default function CDCurriculum({ course, modules }) {
       setCurrentVideo({ url: "", title: "" });
     }, 300);
   };
-
-  useEffect(() => {
-    console.log("== COURSE CURRICULUM DEBUG #3 ==");
-    console.log("-- courseId:", course?._id);
-    console.log(
-      "-- totals => modules:",
-      totalModules,
-      "lessons:",
-      totalLessons,
-      "duration(min):",
-      totalDuration
-    );
-    console.log(
-      "** apiModules length:",
-      Array.isArray(modules) ? modules.length : 0,
-      "| hasRenderableModules:",
-      hasRenderableModules,
-      "| materials:",
-      totalMaterials
-    );
-    if (!hasRenderableModules && totalModules > 0) {
-      console.log(
-        "## using fallback modules from course totals because populated modules are empty/non-renderable"
-      );
-    }
-    console.log("===============================");
-  }, [
-    course?._id,
-    hasRenderableModules,
-    modules,
-    totalModules,
-    totalLessons,
-    totalDuration,
-    totalMaterials,
-  ]);
 
   if (!course) return null;
 
@@ -328,7 +274,7 @@ export default function CDCurriculum({ course, modules }) {
         </div>
         <div className="cd-curr-stat">
           <div className="cd-curr-stat-num">{durationLabel}</div>
-          <div className="cd-curr-stat-label">Video</div>
+          <div className="cd-curr-stat-label">Duration</div>
         </div>
         <div className="cd-curr-stat">
           <div className="cd-curr-stat-num">{resourcesCount || "0"}</div>

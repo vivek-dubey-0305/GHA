@@ -89,7 +89,8 @@ export const getMyEnrollments = asyncHandler(async (req, res) => {
 
     const total = await Enrollment.countDocuments(filter);
     const enrollments = await Enrollment.find(filter)
-        .populate("course", "title thumbnail instructor rating totalDuration totalModules totalLessons price category level")
+        .populate("course", "title thumbnail instructor rating totalDuration totalModules totalLessons price category level type")
+        .populate("batchId", "name startDate endDate status")
         .populate("payment", "amount currency status")
         .sort({ enrolledAt: -1 })
         .skip(skip)
@@ -110,6 +111,7 @@ export const getEnrollmentDetails = asyncHandler(async (req, res) => {
         course: req.params.courseId
     })
         .populate("course", "title thumbnail instructor modules totalModules totalLessons totalDuration")
+        .populate("batchId", "name startDate endDate status")
         .populate("payment", "amount currency status transactionId");
 
     if (!enrollment) return errorResponse(res, 404, "Enrollment not found");

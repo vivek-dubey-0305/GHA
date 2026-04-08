@@ -12,6 +12,8 @@ export default function AssignmentCard({ assignment, submission, delay = 0, onOp
   const isOverdue = daysLeft < 0;
   const displayStatus = isOverdue && assignment.status === "pending" ? "overdue" : assignment.status;
   const cfg = ASSIGNMENT_STATUS[displayStatus] ?? ASSIGNMENT_STATUS.pending;
+  const gradingType = String(assignment?.gradingType || "manual").toLowerCase();
+  const assessmentType = String(assignment?.assessmentType || assignment?.type || "").toUpperCase();
 
   return (
     <motion.div
@@ -40,6 +42,18 @@ export default function AssignmentCard({ assignment, submission, delay = 0, onOp
 
       <h3 className="text-white font-semibold text-sm mb-1 leading-snug">{assignment.title}</h3>
       <p className="text-gray-500 text-xs mb-1">{assignment.course?.title}</p>
+      <div className="flex items-center gap-1.5 mb-2">
+        <span
+          className={`text-[10px] px-2 py-0.5 rounded-full border ${gradingType === "auto" ? "text-cyan-300 border-cyan-500/40 bg-cyan-500/10" : "text-orange-300 border-orange-500/40 bg-orange-500/10"}`}
+        >
+          {gradingType === "auto" ? "Auto Graded" : "Manual Review"}
+        </span>
+        {assessmentType && (
+          <span className="text-[10px] px-2 py-0.5 rounded-full border border-gray-700 text-gray-400 bg-black/30">
+            {assessmentType}
+          </span>
+        )}
+      </div>
       <p className="text-gray-600 text-xs mb-4 line-clamp-2">{assignment.description}</p>
 
       {/* Due date */}

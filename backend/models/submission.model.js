@@ -315,7 +315,11 @@ const submissionSchema = new mongoose.Schema({
                     message: "Invalid URL format"
                 }
             }
-        }]
+        }],
+        mcqAnswers: {
+            type: mongoose.Schema.Types.Mixed,
+            default: {},
+        }
     },
 
     // Submission Status
@@ -339,6 +343,27 @@ const submissionSchema = new mongoose.Schema({
         type: Number,
         required: true,
         min: 0
+    },
+    gradingType: {
+        type: String,
+        enum: ["auto", "manual"],
+        default: "manual",
+    },
+    gradingStatus: {
+        type: String,
+        enum: ["manual_review", "queued", "processing", "completed", "failed"],
+        default: "manual_review",
+    },
+    gradingSource: {
+        type: String,
+        enum: ["auto", "instructor"],
+        default: "instructor",
+    },
+    gradingError: {
+        type: String,
+        trim: true,
+        maxlength: 1000,
+        default: "",
     },
     grade: {
         type: String,
@@ -449,6 +474,7 @@ submissionSchema.index({ course: 1, status: 1 });
 submissionSchema.index({ gradedBy: 1, gradedAt: -1 });
 submissionSchema.index({ submittedAt: -1 });
 submissionSchema.index({ status: 1, submittedAt: -1 });
+submissionSchema.index({ gradingStatus: 1, submittedAt: -1 });
 
 // Compound indexes
 submissionSchema.index({ user: 1, course: 1, status: 1 });
@@ -488,7 +514,7 @@ submissionSchema.statics.getUserSubmissions = function(userId, options = {}) {
     if (status) query.status = status;
 
     return this.find(query)
-        .populate("assignment", "title dueDate maxScore type instructions")
+        .populate("assignment", "title dueDate maxScore type assessmentType gradingType instructions")
         .populate("course", "title")
         .sort(sort)
         .limit(limit)
@@ -539,6 +565,10 @@ submissionSchema.methods.assignGrade = function(score, feedback, gradedBy, rubri
     this.gradedAt = new Date();
     this.status = "graded";
     this.rubricScores = rubricScores;
+    this.gradingType = "manual";
+    this.gradingStatus = "completed";
+    this.gradingSource = "instructor";
+    this.gradingError = "";
 
     // Calculate grade based on score percentage
     const percentage = (score / this.maxScore) * 100;

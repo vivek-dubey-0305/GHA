@@ -8,6 +8,7 @@ import {
     getMyDoubtQuota,
     getMyDoubtTicketById,
     addUserReplyToDoubtTicket,
+    submitDoubtResolutionFeedback,
     getAssignedDoubtTickets,
     getAssignedDoubtTicketById,
     acceptDoubtTicket,
@@ -34,6 +35,7 @@ router.post(
     handleMulterError,
     addUserReplyToDoubtTicket
 );
+router.patch("/user/:id/feedback", authenticateUser, submitDoubtResolutionFeedback);
 
 router.get("/instructor/assigned", authenticateInstructor, getAssignedDoubtTickets);
 router.get("/instructor/:id", authenticateInstructor, getAssignedDoubtTicketById);

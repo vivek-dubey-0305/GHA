@@ -84,6 +84,7 @@
 import axios from 'axios';
 import { store } from '../redux/store/store.js';
 import { refreshToken as refreshTokenAction, manualLogout } from '../redux/slices/auth.slice.js';
+import { devError, devLog, devWarn } from './devLogger.js';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1';
 
@@ -92,6 +93,22 @@ export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true, // include cookies
 });
+
+apiClient.interceptors.request.use(
+  (config) => {
+    config.metadata = { startedAt: Date.now() };
+    devLog('API Request', {
+      method: (config.method || 'get').toUpperCase(),
+      url: `${config.baseURL || ''}${config.url || ''}`,
+      params: config.params || null,
+    });
+    return config;
+  },
+  (error) => {
+    devError('API Request Setup Error', error?.message || error);
+    return Promise.reject(error);
+  }
+);
 
 // Auth-only axios instance without the response interceptor
 // Use this to call refresh-token so the interceptor won't intercept it and cause recursion.
@@ -114,9 +131,25 @@ const processQueue = (error) => {
 };
 
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const startedAt = response?.config?.metadata?.startedAt || Date.now();
+    devLog('API Response', {
+      method: (response?.config?.method || 'get').toUpperCase(),
+      url: `${response?.config?.baseURL || ''}${response?.config?.url || ''}`,
+      status: response?.status,
+      durationMs: Date.now() - startedAt,
+    });
+    return response;
+  },
   async (error) => {
     const originalRequest = error.config;
+
+    devWarn('API Error', {
+      method: (originalRequest?.method || 'get').toUpperCase(),
+      url: `${originalRequest?.baseURL || ''}${originalRequest?.url || ''}`,
+      status: error?.response?.status,
+      message: error?.response?.data?.message || error?.message,
+    });
 
     // If error is not 401, reject normally
     if (error.response?.status !== 401) {

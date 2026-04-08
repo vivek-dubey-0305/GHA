@@ -1,5 +1,6 @@
 import { Submission } from "../models/submission.model.js";
 import { DateTime } from "luxon";
+import { randomUUID } from "crypto";
 import { Assignment } from "../models/assignment.model.js";
 import { Course } from "../models/course.model.js";
 import { Enrollment } from "../models/enrollment.model.js";
@@ -22,6 +23,7 @@ import {
     ACHIEVEMENT_STATUS,
 } from "../constants/achievement.constant.js";
 import { createAchievementEvent } from "../services/achievement.service.js";
+import { enqueueMcqGradingJob } from "../services/grading-queue.service.js";
 
 /**
  * Submission Controller
@@ -52,6 +54,22 @@ const parseArrayField = (rawValue) => {
         }
     }
     return [];
+};
+
+const parseObjectField = (rawValue) => {
+    if (!rawValue) return {};
+    if (typeof rawValue === "object" && !Array.isArray(rawValue)) return rawValue;
+    if (typeof rawValue === "string") {
+        const trimmed = rawValue.trim();
+        if (!trimmed) return {};
+        try {
+            const parsed = JSON.parse(trimmed);
+            return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+        } catch {
+            return {};
+        }
+    }
+    return {};
 };
 
 const isPrivateHost = (host = "") => {
@@ -129,11 +147,27 @@ const parseContentPayload = (req) => {
 
     const text = String(content.text ?? directText ?? "").trim();
     const links = normalizeLinks(content.links ?? directLinks);
+    const mcqAnswers = parseObjectField(content.mcqAnswers ?? req.body?.answers);
 
-    return { text, links };
+    return { text, links, mcqAnswers };
 };
 
 const IST_ZONE = "Asia/Kolkata";
+const AUTO_GRADED_ASSESSMENT_TYPES = ["mcq", "true_false", "matching"];
+const DEBUG_GRADING_ENABLED = String(process.env.DEBUG_GRADING || "").toLowerCase() === "true";
+
+const debugGrading = (message, meta = {}) => {
+    if (!DEBUG_GRADING_ENABLED) return;
+    logger.info(`🧪 ===[AUTO_GRADER_API]=== ${message} ${JSON.stringify(meta)}`);
+};
+
+const isObjectiveAssessmentType = (assessmentType) => {
+    return AUTO_GRADED_ASSESSMENT_TYPES.includes(String(assessmentType || "").toLowerCase());
+};
+
+const normalizeToken = (value = "") => String(value ?? "").trim();
+
+const normalizeTokenLower = (value = "") => normalizeToken(value).toLowerCase();
 
 const isPastDueDate = (dueDate) => {
     if (!dueDate) return false;
@@ -146,6 +180,40 @@ const isPastDueDate = (dueDate) => {
 };
 
 const validateByAssignmentType = ({ assignment, content }) => {
+    if (isObjectiveAssessmentType(assignment.assessmentType)) {
+        const answers = content.mcqAnswers || {};
+        const hasAnswers = answers && typeof answers === "object" && Object.keys(answers).length > 0;
+        if (!hasAnswers) {
+            throw new Error("Objective assignment requires answers payload");
+        }
+
+        if (assignment.assessmentType === "true_false") {
+            const values = Object.values(answers);
+            const hasInvalid = values.some((value) => {
+                const normalized = normalizeTokenLower(value);
+                return !["true", "false"].includes(normalized);
+            });
+
+            if (hasInvalid) {
+                throw new Error("True/False assignment accepts only true/false answers");
+            }
+        }
+
+        if (assignment.assessmentType === "matching") {
+            const values = Object.values(answers);
+            const hasInvalid = values.some((value) => {
+                if (!value || typeof value !== "object" || Array.isArray(value)) return true;
+                return Object.values(value).some((mapped) => !normalizeToken(mapped));
+            });
+
+            if (hasInvalid) {
+                throw new Error("Matching assignment requires term-to-option mapping answers");
+            }
+        }
+
+        return;
+    }
+
     const type = assignment.type || "text";
     const hasText = Boolean(content.text?.trim());
     const hasFiles = Array.isArray(content.files) && content.files.length > 0;
@@ -181,6 +249,48 @@ const validateByAssignmentType = ({ assignment, content }) => {
             throw new Error(`Submission text cannot exceed ${assignment.wordLimit.max} words.`);
         }
     }
+};
+
+const enqueueAutoGradingIfEligible = async ({ assignment, submission, traceId }) => {
+    const isAutoObjective = isObjectiveAssessmentType(assignment.assessmentType) && assignment.gradingType === "auto";
+    if (!isAutoObjective) {
+        return {
+            queued: false,
+            eligible: false,
+            traceId: String(traceId || ""),
+            jobId: null,
+        };
+    }
+
+    const job = await enqueueMcqGradingJob({
+        submissionId: submission._id,
+        assignmentId: assignment._id,
+        userId: submission.user,
+        courseId: submission.course,
+        assessmentType: assignment.assessmentType,
+        attemptNumber: submission.attemptNumber,
+        traceId,
+        isLate: submission.isLate,
+        latePenalty: submission.latePenalty,
+    });
+
+    if (!job) {
+        throw new Error("Grading queue unavailable");
+    }
+
+    return {
+        queued: true,
+        eligible: true,
+        traceId: String(traceId || ""),
+        jobId: String(job.id),
+    };
+};
+
+const markSubmissionQueueFailure = async (submission, errorMessage) => {
+    submission.gradingStatus = "failed";
+    submission.gradingError = String(errorMessage || "Grading queue unavailable").slice(0, 1000);
+    submission.gradingSource = "auto";
+    await submission.save();
 };
 
 const uploadSubmissionFiles = async ({ files = [], assignment, course }) => {
@@ -267,7 +377,13 @@ export const createSubmission = asyncHandler(async (req, res) => {
     }
 
     if (existing && existing.status === "graded") {
-        return errorResponse(res, 400, "This submission is graded and cannot be updated");
+        const canResubmitAutoObjective =
+            assignment.gradingType === "auto" &&
+            isObjectiveAssessmentType(assignment.assessmentType);
+
+        if (!canResubmitAutoObjective) {
+            return errorResponse(res, 400, "This submission is graded and cannot be updated");
+        }
     }
 
     const isLate = isPastDueDate(assignment.dueDate);
@@ -286,11 +402,15 @@ export const createSubmission = asyncHandler(async (req, res) => {
         text: parsed.text,
         links: parsed.links,
         files: uploadedFiles,
+        mcqAnswers: parsed.mcqAnswers,
     };
 
     if (existing) {
         mergedContent.text = parsed.text || existing.content?.text || "";
         mergedContent.links = parsed.links.length > 0 ? parsed.links : (existing.content?.links || []);
+        mergedContent.mcqAnswers = Object.keys(parsed.mcqAnswers || {}).length > 0
+            ? parsed.mcqAnswers
+            : (existing.content?.mcqAnswers || {});
         mergedContent.files = [
             ...(existing.content?.files || []),
             ...uploadedFiles,
@@ -314,6 +434,10 @@ export const createSubmission = asyncHandler(async (req, res) => {
         content: mergedContent,
         maxScore: assignment.maxScore,
         status: "submitted",
+        gradingType: assignment.gradingType === "auto" ? "auto" : "manual",
+        gradingStatus: assignment.gradingType === "auto" ? "queued" : "manual_review",
+        gradingSource: assignment.gradingType === "auto" ? "auto" : "instructor",
+        gradingError: "",
         submittedAt: new Date(),
         submittedBy: req.user.id,
         isLate,
@@ -322,6 +446,49 @@ export const createSubmission = asyncHandler(async (req, res) => {
 
     if (existing) {
         const updated = await existing.resubmit(mergedContent);
+        updated.gradingType = assignment.gradingType === "auto" ? "auto" : "manual";
+        updated.gradingStatus = assignment.gradingType === "auto" ? "queued" : "manual_review";
+        updated.gradingSource = assignment.gradingType === "auto" ? "auto" : "instructor";
+        updated.gradingError = "";
+        await updated.save();
+
+        const gradingTraceId = randomUUID();
+        let queueMeta = {
+            queued: false,
+            eligible: assignment.gradingType === "auto" && isObjectiveAssessmentType(assignment.assessmentType),
+            traceId: gradingTraceId,
+            jobId: null,
+        };
+
+        if (queueMeta.eligible) {
+            try {
+                debugGrading("API_RESUBMIT_QUEUE_START", {
+                    submissionId: String(updated._id),
+                    assignmentId: String(assignment._id),
+                    attemptNumber: Number(updated.attemptNumber || 1),
+                    traceId: gradingTraceId,
+                });
+                queueMeta = await enqueueAutoGradingIfEligible({
+                    assignment,
+                    submission: updated,
+                    traceId: gradingTraceId,
+                });
+                debugGrading("API_RESUBMIT_QUEUE_DONE", {
+                    submissionId: String(updated._id),
+                    traceId: queueMeta.traceId,
+                    jobId: queueMeta.jobId,
+                });
+            } catch (queueError) {
+                await markSubmissionQueueFailure(updated, `Queue enqueue failed: ${queueError.message}`);
+                logger.error(`[AUTO_GRADER_API] Resubmit queue failed for submission ${updated._id}: ${queueError.message}`);
+                queueMeta = {
+                    queued: false,
+                    eligible: true,
+                    traceId: gradingTraceId,
+                    jobId: null,
+                };
+            }
+        }
 
         if (lesson) {
             await upsertLessonProgress({
@@ -364,10 +531,52 @@ export const createSubmission = asyncHandler(async (req, res) => {
             dedupeKey: `achievement:assignment-submit:${req.user.id}:${assignment._id}`,
         });
 
-        return successResponse(res, 200, "Assignment submission updated successfully", updated);
+        return successResponse(res, 200, "Assignment submission updated successfully", {
+            submission: updated,
+            autoGradingQueued: queueMeta.queued,
+            gradingTraceId: queueMeta.traceId,
+        });
     }
 
     const submission = await Submission.create(submissionData);
+
+    const gradingTraceId = randomUUID();
+    let queueMeta = {
+        queued: false,
+        eligible: assignment.gradingType === "auto" && isObjectiveAssessmentType(assignment.assessmentType),
+        traceId: gradingTraceId,
+        jobId: null,
+    };
+
+    if (queueMeta.eligible) {
+        try {
+            debugGrading("API_CREATE_QUEUE_START", {
+                submissionId: String(submission._id),
+                assignmentId: String(assignment._id),
+                attemptNumber: Number(submission.attemptNumber || 1),
+                traceId: gradingTraceId,
+            });
+            queueMeta = await enqueueAutoGradingIfEligible({
+                assignment,
+                submission,
+                traceId: gradingTraceId,
+            });
+            debugGrading("API_CREATE_QUEUE_DONE", {
+                submissionId: String(submission._id),
+                traceId: queueMeta.traceId,
+                jobId: queueMeta.jobId,
+            });
+        } catch (queueError) {
+            await markSubmissionQueueFailure(submission, `Queue enqueue failed: ${queueError.message}`);
+            logger.error(`[AUTO_GRADER_API] Create queue failed for submission ${submission._id}: ${queueError.message}`);
+            queueMeta = {
+                queued: false,
+                eligible: true,
+                traceId: gradingTraceId,
+                jobId: null,
+            };
+        }
+    }
 
     if (lesson) {
         await upsertLessonProgress({
@@ -457,7 +666,11 @@ export const createSubmission = asyncHandler(async (req, res) => {
     // Update assignment submission count
     await assignment.updateAnalytics();
 
-    successResponse(res, 201, "Assignment submitted successfully", submission);
+    successResponse(res, 201, "Assignment submitted successfully", {
+        submission,
+        autoGradingQueued: queueMeta.queued,
+        gradingTraceId: queueMeta.traceId,
+    });
 });
 
 // @route   GET /api/v1/submissions/my

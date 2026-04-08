@@ -9,6 +9,7 @@ import {
 import { DragDropContext, Draggable } from '@hello-pangea/dnd';
 import { InstructorLayout } from '../../components/layout/InstructorLayout';
 import { StrictModeDroppable } from '../../components/ui/StrictModeDroppable';
+import RichTextEditor from '../../components/ui/RichTextEditor';
 import {
   createFullCourse,
   createCourseDraft,
@@ -29,16 +30,25 @@ import {
   LESSON_TYPES,
   MATERIAL_TYPES,
   SUBMISSION_TYPES,
+  ASSESSMENT_TYPES,
+  COURSE_ASSESSMENT_TYPE_MAP,
+  COURSE_TYPES,
 } from '../../constants/course/index';
 import {
   uid, formatDuration, calculateModuleDuration, calculateCourseDuration,
   createEmptyLesson, createEmptyModule, isValidVideoFile, isValidImageFile,
 } from '../../utils/course.utils';
+import {
+  countWords,
+  extractPlainTextFromRichContent,
+  normalizeRichContentInput,
+} from '../../utils/richContent.utils';
 
 // ─── style constants ──────────────────────────────────────────────
 const inputCls = 'w-full px-3 py-2 bg-[#0a0a0a] border border-gray-800 rounded-lg text-white text-sm placeholder:text-gray-600 focus:outline-none focus:border-gray-600 transition-colors';
 const selectCls = inputCls;
 const textareaCls = `${inputCls} resize-none`;
+const MAX_PROJECT_COUNT = 10;
 
 const getFilePreviewKind = (fileName = '', mimeType = '', fileUrl = '') => {
   const type = (mimeType || '').toLowerCase();
@@ -67,12 +77,13 @@ const DEFAULT_CATEGORY = CATEGORIES[0]?.value || '';
 const DEFAULT_SUBCATEGORY = CATEGORY_MAP[DEFAULT_CATEGORY]?.[0] || '';
 
 // ─── buildFormData ────────────────────────────────────────────────
-const buildFormData = (course, modules, thumbnailFile, trailerFile, certificate, status) => {
+const buildFormData = (course, modules, thumbnailFile, trailerFile, certificate, status, existingCourseId = null) => {
   const fd = new FormData();
   const normalizedProjects = (course.projects || [])
     .map((project) => ({
       title: (project?.title || '').trim(),
-      description: (project?.description || '').trim(),
+      description: extractPlainTextFromRichContent(project?.descriptionRich || project?.description || ''),
+      descriptionRich: normalizeRichContentInput(project?.descriptionRich || project?.description || ''),
     }))
     .filter((project) => project.title && project.description);
 
@@ -81,6 +92,10 @@ const buildFormData = (course, modules, thumbnailFile, trailerFile, certificate,
     discountPrice: course.discountPrice ? Number(course.discountPrice) : undefined,
     discountValidUntil: course.discountValidUntil || undefined,
     maxStudents: course.maxStudents ? Number(course.maxStudents) : undefined,
+    projectCount: course.projectBased
+      ? Math.max(1, Math.min(MAX_PROJECT_COUNT, Number(course.projectCount) || normalizedProjects.length || 1))
+      : 0,
+    courseId: existingCourseId || undefined,
     projects: course.projectBased ? normalizedProjects : [],
     totalDuration: calculateCourseDuration(modules),
     modules: modules.map((m, mi) => {
@@ -99,15 +114,25 @@ const buildFormData = (course, modules, thumbnailFile, trailerFile, certificate,
               duration: parseInt(l.video.duration) || 0 
             };
           }
-          if (l.type === 'article') lp.content = { articleContent: l.content?.articleContent || '' };
+          if (l.type === 'article') {
+            const articleContentRich = normalizeRichContentInput(l.content?.articleContentRich || l.content?.articleContent || '');
+            lp.content = {
+              articleContent: extractPlainTextFromRichContent(articleContentRich),
+              articleContentRich,
+              articleEstimatedDurationMinutes: parseInt(l.content?.articleEstimatedDurationMinutes) || 0,
+            };
+          }
           if (l.type === 'assignment' && l.assignment) {
             if (l.assignment.thumbnailFile) fd.append(`module_${mi}_lesson_${li}_assignment_thumb`, l.assignment.thumbnailFile);
             lp.assignment = {
               title: l.assignment.title || l.title, description: l.assignment.description || l.assignment.instructions || 'No description',
               instructions: l.assignment.instructions || '', maxScore: parseInt(l.assignment.maxScore) || 100,
               passingScore: parseInt(l.assignment.passingScore) || 40, dueDate: l.assignment.dueDate || undefined,
+              assessmentType: l.assignment.assessmentType || 'subjective',
+              questions: Array.isArray(l.assignment.questions) ? l.assignment.questions : [],
               type: l.assignment.type || 'text', allowLateSubmission: l.assignment.allowLateSubmission || false,
               lateSubmissionPenalty: parseInt(l.assignment.lateSubmissionPenalty) || 0,
+              estimatedDurationMinutes: parseInt(l.assignment.estimatedDurationMinutes) || 0,
             };
           }
           if (l.type === 'live' && l.liveClass) {
@@ -123,6 +148,7 @@ const buildFormData = (course, modules, thumbnailFile, trailerFile, certificate,
             lp.material = {
               title: l.material.title || l.title, description: l.material.description || '',
               type: l.material.type || 'pdf', fileName: l.material.fileName || '',
+              estimatedDurationMinutes: parseInt(l.material.estimatedDurationMinutes) || 0,
             };
           }
           return lp;
@@ -170,7 +196,7 @@ function DynamicList({ items, onChange, placeholder, label }) {
 
 // ─── ProjectsBuilder ─────────────────────────────────────────────
 function ProjectsBuilder({ projects, onChange }) {
-  const addProject = () => onChange([...projects, { title: '', description: '', _uid: uid() }]);
+  const addProject = () => onChange([...projects, { title: '', description: '', descriptionRich: normalizeRichContentInput(''), _uid: uid() }]);
   const removeProject = (idx) => onChange(projects.filter((_, index) => index !== idx));
   const updateProject = (idx, field, value) => {
     const copy = [...projects];
@@ -219,14 +245,23 @@ function ProjectsBuilder({ projects, onChange }) {
           </div>
           <div>
             <label className="text-gray-400 text-xs mb-1 block">Project Description</label>
-            <textarea
-              value={project.description || ''}
-              onChange={(e) => updateProject(idx, 'description', e.target.value)}
-              className={textareaCls}
-              rows={3}
-              maxLength={700}
+            <RichTextEditor
+              value={project.descriptionRich || project.description || ''}
+              onChange={(nextValue) => {
+                const copy = [...projects];
+                copy[idx] = {
+                  ...copy[idx],
+                  descriptionRich: nextValue,
+                  description: extractPlainTextFromRichContent(nextValue),
+                };
+                onChange(copy);
+              }}
               placeholder="Describe this project"
+              minHeight="140px"
             />
+            <p className="text-gray-600 text-xs mt-1">
+              {extractPlainTextFromRichContent(project.descriptionRich || project.description || '').length} characters • {countWords(project.descriptionRich || project.description || '')} words
+            </p>
           </div>
         </div>
       ))}
@@ -258,15 +293,131 @@ function TagsInput({ tags, onChange }) {
 }
 
 // ─── LessonItem ───────────────────────────────────────────────────
-function LessonItem({ lesson, lessonIdx, onUpdate, onRemove, dragHandleProps }) {
+function LessonItem({ lesson, lessonIdx, onUpdate, onRemove, dragHandleProps, courseType = 'recorded' }) {
   const [collapsed, setCollapsed] = useState(false);
   const updateField = (field, value) => onUpdate({ ...lesson, [field]: value });
   const updateVideo = (field, value) => onUpdate({ ...lesson, video: { ...lesson.video, [field]: value } });
   const patchVideo = (patch) => onUpdate({ ...lesson, video: { ...lesson.video, ...patch } });
-  const updateAssignment = (field, value) => onUpdate({ ...lesson, assignment: { ...lesson.assignment, [field]: value } });
+  const patchAssignment = (patch) => onUpdate({ ...lesson, assignment: { ...lesson.assignment, ...patch } });
+  const updateAssignment = (field, value) => patchAssignment({ [field]: value });
+  const updateAssignmentQuestion = (index, patch) => {
+    const list = Array.isArray(lesson.assignment?.questions) ? [...lesson.assignment.questions] : [];
+    list[index] = { ...(list[index] || {}), ...patch };
+    updateAssignment('questions', list);
+  };
+  const removeAssignmentQuestion = (index) => {
+    const list = Array.isArray(lesson.assignment?.questions) ? [...lesson.assignment.questions] : [];
+    list.splice(index, 1);
+    updateAssignment('questions', list);
+  };
+  const addAssignmentQuestion = () => {
+    const currentType = lesson.assignment?.assessmentType || (courseType === 'recorded' ? 'mcq' : 'subjective');
+    const list = Array.isArray(lesson.assignment?.questions) ? [...lesson.assignment.questions] : [];
+    const questionId = `q${list.length + 1}`;
+
+    if (currentType === 'true_false') {
+      list.push({ questionId, type: 'true_false', question: '', options: ['True', 'False'], correctAnswer: 'True', marks: 1 });
+    } else if (currentType === 'matching') {
+      list.push({ questionId, type: 'matching', question: '', pairs: [{ term: '', correctOption: '', options: [] }], marks: 1 });
+    } else {
+      list.push({ questionId, type: 'mcq', question: '', options: ['', ''], correctAnswer: '', correctAnswers: [], marks: 1 });
+    }
+
+    updateAssignment('questions', list);
+  };
+  const addMcqOption = (questionIndex) => {
+    const question = lesson.assignment?.questions?.[questionIndex] || {};
+    const options = Array.isArray(question.options) ? [...question.options] : [];
+    if (options.length >= 6) return;
+    options.push("");
+    updateAssignmentQuestion(questionIndex, { options });
+  };
+  const removeMcqOption = (questionIndex, optionIndex) => {
+    const question = lesson.assignment?.questions?.[questionIndex] || {};
+    const options = Array.isArray(question.options) ? [...question.options] : [];
+    if (options.length <= 2) return;
+    const removed = options[optionIndex] || "";
+    options.splice(optionIndex, 1);
+
+    const correctAnswers = Array.isArray(question.correctAnswers)
+      ? question.correctAnswers.filter((item) => item !== removed)
+      : [];
+    const correctAnswer = question.correctAnswer === removed ? "" : (question.correctAnswer || "");
+
+    updateAssignmentQuestion(questionIndex, {
+      options,
+      correctAnswers,
+      correctAnswer,
+    });
+  };
+  const setMcqMultiple = (questionIndex, enabled) => {
+    const question = lesson.assignment?.questions?.[questionIndex] || {};
+    const answers = Array.isArray(question.correctAnswers) ? [...question.correctAnswers] : [];
+    if (!enabled) {
+      const first = answers[0] || question.correctAnswer || "";
+      updateAssignmentQuestion(questionIndex, {
+        correctAnswers: first ? [first] : [],
+        correctAnswer: first,
+      });
+      return;
+    }
+
+    const seed = answers.length > 0 ? answers : (question.correctAnswer ? [question.correctAnswer] : []);
+    updateAssignmentQuestion(questionIndex, {
+      correctAnswers: seed,
+      correctAnswer: seed[0] || "",
+    });
+  };
+  const toggleMcqCorrect = (questionIndex, optionValue, allowMultiple) => {
+    const question = lesson.assignment?.questions?.[questionIndex] || {};
+    const current = Array.isArray(question.correctAnswers) ? [...question.correctAnswers] : [];
+
+    if (!allowMultiple) {
+      updateAssignmentQuestion(questionIndex, {
+        correctAnswers: optionValue ? [optionValue] : [],
+        correctAnswer: optionValue || "",
+      });
+      return;
+    }
+
+    const exists = current.includes(optionValue);
+    const next = exists ? current.filter((item) => item !== optionValue) : [...current, optionValue];
+
+    updateAssignmentQuestion(questionIndex, {
+      correctAnswers: next,
+      correctAnswer: next[0] || "",
+    });
+  };
+  const addMatchingPair = (questionIndex) => {
+    const question = lesson.assignment?.questions?.[questionIndex] || {};
+    const pairs = Array.isArray(question.pairs) ? [...question.pairs] : [];
+    pairs.push({ term: "", correctOption: "", options: [] });
+    updateAssignmentQuestion(questionIndex, { pairs });
+  };
+  const removeMatchingPair = (questionIndex, pairIndex) => {
+    const question = lesson.assignment?.questions?.[questionIndex] || {};
+    const pairs = Array.isArray(question.pairs) ? [...question.pairs] : [];
+    if (pairs.length <= 1) return;
+    pairs.splice(pairIndex, 1);
+    updateAssignmentQuestion(questionIndex, { pairs });
+  };
+  const updateMatchingPair = (questionIndex, pairIndex, patch) => {
+    const question = lesson.assignment?.questions?.[questionIndex] || {};
+    const pairs = Array.isArray(question.pairs) ? [...question.pairs] : [];
+    pairs[pairIndex] = { ...(pairs[pairIndex] || {}), ...patch };
+    updateAssignmentQuestion(questionIndex, { pairs });
+  };
   const updateLiveClass = (field, value) => onUpdate({ ...lesson, liveClass: { ...lesson.liveClass, [field]: value } });
   const updateMaterial = (field, value) => onUpdate({ ...lesson, material: { ...lesson.material, [field]: value } });
   const typeInfo = LESSON_TYPES.find(t => t.value === lesson.type);
+  const defaultAssessmentType = courseType === 'recorded' ? 'mcq' : 'subjective';
+  const currentAssessmentType = String(lesson.assignment?.assessmentType || defaultAssessmentType).toLowerCase();
+  const objectiveAssessment = ['mcq', 'true_false', 'matching'].includes(currentAssessmentType);
+  const allowedAssessmentTypes = COURSE_ASSESSMENT_TYPE_MAP[courseType] || COURSE_ASSESSMENT_TYPE_MAP.live;
+  const assessmentTypeOptions = ASSESSMENT_TYPES.filter((item) => allowedAssessmentTypes.includes(item.value));
+  const allowedLessonTypes = courseType === 'recorded'
+    ? LESSON_TYPES.filter((type) => type.value !== 'live')
+    : LESSON_TYPES;
   const LIcon = typeInfo?.icon || FileText;
 
   return (
@@ -288,7 +439,32 @@ function LessonItem({ lesson, lessonIdx, onUpdate, onRemove, dragHandleProps }) 
         <div className="p-4 space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div><label className="text-gray-400 text-xs mb-1 block">Lesson Title *</label><input value={lesson.title} onChange={e => updateField('title', e.target.value)} className={inputCls} placeholder="Enter lesson title" /></div>
-            <div><label className="text-gray-400 text-xs mb-1 block">Type</label><select value={lesson.type} onChange={e => updateField('type', e.target.value)} className={selectCls}>{LESSON_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}</select></div>
+            <div>
+              <label className="text-gray-400 text-xs mb-1 block">Type</label>
+              <select
+                value={lesson.type}
+                onChange={e => {
+                  const nextType = e.target.value;
+                  if (nextType === 'assignment' && courseType === 'recorded') {
+                    onUpdate({
+                      ...lesson,
+                      type: nextType,
+                      assignment: {
+                        ...lesson.assignment,
+                        assessmentType: currentAssessmentType === 'subjective' ? 'mcq' : currentAssessmentType,
+                        questions: Array.isArray(lesson.assignment?.questions) ? lesson.assignment.questions : [],
+                      },
+                    });
+                    return;
+                  }
+
+                  updateField('type', nextType);
+                }}
+                className={selectCls}
+              >
+                {allowedLessonTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
           </div>
           <div><label className="text-gray-400 text-xs mb-1 block">Description</label><textarea value={lesson.description} onChange={e => updateField('description', e.target.value)} className={textareaCls} rows={2} placeholder="Lesson description..." /></div>
 
@@ -372,25 +548,256 @@ function LessonItem({ lesson, lessonIdx, onUpdate, onRemove, dragHandleProps }) 
           {/* ARTICLE */}
           {lesson.type === 'article' && (
             <div className="p-3 bg-[#0d0d0d] rounded-lg border border-gray-800">
+              <div className="mb-3 max-w-xs">
+                <label className="text-gray-400 text-xs mb-1 block">Estimated Duration (min)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={lesson.content?.articleEstimatedDurationMinutes ?? 0}
+                  onChange={(e) => onUpdate({
+                    ...lesson,
+                    content: {
+                      ...lesson.content,
+                      articleEstimatedDurationMinutes: e.target.value,
+                    },
+                  })}
+                  className={inputCls}
+                />
+              </div>
               <label className="text-gray-400 text-xs mb-1 block">Article Content</label>
-              <textarea value={lesson.content?.articleContent || ''} onChange={e => onUpdate({ ...lesson, content: { ...lesson.content, articleContent: e.target.value } })} className={textareaCls} rows={6} placeholder="Write article content (Markdown supported)..." />
+              <RichTextEditor
+                value={lesson.content?.articleContentRich || lesson.content?.articleContent || ''}
+                onChange={(nextValue) => onUpdate({
+                  ...lesson,
+                  content: {
+                    ...lesson.content,
+                    articleContentRich: nextValue,
+                    articleContent: extractPlainTextFromRichContent(nextValue),
+                  },
+                })}
+                placeholder="Write article content..."
+              />
+              <p className="text-gray-600 text-xs mt-1">
+                {extractPlainTextFromRichContent(lesson.content?.articleContentRich || lesson.content?.articleContent || '').length} characters • {countWords(lesson.content?.articleContentRich || lesson.content?.articleContent || '')} words
+              </p>
             </div>
           )}
 
           {/* ASSIGNMENT */}
           {lesson.type === 'assignment' && (
-            <div className="space-y-3 p-3 bg-[#0d0d0d] rounded-lg border border-gray-800">
+            <div className="space-y-3 p-3 bg-[#0d0d0d] rounded-lg border border-gray-800 transition-all duration-300">
               <h5 className="text-gray-300 text-xs font-semibold flex items-center gap-1.5"><BookOpen className="w-3.5 h-3.5 text-orange-400" /> Assignment</h5>
+              <div className={`rounded-lg border px-3 py-2 text-xs ${courseType === 'recorded' ? 'border-green-500/30 bg-green-500/10 text-green-300' : 'border-blue-500/30 bg-blue-500/10 text-blue-300'}`}>
+                {courseType === 'recorded'
+                  ? 'Recorded course: only MCQ / True-False / Matching are allowed and auto-graded.'
+                  : 'Live batch course: objective types auto-grade, and coding/subjective use Text/File/URL/Mixed submission types.'}
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div><label className="text-gray-400 text-xs mb-1 block">Title</label><input value={lesson.assignment?.title || ''} onChange={e => updateAssignment('title', e.target.value)} className={inputCls} placeholder="Assignment title" /></div>
-                <div><label className="text-gray-400 text-xs mb-1 block">Submission Type</label><select value={lesson.assignment?.type || 'text'} onChange={e => updateAssignment('type', e.target.value)} className={selectCls}>{SUBMISSION_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}</select></div>
+                <div>
+                  <label className="text-gray-400 text-xs mb-1 block">Assessment Type</label>
+                  <select
+                    value={currentAssessmentType}
+                    onChange={e => {
+                      const nextType = e.target.value;
+                      const patch = {
+                        assessmentType: nextType,
+                      };
+
+                      if (['mcq', 'true_false', 'matching'].includes(nextType)) {
+                        patch.type = 'text';
+                      }
+
+                      if (nextType !== currentAssessmentType) {
+                        patch.questions = [];
+                      }
+
+                      patchAssignment(patch);
+                    }}
+                    className={`${selectCls} transition-all duration-200`}
+                  >
+                    {assessmentTypeOptions.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                </div>
               </div>
+              {!objectiveAssessment && (
+                <div className="transition-all duration-200">
+                  <label className="text-gray-400 text-xs mb-1 block">Submission Type</label>
+                  <select value={lesson.assignment?.type || 'text'} onChange={e => updateAssignment('type', e.target.value)} className={selectCls}>
+                    {SUBMISSION_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                </div>
+              )}
               <div><label className="text-gray-400 text-xs mb-1 block">Description</label><textarea value={lesson.assignment?.description || ''} onChange={e => updateAssignment('description', e.target.value)} className={textareaCls} rows={2} placeholder="Assignment description..." /></div>
               <div><label className="text-gray-400 text-xs mb-1 block">Instructions</label><textarea value={lesson.assignment?.instructions || ''} onChange={e => updateAssignment('instructions', e.target.value)} className={textareaCls} rows={3} placeholder="Detailed instructions..." /></div>
+              {objectiveAssessment && (
+                <div className="space-y-2 rounded-lg border border-gray-800 bg-[#111] p-3 transition-all duration-200">
+                  <div className="flex items-center justify-between">
+                    <p className="text-gray-300 text-xs font-semibold">Questions</p>
+                    <button type="button" onClick={addAssignmentQuestion} className="text-blue-400 hover:text-blue-300 text-xs">+ Add Question</button>
+                  </div>
+                  {(lesson.assignment?.questions || []).length === 0 && <p className="text-gray-600 text-xs">No questions added yet.</p>}
+                  {(lesson.assignment?.questions || []).map((q, qIdx) => (
+                    <div key={q.questionId || qIdx} className="rounded-lg border border-gray-800 bg-[#0d0d0d] p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-gray-400 text-xs">Question {qIdx + 1}</p>
+                        <button type="button" onClick={() => removeAssignmentQuestion(qIdx)} className="text-red-400 hover:text-red-300 text-xs">Remove</button>
+                      </div>
+                      <input
+                        value={q.question || ''}
+                        onChange={e => updateAssignmentQuestion(qIdx, { question: e.target.value, type: currentAssessmentType, questionId: q.questionId || `q${qIdx + 1}` })}
+                        className={inputCls}
+                        placeholder="Question text"
+                      />
+                      <input
+                        type="hidden"
+                        value={q.marks ?? 1}
+                        onChange={e => updateAssignmentQuestion(qIdx, { marks: parseInt(e.target.value || '1', 10) || 1 })}
+                      />
+
+                      {currentAssessmentType === 'mcq' && (
+                        <div className="space-y-2 rounded-lg border border-gray-800 p-2">
+                          <label className="flex items-center gap-2 text-xs text-gray-300">
+                            <input
+                              type="checkbox"
+                              checked={Array.isArray(q.correctAnswers) && q.correctAnswers.length > 1}
+                              onChange={(e) => setMcqMultiple(qIdx, e.target.checked)}
+                              className="accent-blue-500"
+                            />
+                            Multiple correct options
+                          </label>
+
+                          {(Array.isArray(q.options) ? q.options : ["", ""]).map((option, optionIdx) => {
+                            const allowMultiple = Array.isArray(q.correctAnswers) && q.correctAnswers.length > 1;
+                            const selected = allowMultiple
+                              ? (q.correctAnswers || []).includes(option)
+                              : (q.correctAnswers?.[0] === option || q.correctAnswer === option);
+
+                            return (
+                              <div key={`${qIdx}-opt-${optionIdx}`} className="flex items-center gap-2">
+                                <input
+                                  type={allowMultiple ? 'checkbox' : 'radio'}
+                                  name={`q-${qIdx}-correct`}
+                                  checked={Boolean(option) && selected}
+                                  onChange={() => toggleMcqCorrect(qIdx, option, allowMultiple)}
+                                  className="accent-green-500"
+                                />
+                                <input
+                                  value={option}
+                                  onChange={(e) => {
+                                    const nextOptions = Array.isArray(q.options) ? [...q.options] : ["", ""];
+                                    const oldValue = nextOptions[optionIdx] || "";
+                                    nextOptions[optionIdx] = e.target.value;
+                                    const correctAnswers = Array.isArray(q.correctAnswers)
+                                      ? q.correctAnswers.map((item) => (item === oldValue ? e.target.value : item))
+                                      : [];
+                                    const correctAnswer = q.correctAnswer === oldValue ? e.target.value : (q.correctAnswer || "");
+                                    updateAssignmentQuestion(qIdx, { options: nextOptions, correctAnswers, correctAnswer });
+                                  }}
+                                  className={inputCls}
+                                  placeholder={`Option ${optionIdx + 1}`}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => removeMcqOption(qIdx, optionIdx)}
+                                  className="text-red-400 hover:text-red-300 text-xs"
+                                  disabled={(q.options || []).length <= 2}
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            );
+                          })}
+
+                          <button
+                            type="button"
+                            onClick={() => addMcqOption(qIdx)}
+                            disabled={(q.options || []).length >= 6}
+                            className="text-blue-400 hover:text-blue-300 text-xs disabled:opacity-50"
+                          >
+                            + Add Option
+                          </button>
+                        </div>
+                      )}
+
+                      {currentAssessmentType === 'true_false' && (
+                        <div className="rounded-lg border border-gray-800 p-2 space-y-2">
+                          <p className="text-xs text-gray-400">Select correct answer</p>
+                          <label className="flex items-center gap-2 text-sm text-gray-300">
+                            <input
+                              type="radio"
+                              name={`tf-${qIdx}`}
+                              checked={(q.correctAnswer || 'True') === 'True'}
+                              onChange={() => updateAssignmentQuestion(qIdx, { correctAnswer: 'True', options: ['True', 'False'] })}
+                              className="accent-green-500"
+                            />
+                            True
+                          </label>
+                          <label className="flex items-center gap-2 text-sm text-gray-300">
+                            <input
+                              type="radio"
+                              name={`tf-${qIdx}`}
+                              checked={(q.correctAnswer || 'True') === 'False'}
+                              onChange={() => updateAssignmentQuestion(qIdx, { correctAnswer: 'False', options: ['True', 'False'] })}
+                              className="accent-green-500"
+                            />
+                            False
+                          </label>
+                        </div>
+                      )}
+
+                      {currentAssessmentType === 'matching' && (
+                        <div className="space-y-2 rounded-lg border border-gray-800 p-2">
+                          {(Array.isArray(q.pairs) ? q.pairs : [{ term: '', correctOption: '', options: [] }]).map((pair, pairIdx) => (
+                            <div key={`${qIdx}-pair-${pairIdx}`} className="grid grid-cols-1 md:grid-cols-3 gap-2 items-center">
+                              <input
+                                value={pair.term || ''}
+                                onChange={(e) => updateMatchingPair(qIdx, pairIdx, { term: e.target.value })}
+                                className={inputCls}
+                                placeholder="Left item"
+                              />
+                              <input
+                                value={pair.correctOption || ''}
+                                onChange={(e) => updateMatchingPair(qIdx, pairIdx, { correctOption: e.target.value })}
+                                className={inputCls}
+                                placeholder="Correct match"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeMatchingPair(qIdx, pairIdx)}
+                                className="text-red-400 hover:text-red-300 text-xs justify-self-start"
+                              >
+                                Remove Pair
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => addMatchingPair(qIdx)}
+                            className="text-blue-400 hover:text-blue-300 text-xs"
+                          >
+                            + Add Pair
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div><label className="text-gray-400 text-xs mb-1 block">Max Score</label><input type="number" value={lesson.assignment?.maxScore ?? 100} onChange={e => updateAssignment('maxScore', e.target.value)} className={inputCls} min="1" max="100" /></div>
                 <div><label className="text-gray-400 text-xs mb-1 block">Passing Score</label><input type="number" value={lesson.assignment?.passingScore ?? 40} onChange={e => updateAssignment('passingScore', e.target.value)} className={inputCls} min="0" max="100" /></div>
                 <div><label className="text-gray-400 text-xs mb-1 block">Due Date</label><input type="datetime-local" value={lesson.assignment?.dueDate || ''} onChange={e => updateAssignment('dueDate', e.target.value)} className={inputCls} /></div>
+              </div>
+              <div className="max-w-xs">
+                <label className="text-gray-400 text-xs mb-1 block">Estimated Duration (min)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={lesson.assignment?.estimatedDurationMinutes ?? 0}
+                  onChange={e => updateAssignment('estimatedDurationMinutes', e.target.value)}
+                  className={inputCls}
+                />
               </div>
               <label className="flex items-center gap-2 text-gray-400 text-xs cursor-pointer"><input type="checkbox" checked={lesson.assignment?.allowLateSubmission || false} onChange={e => updateAssignment('allowLateSubmission', e.target.checked)} className="accent-blue-500" /> Allow Late Submission</label>
               {lesson.assignment?.allowLateSubmission && <div><label className="text-gray-400 text-xs mb-1 block">Late Penalty (%)</label><input type="number" value={lesson.assignment?.lateSubmissionPenalty || 0} onChange={e => updateAssignment('lateSubmissionPenalty', e.target.value)} className={inputCls} min="0" max="100" /></div>}
@@ -423,6 +830,16 @@ function LessonItem({ lesson, lessonIdx, onUpdate, onRemove, dragHandleProps }) 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div><label className="text-gray-400 text-xs mb-1 block">Title</label><input value={lesson.material?.title || ''} onChange={e => updateMaterial('title', e.target.value)} className={inputCls} placeholder="Material title" /></div>
                 <div><label className="text-gray-400 text-xs mb-1 block">Type</label><select value={lesson.material?.type || 'pdf'} onChange={e => updateMaterial('type', e.target.value)} className={selectCls}>{MATERIAL_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}</select></div>
+              </div>
+              <div className="max-w-xs">
+                <label className="text-gray-400 text-xs mb-1 block">Estimated Duration (min)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={lesson.material?.estimatedDurationMinutes ?? 0}
+                  onChange={e => updateMaterial('estimatedDurationMinutes', e.target.value)}
+                  className={inputCls}
+                />
               </div>
               <div><label className="text-gray-400 text-xs mb-1 block">Description</label><textarea value={lesson.material?.description || ''} onChange={e => updateMaterial('description', e.target.value)} className={textareaCls} rows={2} placeholder="Material description..." /></div>
               <div>
@@ -493,7 +910,7 @@ function LessonItem({ lesson, lessonIdx, onUpdate, onRemove, dragHandleProps }) 
 }
 
 // ─── ModuleItem ───────────────────────────────────────────────────
-function ModuleItem({ module, moduleIdx, onUpdate, onRemove, totalModules, dragHandleProps }) {
+function ModuleItem({ module, moduleIdx, onUpdate, onRemove, totalModules, dragHandleProps, courseType = 'recorded' }) {
   const thumbnailInputRef = useRef(null);
   const updateField = useCallback((field, value) => { onUpdate({ ...module, [field]: value }); }, [module, onUpdate]);
   const toggleCollapsed = () => updateField('collapsed', !module.collapsed);
@@ -571,6 +988,7 @@ function ModuleItem({ module, moduleIdx, onUpdate, onRemove, totalModules, dragH
                               onUpdate={l => updateLesson(li, l)}
                               onRemove={() => removeLesson(li)}
                               dragHandleProps={provided.dragHandleProps}
+                              courseType={courseType}
                             />
                           </div>
                         )}
@@ -603,11 +1021,20 @@ export default function CreateCourse() {
   const [course, setCourse] = useState({
     title: '', description: '', shortDescription: '', category: DEFAULT_CATEGORY,
     subCategory: DEFAULT_SUBCATEGORY,
+    type: 'recorded',
     level: 'beginner', language: 'English', price: 0, currency: 'INR',
     discountPrice: '', discountValidUntil: '', isFree: false, status: 'draft',
     certificateEnabled: true, allowPreview: true, maxStudents: '',
     isInternshipEligible: false,
     projectBased: false,
+    projectCount: 1,
+    liveFinalProjectReward: {
+      enabled: false,
+      title: '',
+      description: '',
+      amount: '',
+      currency: 'INR',
+    },
     projects: [],
     learningOutcomes: [], prerequisites: [], targetAudience: [],
     tags: [], seoTitle: '', seoDescription: '',
@@ -627,11 +1054,89 @@ export default function CreateCourse() {
 
   const showToast = useCallback((message, type = 'success') => { setToast({ message, type }); setTimeout(() => setToast(null), 4000); }, []);
 
-  const handleCourseChange = useCallback((field, value) => { setCourse(prev => ({ ...prev, [field]: value })); }, []);
+  const handleCourseChange = useCallback((field, value) => {
+    setCourse((prev) => {
+      const next = { ...prev, [field]: value };
+
+      if (field === 'projectBased' && !value) {
+        next.projects = [];
+        next.projectCount = 0;
+      }
+
+      if (field === 'projectBased' && value) {
+        const nextCount = Math.max(1, Math.min(MAX_PROJECT_COUNT, Number(prev.projectCount) || 1));
+        next.projectCount = nextCount;
+        const existing = Array.isArray(prev.projects) ? prev.projects : [];
+        if (existing.length < nextCount) {
+          next.projects = [...existing, ...Array.from({ length: nextCount - existing.length }, () => ({
+            title: '',
+            description: '',
+            descriptionRich: normalizeRichContentInput(''),
+            _uid: uid(),
+          }))];
+        } else {
+          next.projects = existing.slice(0, nextCount);
+        }
+      }
+
+      if (field === 'projectCount') {
+        const nextCount = Math.max(1, Math.min(MAX_PROJECT_COUNT, Number(value) || 1));
+        next.projectCount = nextCount;
+        const existing = Array.isArray(prev.projects) ? prev.projects : [];
+        if (existing.length < nextCount) {
+          next.projects = [...existing, ...Array.from({ length: nextCount - existing.length }, () => ({
+            title: '',
+            description: '',
+            descriptionRich: normalizeRichContentInput(''),
+            _uid: uid(),
+          }))];
+        } else {
+          next.projects = existing.slice(0, nextCount);
+        }
+      }
+
+      return next;
+    });
+  }, []);
   const handleCategoryChange = useCallback((categoryValue) => {
     const nextSubCategory = CATEGORY_MAP[categoryValue]?.[0] || '';
     setCourse(prev => ({ ...prev, category: categoryValue, subCategory: nextSubCategory }));
   }, []);
+
+  const handleCourseTypeChange = useCallback((nextType) => {
+    if (nextType === 'recorded') {
+      const hasLiveLessons = modules.some((module) =>
+        (module.lessons || []).some((lesson) => lesson.type === 'live')
+      );
+
+      if (hasLiveLessons) {
+        showToast('Remove live lessons before switching to Recorded Course', 'error');
+        return;
+      }
+    }
+
+    setModules((prevModules) => prevModules.map((module) => ({
+      ...module,
+      lessons: (module.lessons || []).map((lesson) => {
+        if (lesson.type !== 'assignment') return lesson;
+
+        const assignment = { ...(lesson.assignment || {}) };
+        const assessmentType = String(assignment.assessmentType || 'subjective').toLowerCase();
+        if (nextType === 'recorded' && !['mcq', 'true_false', 'matching'].includes(assessmentType)) {
+          assignment.assessmentType = 'mcq';
+          assignment.questions = [];
+          assignment.type = 'text';
+        }
+
+        return {
+          ...lesson,
+          assignment,
+        };
+      }),
+    })));
+
+    setCourse((prev) => ({ ...prev, type: nextType }));
+  }, [modules, showToast]);
 
   const subCategoryOptions = getSubCategoriesByCategory(course.category);
 
@@ -657,8 +1162,21 @@ export default function CreateCourse() {
     if (!course.description?.trim()) { showToast('Description is required', 'error'); setActiveTab('basic'); return; }
     if (!course.category) { showToast('Category is required', 'error'); setActiveTab('basic'); return; }
     if (!course.subCategory) { showToast('Subcategory is required', 'error'); setActiveTab('basic'); return; }
+    if (course.projectBased) {
+      const targetCount = Math.max(1, Math.min(MAX_PROJECT_COUNT, Number(course.projectCount) || 1));
+      const validProjects = (course.projects || []).filter((project) => {
+        const title = (project?.title || '').trim();
+        const description = extractPlainTextFromRichContent(project?.descriptionRich || project?.description || '');
+        return title && description;
+      });
+      if (validProjects.length < targetCount) {
+        showToast(`Please add ${targetCount} complete project entries`, 'error');
+        setActiveTab('settings');
+        return;
+      }
+    }
     setIsSavingCourse(true);
-    const fd = buildFormData(course, modules, thumbnailFile, trailerFile, certificate, 'published');
+    const fd = buildFormData(course, modules, thumbnailFile, trailerFile, certificate, 'published', draftCourseId);
     const result = await dispatch(createFullCourse(fd));
     if (result.meta.requestStatus === 'fulfilled') {
       showToast('Course published!');
@@ -671,7 +1189,7 @@ export default function CreateCourse() {
 
   const handleSaveDraft = async () => {
     setIsSavingCourse(true);
-    const fd = buildFormData(course, modules, thumbnailFile, trailerFile, certificate, 'draft');
+    const fd = buildFormData(course, modules, thumbnailFile, trailerFile, certificate, 'draft', draftCourseId);
     const result = draftCourseId
       ? await dispatch(updateCourseDraft({ courseId: draftCourseId, formData: fd }))
       : await dispatch(createCourseDraft(fd));
@@ -814,6 +1332,7 @@ export default function CreateCourse() {
               <div>
                 <label className="text-gray-300 text-sm font-medium mb-1.5 block">Short Description</label>
                 <input value={course.shortDescription} onChange={e => handleCourseChange('shortDescription', e.target.value)} className={inputCls} placeholder="Brief one-liner" maxLength={300} />
+                <p className="text-gray-600 text-xs mt-1">{course.shortDescription.length}/300</p>
               </div>
               <div>
                 <label className="text-gray-300 text-sm font-medium mb-1.5 block">Full Description *</label>
@@ -836,12 +1355,18 @@ export default function CreateCourse() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
+                  <label className="text-gray-300 text-sm font-medium mb-1.5 block">Course Type</label>
+                  <select value={course.type} onChange={e => handleCourseTypeChange(e.target.value)} className={selectCls}>
+                    {COURSE_TYPES.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </div>
+                <div>
                   <label className="text-gray-300 text-sm font-medium mb-1.5 block">Level</label>
                   <select value={course.level} onChange={e => handleCourseChange('level', e.target.value)} className={selectCls}>
                     {LEVELS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
                   </select>
                 </div>
-                <div>
+                <div className="md:col-span-2">
                   <label className="text-gray-300 text-sm font-medium mb-1.5 block">Language</label>
                   <input value={course.language} onChange={e => handleCourseChange('language', e.target.value)} className={inputCls} placeholder="English" />
                 </div>
@@ -854,7 +1379,7 @@ export default function CreateCourse() {
             <div className="max-w-4xl space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-[#111] border border-gray-800 rounded-xl p-5">
-                  <label className="text-gray-300 text-sm font-medium mb-3 block flex items-center gap-2"><ImageIcon className="w-4 h-4" /> Course Thumbnail</label>
+                  <label className="text-gray-300 text-sm font-medium mb-3 flex items-center gap-2"><ImageIcon className="w-4 h-4" /> Course Thumbnail</label>
                   {thumbnailPreview ? (
                     <div className="relative group">
                       <img src={thumbnailPreview} alt="Thumbnail" className="w-full aspect-video object-cover rounded-lg" />
@@ -892,7 +1417,7 @@ export default function CreateCourse() {
                 <div><span className="text-gray-200 text-sm font-medium">Free Course</span><p className="text-gray-500 text-xs mt-0.5">Make this course available for free</p></div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input type="checkbox" checked={course.isFree} onChange={e => handleCourseChange('isFree', e.target.checked)} className="sr-only peer" />
-                  <div className="w-9 h-5 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
+                  <div className="w-9 h-5 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
                 </label>
               </div>
               {!course.isFree && (
@@ -974,6 +1499,7 @@ export default function CreateCourse() {
                                   onRemove={() => removeModule(idx)}
                                   totalModules={modules.length}
                                   dragHandleProps={provided.dragHandleProps}
+                                  courseType={course.type}
                                 />
                               </div>
                             )}
@@ -998,7 +1524,7 @@ export default function CreateCourse() {
                 <div><span className="text-gray-200 text-sm font-medium">Enable Certificate</span><p className="text-gray-500 text-xs mt-0.5">Issue certificates on completion</p></div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input type="checkbox" checked={course.certificateEnabled} onChange={e => handleCourseChange('certificateEnabled', e.target.checked)} className="sr-only peer" />
-                  <div className="w-9 h-5 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
+                  <div className="w-9 h-5 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
                 </label>
               </div>
               {course.certificateEnabled && (
@@ -1023,11 +1549,19 @@ export default function CreateCourse() {
           {/* SETTINGS */}
           {activeTab === 'settings' && (
             <div className="max-w-4xl space-y-5">
+              <div className="bg-[#111] border border-gray-800 rounded-lg p-4">
+                <span className="text-gray-200 text-sm font-medium">Course Type Policy</span>
+                <p className="text-gray-500 text-xs mt-1">
+                  {course.type === 'recorded'
+                    ? 'Recorded courses disable live lessons and use auto-graded (MCQ) assignment flow.'
+                    : 'Live batch courses allow live lessons and use manual assignment grading flow.'}
+                </p>
+              </div>
               <div className="flex items-center justify-between bg-[#111] border border-gray-800 rounded-lg p-4">
                 <div><span className="text-gray-200 text-sm font-medium">Allow Preview</span><p className="text-gray-500 text-xs mt-0.5">Let users preview free lessons</p></div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input type="checkbox" checked={course.allowPreview} onChange={e => handleCourseChange('allowPreview', e.target.checked)} className="sr-only peer" />
-                  <div className="w-9 h-5 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
+                  <div className="w-9 h-5 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
                 </label>
               </div>
 
@@ -1038,7 +1572,7 @@ export default function CreateCourse() {
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input type="checkbox" checked={course.isInternshipEligible} onChange={e => handleCourseChange('isInternshipEligible', e.target.checked)} className="sr-only peer" />
-                  <div className="w-9 h-5 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
+                  <div className="w-9 h-5 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
                 </label>
               </div>
 
@@ -1049,12 +1583,91 @@ export default function CreateCourse() {
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input type="checkbox" checked={course.projectBased} onChange={e => handleCourseChange('projectBased', e.target.checked)} className="sr-only peer" />
-                  <div className="w-9 h-5 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
+                  <div className="w-9 h-5 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
                 </label>
               </div>
 
               {course.projectBased && (
                 <div className="bg-[#111] border border-gray-800 rounded-xl p-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="text-gray-300 text-sm font-medium mb-1.5 block">Project Count (1-10)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={MAX_PROJECT_COUNT}
+                        value={Math.max(1, Number(course.projectCount) || 1)}
+                        onChange={(e) => handleCourseChange('projectCount', e.target.value)}
+                        className={inputCls}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between bg-[#0d0d0d] border border-gray-800 rounded-lg p-4">
+                      <div>
+                        <span className="text-gray-200 text-sm font-medium">Live Final Project Reward</span>
+                        <p className="text-gray-500 text-xs mt-0.5">Metadata for winner rewards in live batches</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(course.liveFinalProjectReward?.enabled)}
+                          onChange={(e) => handleCourseChange('liveFinalProjectReward', {
+                            ...(course.liveFinalProjectReward || {}),
+                            enabled: e.target.checked,
+                          })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-9 h-5 bg-gray-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
+                      </label>
+                    </div>
+                  </div>
+
+                  {course.liveFinalProjectReward?.enabled && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 p-4 bg-[#0d0d0d] border border-gray-800 rounded-lg">
+                      <div>
+                        <label className="text-gray-300 text-sm font-medium mb-1.5 block">Reward Title</label>
+                        <input
+                          value={course.liveFinalProjectReward?.title || ''}
+                          onChange={(e) => handleCourseChange('liveFinalProjectReward', {
+                            ...(course.liveFinalProjectReward || {}),
+                            title: e.target.value,
+                          })}
+                          className={inputCls}
+                          maxLength={120}
+                          placeholder="Top Performer Cash Prize"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-gray-300 text-sm font-medium mb-1.5 block">Reward Amount (Optional)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={course.liveFinalProjectReward?.amount || ''}
+                          onChange={(e) => handleCourseChange('liveFinalProjectReward', {
+                            ...(course.liveFinalProjectReward || {}),
+                            amount: e.target.value,
+                          })}
+                          className={inputCls}
+                          placeholder="5000"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="text-gray-300 text-sm font-medium mb-1.5 block">Reward Description</label>
+                        <textarea
+                          value={course.liveFinalProjectReward?.description || ''}
+                          onChange={(e) => handleCourseChange('liveFinalProjectReward', {
+                            ...(course.liveFinalProjectReward || {}),
+                            description: e.target.value,
+                          })}
+                          className={textareaCls}
+                          rows={2}
+                          maxLength={500}
+                          placeholder="How winners are selected and what they receive"
+                        />
+                        <p className="text-gray-600 text-xs mt-1">{(course.liveFinalProjectReward?.description || '').length}/500</p>
+                      </div>
+                    </div>
+                  )}
+
                   <ProjectsBuilder
                     projects={course.projects}
                     onChange={(projects) => handleCourseChange('projects', projects)}
@@ -1066,15 +1679,15 @@ export default function CreateCourse() {
         </div>
 
         {/* Footer */}
-        <div className="fixed bottom-0 left-0 right-0 bg-[#111]/95 backdrop-blur border-t border-gray-800 px-6 py-3 flex items-center justify-between z-40">
-          <div className="flex items-center gap-3 text-xs text-gray-500">
+        <div className="fixed bottom-0 left-0 right-0 lg:left-(--instructor-sidebar-offset) bg-[#111]/95 backdrop-blur border-t border-gray-800 px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 z-40">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-gray-500">
             <span>{modules.length} module{modules.length !== 1 ? 's' : ''}</span>
             <span>•</span>
             <span>{totalLessons} lesson{totalLessons !== 1 ? 's' : ''}</span>
             <span>•</span>
             <span className="font-medium text-blue-400">Total: {formatDuration(modules.reduce((s, m) => s + calculateModuleDuration(m.lessons), 0))}</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 self-end sm:self-auto">
             <Link to="/instructor/courses" className="px-4 py-2 bg-transparent border border-gray-700 text-gray-300 hover:bg-gray-800 text-sm rounded-lg transition-colors">Cancel</Link>
             <button onClick={handleSaveDraft} disabled={createLoading || isSavingCourse} className="flex items-center gap-2 px-4 py-2 border border-gray-700 text-gray-300 hover:bg-gray-800 text-sm rounded-lg transition-colors disabled:opacity-50">
               {isSavingCourse ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} {isSavingCourse ? 'Saving…' : 'Draft'}

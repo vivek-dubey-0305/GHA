@@ -12,6 +12,23 @@ const enrollmentSchema = new mongoose.Schema({
         ref: "Course",
         required: [true, "Enrollment must belong to a course"]
     },
+    type: {
+        type: String,
+        enum: ["recorded", "live"],
+        default: "recorded",
+        index: true,
+    },
+    batchId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Batch",
+        default: null,
+    },
+    liveAccessStatus: {
+        type: String,
+        enum: ["not_applicable", "awaiting_start", "active", "completed"],
+        default: "not_applicable",
+        index: true,
+    },
     payment: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Payment",
@@ -148,6 +165,20 @@ enrollmentSchema.index({ "progressModules.status": 1 });
 // Compound indexes
 enrollmentSchema.index({ user: 1, status: 1, enrolledAt: -1 });
 enrollmentSchema.index({ course: 1, enrolledAt: -1, status: 1 });
+enrollmentSchema.index({ type: 1, status: 1, enrolledAt: -1 });
+enrollmentSchema.index({ batchId: 1, status: 1 }, { sparse: true });
+
+enrollmentSchema.pre("validate", function() {
+    if (this.type === "recorded") {
+        this.batchId = null;
+        this.liveAccessStatus = "not_applicable";
+    }
+
+    if (this.type === "live" && this.liveAccessStatus === "not_applicable") {
+        this.liveAccessStatus = "awaiting_start";
+    }
+    return;
+});
 
 // Pre-save middleware to set expiry date
 enrollmentSchema.pre("save", function() {

@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Upload, X } from "lucide-react";
 import { YellowButton } from "../DashboardPages/DashboardUI";
 import { validateDoubtAttachments } from "../../utils/doubtTicket.utils";
 
-export default function DoubtTicketForm({ onSubmit, enrolledCourses = [], disabled = false, loading = false }) {
+export default function DoubtTicketForm({ onSubmit, enrolledCourses = [], disabled = false, loading = false, initialValues = null }) {
   const [form, setForm] = useState({
     courseId: "",
     title: "",
@@ -23,6 +23,17 @@ export default function DoubtTicketForm({ onSubmit, enrolledCourses = [], disabl
     () => enrolledCourses.find((course) => course.id === activeCourseId),
     [enrolledCourses, activeCourseId]
   );
+
+  useEffect(() => {
+    if (!initialValues) return;
+    setForm((prev) => ({
+      ...prev,
+      courseId: initialValues.courseId || prev.courseId,
+      title: initialValues.title || prev.title,
+      description: initialValues.description || prev.description,
+      notes: initialValues.notes || prev.notes,
+    }));
+  }, [initialValues]);
 
   const onPickFiles = async (event) => {
     const selected = Array.from(event.target.files || []);

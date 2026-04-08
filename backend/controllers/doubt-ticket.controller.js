@@ -6,6 +6,7 @@ import { DoubtTicket } from "../models/doubt-ticket.model.js";
 import { Notification } from "../models/notification.model.js";
 import {
     DOUBT_TICKET_NOTIFICATION_TYPES,
+    DOUBT_TICKET_RESOLVER_SOURCE,
     DOUBT_TICKET_STATUS,
 } from "../constants/doubt-ticket.constant.js";
 import {
@@ -88,6 +89,7 @@ export const createDoubtTicket = asyncHandler(async (req, res) => {
         ticketId,
         attachments,
     });
+    payload.courseType = accessCheck.course?.type || "recorded";
 
     const ticket = await DoubtTicket.create(payload);
 
@@ -328,6 +330,7 @@ export const resolveDoubtTicket = asyncHandler(async (req, res) => {
     ticket.resolutionNote = resolutionNote?.trim() || "";
     ticket.resolvedAt = new Date();
     ticket.resolvedBy = instructorId;
+    ticket.resolverSource = DOUBT_TICKET_RESOLVER_SOURCE.INSTRUCTOR;
     await ticket.save();
 
     const notification = await Notification.createNotification({
@@ -352,6 +355,43 @@ export const resolveDoubtTicket = asyncHandler(async (req, res) => {
     });
 
     successResponse(res, 200, "Doubt ticket resolved", ticket);
+});
+
+export const submitDoubtResolutionFeedback = asyncHandler(async (req, res) => {
+    const userId = req.user?.id;
+    if (!userId) return errorResponse(res, 401, "Authentication required");
+
+    const { solved, rating, comment } = req.body || {};
+
+    const ticket = await DoubtTicket.findOne({ _id: req.params.id, user: userId });
+    if (!ticket) return errorResponse(res, 404, "Doubt ticket not found");
+
+    if (ticket.status !== DOUBT_TICKET_STATUS.RESOLVED) {
+        return errorResponse(res, 400, "Feedback can be submitted only after ticket resolution");
+    }
+
+    if (typeof solved !== "boolean") {
+        return errorResponse(res, 400, "Solved is required and must be boolean");
+    }
+
+    let normalizedRating = null;
+    if (rating !== undefined && rating !== null && String(rating).trim() !== "") {
+        normalizedRating = Number(rating);
+        if (!Number.isFinite(normalizedRating) || normalizedRating < 1 || normalizedRating > 5) {
+            return errorResponse(res, 400, "Rating must be a number between 1 and 5");
+        }
+    }
+
+    ticket.resolutionFeedback = {
+        solved,
+        rating: normalizedRating,
+        comment: String(comment || "").trim(),
+        ratedAt: new Date(),
+    };
+
+    await ticket.save();
+
+    successResponse(res, 200, "Doubt resolution feedback submitted", ticket);
 });
 
 export const addInstructorReplyToDoubtTicket = asyncHandler(async (req, res) => {

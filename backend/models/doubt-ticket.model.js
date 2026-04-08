@@ -100,6 +100,12 @@ const doubtTicketSchema = new mongoose.Schema({
         required: true,
         index: true,
     },
+    courseType: {
+        type: String,
+        enum: ["recorded", "live"],
+        default: "recorded",
+        index: true,
+    },
     lesson: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Lesson",
@@ -163,6 +169,33 @@ const doubtTicketSchema = new mongoose.Schema({
         maxlength: 2000,
         default: "",
     },
+    resolverSource: {
+        type: String,
+        enum: ["instructor", "ai"],
+        default: null,
+    },
+    resolutionFeedback: {
+        solved: {
+            type: Boolean,
+            default: null,
+        },
+        rating: {
+            type: Number,
+            min: 1,
+            max: 5,
+            default: null,
+        },
+        comment: {
+            type: String,
+            trim: true,
+            maxlength: 1000,
+            default: "",
+        },
+        ratedAt: {
+            type: Date,
+            default: null,
+        },
+    },
 }, {
     timestamps: true,
     collection: "doubtTickets",
@@ -172,5 +205,6 @@ doubtTicketSchema.index({ user: 1, createdAt: -1 });
 doubtTicketSchema.index({ instructor: 1, status: 1, createdAt: -1 });
 doubtTicketSchema.index({ course: 1, status: 1, createdAt: -1 });
 doubtTicketSchema.index({ createdAt: -1 });
+doubtTicketSchema.index({ instructor: 1, courseType: 1, status: 1, createdAt: -1 });
 
 export const DoubtTicket = mongoose.model("DoubtTicket", doubtTicketSchema);

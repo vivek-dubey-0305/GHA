@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { HelpCircle, Send, ArrowRight, ArrowLeft, ImagePlus, X } from "lucide-react";
 import { io } from "socket.io-client";
 import { useDispatch, useSelector } from "react-redux";
+import { useSearchParams } from "react-router-dom";
 import { UserLayout } from "../../components/layout/UserLayout";
 import { PageShell, EmptyState, SearchBar } from "../../components/DashboardPages/DashboardUI";
 import { apiClient } from "../../utils/api.utils";
@@ -13,6 +14,7 @@ import { DOUBT_STATUS_LABEL, DOUBT_STATUS_COLOR } from "../../constants/doubtTic
 
 export default function DoubtTickets() {
   const dispatch = useDispatch();
+  const [searchParams] = useSearchParams();
   const { myEnrollments } = useSelector((state) => state.enrollment);
   const [tickets, setTickets] = useState([]);
   const [quota, setQuota] = useState({ limit: 3, used: 0, remaining: 3 });
@@ -31,6 +33,7 @@ export default function DoubtTickets() {
   const [toastState, setToastState] = useState({ visible: false, type: "success", title: "", message: "" });
   const repliesEndRef = useRef(null);
   const replyInputRef = useRef(null);
+  const createFormRef = useRef(null);
 
   const appendReplyUnique = useCallback((ticket, nextReply) => {
     if (!ticket || !nextReply) return ticket;
@@ -127,9 +130,25 @@ export default function DoubtTickets() {
       return {
         id: String(course?._id || course || ""),
         title: course?.title || "Untitled Course",
+        type: String(course?.type || "recorded").toLowerCase(),
       };
     })
     .filter((course) => course.id);
+
+  const prefills = useMemo(() => {
+    const courseId = searchParams.get("courseId") || "";
+    const title = searchParams.get("title") || "";
+    const description = searchParams.get("description") || "";
+    const notes = searchParams.get("notes") || "";
+
+    return { courseId, title, description, notes };
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!prefills.courseId && !prefills.title && !prefills.description && !prefills.notes) return;
+    setActiveTab("create");
+    createFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [prefills]);
 
   const handleCreate = async ({ courseId, title, description, notes, files }) => {
     setCreating(true);
@@ -264,12 +283,22 @@ export default function DoubtTickets() {
           {activeTab === "create" ? (
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
               <div className="xl:col-span-1">
+                <div className="mb-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3">
+                  <p className="text-xs font-semibold text-cyan-300">Greed AI Doubt Solver: Coming Soon</p>
+                  <p className="text-xs text-gray-300 mt-1">
+                    AI doubt resolution is under development. For now, directly book with instructors using the form below.
+                  </p>
+                </div>
+
+                <div ref={createFormRef}>
                 <DoubtTicketForm
                   onSubmit={handleCreate}
                   enrolledCourses={enrolledCourses}
                   loading={creating}
                   disabled={limitReached}
+                  initialValues={prefills}
                 />
+                </div>
                 {limitReached && (
                   <p className="text-xs text-yellow-400 mt-2">Daily limit reached. You can submit more tickets after IST midnight.</p>
                 )}

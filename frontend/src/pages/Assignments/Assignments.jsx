@@ -20,6 +20,7 @@ export default function Assignments() {
   const { user } = useSelector((state) => state.auth);
 
   const [activeTab, setActiveTab] = useState("All");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [selected, setSelected] = useState(null);
   const [assignments, setAssignments] = useState([]);
   const [submissions, setSubmissions] = useState([]);
@@ -28,6 +29,7 @@ export default function Assignments() {
   const [submitting, setSubmitting] = useState(false);
   const [draftText, setDraftText] = useState("");
   const [draftLinks, setDraftLinks] = useState([""]);
+  const [objectiveAnswers, setObjectiveAnswers] = useState({});
   const [newFiles, setNewFiles] = useState([]);
   const [isEditMode, setIsEditMode] = useState(false);
 
@@ -44,10 +46,11 @@ export default function Assignments() {
   }, []);
 
   const loadAssignments = useCallback(async () => {
+    const isObjectId = (value) => /^[a-f\d]{24}$/i.test(String(value || ""));
     const courseMap = new Map(
       (myEnrollments || []).map((e) => [String(e?.course?._id || e?.course), e?.course])
     );
-    const courseIds = Array.from(courseMap.keys()).filter(Boolean);
+    const courseIds = Array.from(courseMap.keys()).filter((id) => isObjectId(id));
 
     if (courseIds.length === 0) {
       setAssignments([]);
@@ -110,6 +113,15 @@ export default function Assignments() {
   );
 
   const filtered = assignments.filter((a) => {
+    const courseType = String(a?.course?.type || "recorded").toLowerCase();
+    const matchesType =
+      typeFilter === "all"
+        ? true
+        : typeFilter === "recorded"
+          ? courseType !== "live"
+          : courseType === "live";
+
+    if (!matchesType) return false;
     if (activeTab === "All") return true;
     if (activeTab === "Pending")   return a.status === "pending";
     if (activeTab === "Submitted") return a.status === "submitted";
@@ -123,6 +135,7 @@ export default function Assignments() {
     setDraftText(selectedSubmission?.content?.text || "");
     setDraftLinks((selectedSubmission?.content?.links || []).map((item) => item.url || "") || [""]);
     if (!(selectedSubmission?.content?.links || []).length) setDraftLinks([""]);
+    setObjectiveAnswers(selectedSubmission?.content?.mcqAnswers || {});
     setNewFiles([]);
     setIsEditMode(!(selectedSubmission && selectedSubmission.status === "submitted"));
   }, [selectedSubmission]);
@@ -162,7 +175,15 @@ export default function Assignments() {
     setNewFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const updateObjectiveAnswer = (questionId, value) => {
+    setObjectiveAnswers((prev) => ({ ...prev, [questionId]: value }));
+  };
+
   const assignmentType = selected?.type || "text";
+  const assessmentType = String(selected?.assessmentType || "subjective").toLowerCase();
+  const isObjectiveAssignment = ["mcq", "true_false", "matching"].includes(assessmentType);
+  const gradingType = String(selected?.gradingType || (selected?.course?.type === "recorded" ? "auto" : "manual")).toLowerCase();
+  const gradingStatus = String(selectedSubmission?.gradingStatus || "").toLowerCase();
   const existingFiles = selectedSubmission?.content?.files || [];
   const hasExistingSubmission = Boolean(selectedSubmission);
   const isSubmittedState = selectedSubmission?.status === "submitted";
@@ -199,22 +220,42 @@ export default function Assignments() {
     const hasLinks = links.length > 0;
     const hasFiles = existingFiles.length + newFiles.length > 0;
 
-    if (assignmentType === "text" && (!hasText || hasLinks || hasFiles)) {
+    if (isObjectiveAssignment) {
+      const safeQuestions = Array.isArray(selected?.questions) ? selected.questions : [];
+      const allAnswered = safeQuestions.every((question, index) => {
+        const questionId = String(question?.questionId || index + 1);
+        const answer = objectiveAnswers?.[questionId];
+
+        if (assessmentType === "matching") {
+          return answer && typeof answer === "object" && !Array.isArray(answer) && Object.keys(answer).length > 0;
+        }
+
+        if (Array.isArray(answer)) return answer.length > 0;
+        return String(answer || "").trim().length > 0;
+      });
+
+      if (!allAnswered) {
+        throw new Error("Please answer all questions before submitting.");
+      }
+    }
+
+    if (!isObjectiveAssignment && assignmentType === "text" && (!hasText || hasLinks || hasFiles)) {
       throw new Error("This assignment accepts only text.");
     }
-    if (assignmentType === "url" && (!hasLinks || hasText || hasFiles)) {
+    if (!isObjectiveAssignment && assignmentType === "url" && (!hasLinks || hasText || hasFiles)) {
       throw new Error("This assignment accepts only URLs.");
     }
-    if (assignmentType === "file" && (!hasFiles || hasText || hasLinks)) {
+    if (!isObjectiveAssignment && assignmentType === "file" && (!hasFiles || hasText || hasLinks)) {
       throw new Error("This assignment accepts only files.");
     }
-    if (assignmentType === "mixed" && !hasText && !hasLinks && !hasFiles) {
+    if (!isObjectiveAssignment && assignmentType === "mixed" && !hasText && !hasLinks && !hasFiles) {
       throw new Error("Add at least one text, URL, or file item before submit.");
     }
 
     const content = {
       text: draftText.trim(),
       links,
+      mcqAnswers: isObjectiveAssignment ? objectiveAnswers : {},
     };
 
     const formData = new FormData();
@@ -262,6 +303,30 @@ export default function Assignments() {
         subtitle="Track your pending, submitted, and graded assignments."
       >
         <TabBar tabs={ASSIGNMENT_TABS} active={activeTab} onChange={setActiveTab} />
+
+        <div className="mt-3 inline-flex rounded-xl border border-gray-800 bg-[#0d0d0d] p-1 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={() => setTypeFilter("all")}
+            className={`px-3 py-1.5 text-xs rounded-lg transition ${typeFilter === "all" ? "bg-yellow-400 text-black font-semibold" : "text-gray-300 hover:text-white"}`}
+          >
+            All Types
+          </button>
+          <button
+            type="button"
+            onClick={() => setTypeFilter("recorded")}
+            className={`px-3 py-1.5 text-xs rounded-lg transition ${typeFilter === "recorded" ? "bg-blue-400 text-black font-semibold" : "text-gray-300 hover:text-white"}`}
+          >
+            Recorded
+          </button>
+          <button
+            type="button"
+            onClick={() => setTypeFilter("live")}
+            className={`px-3 py-1.5 text-xs rounded-lg transition ${typeFilter === "live" ? "bg-green-400 text-black font-semibold" : "text-gray-300 hover:text-white"}`}
+          >
+            Live Batches
+          </button>
+        </div>
 
         {loading && <p className="text-gray-500 text-sm py-4">Loading assignments...</p>}
         {!loading && error && <p className="text-red-400 text-sm py-2">{error}</p>}
@@ -322,6 +387,24 @@ export default function Assignments() {
                 <p className="text-xs text-gray-500 mt-3">
                   Due: {formatDateTime(selected?.dueDate)} | Max Score: {selected?.maxScore}
                 </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Grading: {gradingType === "auto" ? "Auto grading (instant for MCQ)" : "Manual instructor review"}
+                </p>
+                {isObjectiveAssignment && (
+                  <p className="text-xs text-emerald-300 mt-1">
+                    Objective assignment: answers are auto-graded after submission.
+                  </p>
+                )}
+                {gradingType === "auto" && isSubmittedState && ["queued", "processing"].includes(gradingStatus) && (
+                  <p className="text-xs text-cyan-300 mt-2">
+                    Auto grading is in progress. Your score will appear shortly.
+                  </p>
+                )}
+                {gradingType === "auto" && isSubmittedState && gradingStatus === "failed" && (
+                  <p className="text-xs text-red-300 mt-2">
+                    Auto grading failed. Please update and resubmit, or contact support.
+                  </p>
+                )}
                 {isSubmissionLockedByDeadline && (
                   <p className="text-xs text-red-400 mt-2">
                     Submission is closed because the deadline has passed and late submission is disabled.
@@ -333,7 +416,119 @@ export default function Assignments() {
                 <p className="text-sm font-semibold text-white mb-2">Your Submission</p>
                 <p className="text-xs text-gray-500 mb-3 uppercase tracking-wide">Type: {assignmentType}</p>
 
-                {(assignmentType === "text" || assignmentType === "mixed") && (
+                {isObjectiveAssignment && (
+                  <div className="space-y-3 mb-3">
+                    {(selected?.questions || []).map((question, index) => {
+                      const questionId = String(question?.questionId || index + 1);
+                      const questionType = String(question?.type || assessmentType || "mcq").toLowerCase();
+                      const answer = objectiveAnswers?.[questionId];
+
+                      return (
+                        <div key={questionId} className="rounded-xl border border-gray-700 bg-black/30 p-3">
+                          <p className="text-sm text-gray-100 mb-2">
+                            Q{index + 1}. {question?.question}
+                            {questionType === "mcq" && Array.isArray(question?.correctAnswers) && question.correctAnswers.length > 1
+                              ? " (multiple correct option for this -> select multiple)"
+                              : ""}
+                          </p>
+
+                          {questionType === "mcq" && (
+                            <div className="grid gap-2">
+                              {(question?.options || []).map((option, optIndex) => {
+                                const allowMulti = Array.isArray(question?.correctAnswers) && question.correctAnswers.length > 1;
+                                const values = Array.isArray(answer)
+                                  ? answer
+                                  : (String(answer || "").trim() ? [String(answer)] : []);
+                                const isChecked = values.includes(option);
+
+                                return (
+                                  <label key={`${questionId}-${optIndex}`} className="flex items-center gap-2 text-sm text-gray-200">
+                                    <input
+                                      type={allowMulti ? "checkbox" : "radio"}
+                                      name={`question-${questionId}`}
+                                      checked={isChecked}
+                                      disabled={!canEditNow}
+                                      onChange={(event) => {
+                                        if (allowMulti) {
+                                          const current = Array.isArray(values) ? [...values] : [];
+                                          if (event.target.checked) {
+                                            updateObjectiveAnswer(questionId, Array.from(new Set([...current, option])));
+                                          } else {
+                                            updateObjectiveAnswer(questionId, current.filter((item) => item !== option));
+                                          }
+                                        } else {
+                                          updateObjectiveAnswer(questionId, option);
+                                        }
+                                      }}
+                                    />
+                                    {option}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {questionType === "true_false" && (
+                            <div className="flex items-center gap-4">
+                              {["True", "False"].map((option) => (
+                                <label key={`${questionId}-${option}`} className="flex items-center gap-2 text-sm text-gray-200">
+                                  <input
+                                    type="radio"
+                                    name={`question-${questionId}`}
+                                    checked={String(answer || "") === option}
+                                    disabled={!canEditNow}
+                                    onChange={() => updateObjectiveAnswer(questionId, option)}
+                                  />
+                                  {option}
+                                </label>
+                              ))}
+                            </div>
+                          )}
+
+                          {questionType === "matching" && (
+                            <div className="grid gap-2">
+                              {(question?.pairs || []).map((pair, pairIdx) => {
+                                const term = String(pair?.term || `Term ${pairIdx + 1}`);
+                                const mapping = answer && typeof answer === "object" && !Array.isArray(answer) ? answer : {};
+                                const selectedValue = mapping?.[term] || "";
+                                const optionList = Array.from(
+                                  new Set(
+                                    (question?.pairs || []).flatMap((item) => {
+                                      if (Array.isArray(item?.options) && item.options.length > 0) return item.options;
+                                      return item?.correctOption ? [item.correctOption] : [];
+                                    })
+                                  )
+                                );
+
+                                return (
+                                  <div key={`${questionId}-${pairIdx}`} className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-center">
+                                    <p className="text-xs text-gray-400">{term}</p>
+                                    <select
+                                      value={selectedValue}
+                                      disabled={!canEditNow}
+                                      onChange={(event) => {
+                                        const nextMap = { ...mapping, [term]: event.target.value };
+                                        updateObjectiveAnswer(questionId, nextMap);
+                                      }}
+                                      className="w-full rounded-lg border border-gray-700 bg-black/40 text-gray-100 px-3 py-2 text-sm"
+                                    >
+                                      <option value="">Select option</option>
+                                      {optionList.map((option, optionIdx) => (
+                                        <option key={`${questionId}-${pairIdx}-${optionIdx}`} value={option}>{option}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {!isObjectiveAssignment && (assignmentType === "text" || assignmentType === "mixed") && (
                   <textarea
                     value={draftText}
                     onChange={(e) => setDraftText(e.target.value)}
@@ -344,7 +539,7 @@ export default function Assignments() {
                   />
                 )}
 
-                {(assignmentType === "url" || assignmentType === "mixed") && (
+                {!isObjectiveAssignment && (assignmentType === "url" || assignmentType === "mixed") && (
                   <div className="grid gap-2 mt-3">
                     {draftLinks.map((link, index) => (
                       <div key={`link-${index}`} className="flex items-center gap-2">
@@ -369,7 +564,7 @@ export default function Assignments() {
                   </div>
                 )}
 
-                {(assignmentType === "file" || assignmentType === "mixed") && (
+                {!isObjectiveAssignment && (assignmentType === "file" || assignmentType === "mixed") && (
                   <div className="grid gap-2 mt-3">
                     <div className="rounded-xl border border-dashed border-gray-700 p-3 bg-black/30">
                       <label className="text-sm text-gray-300 flex items-center gap-2 cursor-pointer">

@@ -265,6 +265,7 @@ export default function LiveClasses() {
   const filteredStudents = enrolledStudents.filter(s =>
     !studentSearch || (s.name || s.email || '').toLowerCase().includes(studentSearch.toLowerCase())
   );
+  const liveCourses = (courses || []).filter((course) => (course.type || 'recorded') === 'live');
 
   /* ───── Error state ───── */
   if (error && !liveClasses.length) {
@@ -334,7 +335,7 @@ export default function LiveClasses() {
         {loading && !liveClasses.length ? (
           <div className="space-y-3">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="bg-[#111] border border-gray-800 rounded-xl p-5 animate-pulse h-[100px]" />
+              <div key={i} className="bg-[#111] border border-gray-800 rounded-xl p-5 animate-pulse h-25" />
             ))}
           </div>
         ) : liveClasses.length > 0 ? (
@@ -362,7 +363,7 @@ export default function LiveClasses() {
                     </div>
                   </div>
                   {/* Actions */}
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2 shrink-0">
                     {lc.status === 'scheduled' && lc.isOwner !== false && (
                       <>
                         <button onClick={() => navigate(`/instructor/live-classes/${lc._id}/setup`)} className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600/20 border border-green-600/40 text-green-400 rounded-lg text-xs font-medium hover:bg-green-600/30 transition-colors">
@@ -464,8 +465,11 @@ export default function LiveClasses() {
                   <label className="text-gray-400 text-xs mb-1 block">Select Course *</label>
                   <select value={selectedCourse} onChange={e => handleCourseSelect(e.target.value)} className={selectCls}>
                     <option value="">-- Choose a course --</option>
-                    {(courses || []).map(c => <option key={c._id} value={c._id}>{c.title}</option>)}
+                    {liveCourses.map(c => <option key={c._id} value={c._id}>{c.title}</option>)}
                   </select>
+                  {liveCourses.length === 0 && (
+                    <p className="text-[11px] text-yellow-400 mt-1">No live batch courses available. Create a Live Batch course first.</p>
+                  )}
                 </div>
 
                 {selectedCourse && (

@@ -65,6 +65,14 @@ const sanitizeName = (name) =>
  */
 const detectContentType = (key) => lookup(key) || "application/octet-stream";
 
+export const extractR2KeyFromUrl = (url = "") => {
+    if (!url || typeof url !== "string") return null;
+    if (R2_PUBLIC_URL && url.startsWith(`${R2_PUBLIC_URL}/`)) {
+        return url.slice(R2_PUBLIC_URL.length + 1);
+    }
+    return null;
+};
+
 /**
  * Upload a buffer to R2 and return a result object that mirrors the
  * shape every controller already expects (public_id, secure_url, url, format, bytes …).
@@ -323,6 +331,35 @@ export const uploadCourseOther = async (fileBuffer, courseName, fileName, _resou
     } catch (error) {
         logger.error(`Error uploading course other file ${fileName}: ${error.message}`);
         throw new Error(`Failed to upload course file: ${error.message}`);
+    }
+};
+
+/**
+ * Upload rich-content embedded image (article/project editor images)
+ * Key: GHA/Course/{courseName}/rich-content/{scope}/{fileName}_{ts}.{ext}
+ */
+export const uploadRichContentImage = async (
+    fileBuffer,
+    courseName,
+    scope = "general",
+    fileName = "rich_image"
+) => {
+    try {
+        const safeCourseName = sanitizeName(courseName || "course");
+        const safeScope = sanitizeName(scope || "general");
+        const safeFileName = sanitizeName(fileName || "rich_image");
+        const ext = fileName.includes(".") ? fileName.split(".").pop() : guessExtension(fileBuffer);
+        const key = `GHA/Course/${safeCourseName}/rich-content/${safeScope}/${safeFileName}_${Date.now()}.${ext}`;
+
+        const result = await uploadToR2(fileBuffer, key, {
+            contentType: `image/${ext === "jpg" ? "jpeg" : ext}`,
+        });
+
+        logger.info(`Rich content image uploaded: ${safeFileName} in scope ${safeScope}`);
+        return result;
+    } catch (error) {
+        logger.error(`Error uploading rich content image ${fileName}: ${error.message}`);
+        throw new Error(`Failed to upload rich content image: ${error.message}`);
     }
 };
 

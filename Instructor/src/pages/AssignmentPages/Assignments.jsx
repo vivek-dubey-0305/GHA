@@ -232,6 +232,12 @@ export default function Assignments() {
                       <p className="text-gray-500 text-xs mt-1 line-clamp-2">{assignment.description || 'No description'}</p>
                       <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
                         <span className="flex items-center gap-1"><BookOpen className="w-3.5 h-3.5" /> {assignment.course?.title || 'No course'}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] ${assignment.gradingType === 'auto' ? 'bg-green-500/20 text-green-300' : 'bg-blue-500/20 text-blue-300'}`}>
+                          {assignment.gradingType === 'auto' ? 'Auto Graded' : 'Manual Graded'}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] bg-gray-700/70 text-gray-300 uppercase">
+                          {assignment.assessmentType || 'subjective'}
+                        </span>
                         {assignment.dueDate && <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> Due: {new Date(assignment.dueDate).toLocaleDateString()}</span>}
                         {assignment.maxScore && <span>Max Score: {assignment.maxScore}</span>}
                       </div>
@@ -285,6 +291,9 @@ export default function Assignments() {
                       <span className="text-xs text-gray-500">
                         {sub.submittedAt ? new Date(sub.submittedAt).toLocaleDateString() : '—'}
                       </span>
+                      <p className="text-[10px] text-gray-500 mt-0.5">
+                        {sub.assignment?.gradingType === 'auto' ? 'Auto grading' : 'Manual grading'}
+                      </p>
                       {sub.assignment?.maxScore && (
                         <p className="text-xs text-gray-600 mt-0.5">Max: {sub.assignment.maxScore}</p>
                       )}
@@ -383,6 +392,7 @@ export default function Assignments() {
                   <p className="text-xs text-gray-500 mb-2">Student</p>
                   <p className="text-sm text-white">{selectedSubmission.user?.firstName} {selectedSubmission.user?.lastName} ({selectedSubmission.user?.email})</p>
                   <p className="text-xs text-gray-500 mt-2">Status: {selectedSubmission.status} | Submitted: {selectedSubmission.submittedAt ? new Date(selectedSubmission.submittedAt).toLocaleString() : 'N/A'}</p>
+                  <p className="text-xs text-gray-500 mt-1">Grading: {selectedSubmission.assignment?.gradingType || selectedSubmission.gradingType || 'manual'}</p>
                 </div>
 
                 <div className="rounded-xl border border-gray-800 p-4 bg-[#151517]">
@@ -421,6 +431,27 @@ export default function Assignments() {
                     </a>
                   ))}
                 </div>
+
+                {['mcq', 'true_false', 'matching'].includes(String(selectedSubmission.assignment?.assessmentType || '').toLowerCase()) && (
+                  <div className="rounded-xl border border-gray-800 p-4 bg-[#151517] grid gap-3">
+                    <p className="text-xs text-gray-500">Objective Answers</p>
+                    {(selectedSubmission.assignment?.questions || []).map((question, index) => {
+                      const questionId = String(question?.questionId || index + 1);
+                      const answers = selectedSubmission.content?.mcqAnswers || {};
+                      const studentAnswer = answers?.[questionId];
+                      const type = String(question?.type || selectedSubmission.assignment?.assessmentType || 'mcq').toLowerCase();
+
+                      return (
+                        <div key={questionId} className="rounded-lg border border-gray-800 bg-black/30 p-3">
+                          <p className="text-sm text-gray-100">Q{index + 1}. {question?.question}</p>
+                          <p className="text-xs text-gray-500 mt-1 uppercase">Type: {type}</p>
+                          <p className="text-xs text-gray-400 mt-2">Student Answer:</p>
+                          <pre className="text-xs text-gray-200 whitespace-pre-wrap mt-1">{typeof studentAnswer === 'object' ? JSON.stringify(studentAnswer, null, 2) : String(studentAnswer || 'Not answered')}</pre>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
 
                 <div className="rounded-xl border border-gray-800 p-4 bg-[#151517] grid gap-3">
                   <p className="text-xs text-gray-500">Grading</p>

@@ -1,3 +1,5 @@
+import RichContentRenderer from "../../common/RichContentRenderer";
+
 export default function CDOverview({ course }) {
   if (!course) return null;
 
@@ -32,6 +34,22 @@ export default function CDOverview({ course }) {
             <li key={i}>{aud}</li>
           ))}
         </ul>
+
+        {course.projectBased && Array.isArray(course.projects) && course.projects.length > 0 && (
+          <>
+            <div className="cd-sub-heading cp-reveal" style={{ marginTop: 40 }}>
+              PROJECTS ({course.projectCount || course.projects.length})
+            </div>
+            <div className="cd-requirements-list cp-reveal" style={{ listStyle: "none", paddingLeft: 0 }}>
+              {course.projects.map((project, idx) => (
+                <div key={project._id || idx} style={{ marginBottom: 18 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 6 }}>{project.title || `Project ${idx + 1}`}</div>
+                  <RichContentRenderer content={project.descriptionRich || project.description || ""} className="text-sm text-gray-300" />
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
