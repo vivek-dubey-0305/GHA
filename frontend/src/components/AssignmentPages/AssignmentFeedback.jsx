@@ -10,6 +10,9 @@ import { formatDateTime, scoreColor } from "../../utils/format.utils";
 export default function AssignmentFeedback({ submission, assignment, onClose }) {
   if (!submission) return null;
   const pct = (submission.score / assignment.maxScore) * 100;
+  const gradedByName = submission.gradedBy?.firstName
+    ? `${submission.gradedBy.firstName} ${submission.gradedBy?.lastName || ""}`.trim()
+    : (submission.gradingType === "auto" || submission.gradingSource === "auto" ? "Auto Grader" : "Instructor");
 
   return (
     <AnimatePresence>
@@ -73,7 +76,7 @@ export default function AssignmentFeedback({ submission, assignment, onClose }) 
             {/* Meta */}
             <p className="text-xs text-gray-600 text-center">
               Graded on {formatDateTime(submission.gradedAt)} by{" "}
-              {submission.gradedBy?.firstName} {submission.gradedBy?.lastName}
+              {gradedByName}
             </p>
           </div>
         </motion.div>

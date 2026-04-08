@@ -2,6 +2,8 @@ import chalk from 'chalk';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -26,30 +28,35 @@ function getCallerInfo() {
 // Logger function
 const logger = {
     info: (message) => {
+        if (isProduction) return;
         const { funcName, relativePath } = getCallerInfo();
         console.log(chalk.blue('======================='));
         console.log(chalk.blue(`[${relativePath}]/(${funcName}): ${chalk.green(message)}`));
         console.log(chalk.blue('======================='));
     },
     warn: (message) => {
+        if (isProduction) return;
         const { funcName, relativePath } = getCallerInfo();
         console.log(chalk.yellow('======================='));
         console.log(chalk.yellow(`[${relativePath}]/(${funcName}): ${chalk.yellow(message)}`));
         console.log(chalk.yellow('======================='));
     },
     error: (message) => {
+        if (isProduction) return;
         const { funcName, relativePath } = getCallerInfo();
         console.log(chalk.red('======================='));
         console.log(chalk.red(`[${relativePath}]/(${funcName}): ${chalk.red(message)}`));
         console.log(chalk.red('======================='));
     },
     debug: (message) => {
+        if (isProduction) return;
         const { funcName, relativePath } = getCallerInfo();
         console.log(chalk.magenta('======================='));
         console.log(chalk.magenta(`[${relativePath}]/(${funcName}): ${chalk.cyan(message)}`));
         console.log(chalk.magenta('======================='));
     },
     success: (message) => {
+        if (isProduction) return;
         const { funcName, relativePath } = getCallerInfo();
         console.log(chalk.green('======================='));
         console.log(chalk.green(`[${relativePath}]/(${funcName}): ${chalk.green.bold(message)}`));

@@ -51,6 +51,44 @@ export const formatDuration = (minutes) => {
   return `${h}h ${m}m`;
 };
 
+export const getLessonDurationMinutes = (lesson = {}) => {
+  const type = String(lesson?.type || "").toLowerCase();
+  if (type === "video") {
+    const seconds = Number(lesson?.videoId?.duration || lesson?.video?.duration || 0);
+    return Math.max(0, Math.ceil(seconds / 60));
+  }
+  if (type === "live") {
+    return Math.max(0, Number(lesson?.liveClassId?.duration || lesson?.liveClass?.duration || 0));
+  }
+  if (type === "assignment") {
+    return Math.max(0, Number(lesson?.assignmentId?.estimatedDurationMinutes || lesson?.assignment?.estimatedDurationMinutes || 0));
+  }
+  if (type === "article") {
+    return Math.max(0, Number(lesson?.content?.articleEstimatedDurationMinutes || 0));
+  }
+  if (type === "material") {
+    const explicit = Number(lesson?.materialId?.estimatedDurationMinutes || lesson?.material?.estimatedDurationMinutes || 0);
+    if (explicit > 0) return explicit;
+    const metadataSeconds = Number(lesson?.materialId?.metadata?.duration || lesson?.material?.metadata?.duration || 0);
+    return Math.max(0, Math.ceil(metadataSeconds / 60));
+  }
+  return 0;
+};
+
+export const getModuleDurationMinutes = (module = {}) => {
+  const lessons = Array.isArray(module?.lessonDetails)
+    ? module.lessonDetails
+    : Array.isArray(module?.lessons)
+      ? module.lessons
+      : [];
+
+  if (lessons.length === 0) {
+    return Math.max(0, Number(module?.totalDuration || 0));
+  }
+
+  return lessons.reduce((sum, lesson) => sum + getLessonDurationMinutes(lesson), 0);
+};
+
 export const formatSeconds = (secs) => {
   if (!secs) return "0:00";
   const m = Math.floor(secs / 60);

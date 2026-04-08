@@ -1,5 +1,16 @@
 import mongoose from "mongoose";
 
+const OBJECTIVE_ASSESSMENT_TYPES = ["mcq", "true_false", "matching"];
+
+const normalizeString = (value = "") => String(value || "").trim();
+
+const normalizeOptionList = (list = []) => {
+    if (!Array.isArray(list)) return [];
+    return list
+        .map((item) => normalizeString(item))
+        .filter(Boolean);
+};
+
 const assignmentSchema = new mongoose.Schema({
     // Assignment Information
     title: {
@@ -49,6 +60,78 @@ const assignmentSchema = new mongoose.Schema({
         enum: ["text", "file", "url", "mixed"],
         default: "text"
     },
+    assessmentType: {
+        type: String,
+        enum: ["mcq", "true_false", "matching", "coding", "subjective"],
+        default: "subjective"
+    },
+    gradingType: {
+        type: String,
+        enum: ["auto", "manual"],
+        default: "manual"
+    },
+    questions: [{
+        questionId: {
+            type: String,
+            trim: true,
+        },
+        type: {
+            type: String,
+            enum: ["mcq", "true_false", "matching"],
+            default: "mcq",
+        },
+        question: {
+            type: String,
+            trim: true,
+            maxlength: 2000,
+        },
+        options: [{
+            type: String,
+            trim: true,
+            maxlength: 500,
+        }],
+        correctAnswer: {
+            type: String,
+            trim: true,
+            maxlength: 500,
+        },
+        correctAnswers: [{
+            type: String,
+            trim: true,
+            maxlength: 500,
+        }],
+        pairs: [{
+            term: {
+                type: String,
+                trim: true,
+                maxlength: 500,
+            },
+            correctOption: {
+                type: String,
+                trim: true,
+                maxlength: 500,
+            },
+            options: [{
+                type: String,
+                trim: true,
+                maxlength: 500,
+            }],
+        }],
+        marks: {
+            type: Number,
+            min: 0,
+            default: 1,
+        },
+    }],
+    testCases: [{
+        input: String,
+        expectedOutput: String,
+        weight: {
+            type: Number,
+            min: 0,
+            default: 1,
+        },
+    }],
     maxScore: {
         type: Number,
         required: [true, "Maximum score is required"],
@@ -87,6 +170,11 @@ const assignmentSchema = new mongoose.Schema({
         min: 0,
         max: 100,
         default: 0
+    },
+    estimatedDurationMinutes: {
+        type: Number,
+        min: 0,
+        default: 0,
     },
 
     // Submission Requirements
@@ -165,6 +253,7 @@ assignmentSchema.index({ instructor: 1, isPublished: 1 });
 assignmentSchema.index({ dueDate: 1 });
 assignmentSchema.index({ course: 1, isPublished: 1, dueDate: 1 });
 assignmentSchema.index({ createdAt: -1 });
+assignmentSchema.index({ assessmentType: 1, gradingType: 1 });
 
 // Pre-save middleware to set passing score default
 assignmentSchema.pre("save", function() {
@@ -174,6 +263,78 @@ assignmentSchema.pre("save", function() {
 
     if (!this.passingScore) {
         this.passingScore = Math.round(this.maxScore * 0.6); // 60% default
+    }
+
+    if (OBJECTIVE_ASSESSMENT_TYPES.includes(this.assessmentType) && this.gradingType !== "auto") {
+        this.gradingType = "auto";
+    }
+
+    if (!OBJECTIVE_ASSESSMENT_TYPES.includes(this.assessmentType) && this.gradingType === "auto") {
+        this.gradingType = "manual";
+    }
+
+    if (OBJECTIVE_ASSESSMENT_TYPES.includes(this.assessmentType)) {
+        const safeQuestions = Array.isArray(this.questions) ? this.questions : [];
+
+        if (safeQuestions.length === 0) {
+            throw new Error("Objective assignments require at least one question");
+        }
+
+        for (const [index, rawQuestion] of safeQuestions.entries()) {
+            const question = rawQuestion || {};
+            const questionType = question.type || this.assessmentType;
+            const questionText = normalizeString(question.question);
+            if (!questionText) {
+                throw new Error(`Question ${index + 1} text is required`);
+            }
+
+            if (questionType === "mcq") {
+                const options = normalizeOptionList(question.options);
+                if (options.length < 2) {
+                    throw new Error(`Question ${index + 1} must include at least 2 options`);
+                }
+
+                const normalizedCorrectAnswers = normalizeOptionList(question.correctAnswers);
+                const singleCorrect = normalizeString(question.correctAnswer);
+                const effectiveCorrectAnswers = normalizedCorrectAnswers.length > 0
+                    ? normalizedCorrectAnswers
+                    : (singleCorrect ? [singleCorrect] : []);
+
+                if (effectiveCorrectAnswers.length === 0) {
+                    throw new Error(`Question ${index + 1} must include at least one correct answer`);
+                }
+
+                if (effectiveCorrectAnswers.some((answer) => !options.includes(answer))) {
+                    throw new Error(`Question ${index + 1} has correct answers not present in options`);
+                }
+            }
+
+            if (questionType === "true_false") {
+                const correct = normalizeString(question.correctAnswer).toLowerCase();
+                if (!["true", "false"].includes(correct)) {
+                    throw new Error(`Question ${index + 1} must have correctAnswer as true or false`);
+                }
+            }
+
+            if (questionType === "matching") {
+                const pairs = Array.isArray(question.pairs) ? question.pairs : [];
+                if (pairs.length === 0) {
+                    throw new Error(`Question ${index + 1} must include matching pairs`);
+                }
+
+                for (const [pairIndex, pair] of pairs.entries()) {
+                    const term = normalizeString(pair?.term);
+                    const correctOption = normalizeString(pair?.correctOption);
+                    const options = normalizeOptionList(pair?.options);
+                    if (!term || !correctOption) {
+                        throw new Error(`Question ${index + 1}, pair ${pairIndex + 1} must include term and correctOption`);
+                    }
+                    if (options.length > 0 && !options.includes(correctOption)) {
+                        throw new Error(`Question ${index + 1}, pair ${pairIndex + 1} correctOption must exist in options`);
+                    }
+                }
+            }
+        }
     }
 });
 

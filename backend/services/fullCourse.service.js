@@ -19,6 +19,8 @@ import {
     uploadLessonThumbnail, uploadAssignmentThumbnail,
     uploadMaterialFile, uploadCertificateImage,
     uploadAssignmentFile,
+    uploadRichContentImage,
+    extractR2KeyFromUrl,
     updateImage, deleteImage, deleteRawResource
 } from "./r2.service.js";
 import {
@@ -55,6 +57,271 @@ const extractBunnyVideoId = (value) => {
 const sameId = (a, b) => {
     if (!a || !b) return false;
     return a.toString() === b.toString();
+};
+
+const isRichContentDoc = (value) => {
+    return Boolean(
+        value &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        value.type === "doc" &&
+        Array.isArray(value.content)
+    );
+};
+
+const createRichParagraphDoc = (text = "") => ({
+    type: "doc",
+    content: [
+        {
+            type: "paragraph",
+            content: text ? [{ type: "text", text: String(text) }] : [],
+        },
+    ],
+});
+
+const extractPlainTextFromRichContent = (value) => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (!isRichContentDoc(value)) return "";
+
+    const chunks = [];
+    const visit = (node) => {
+        if (!node || typeof node !== "object") return;
+        if (node.type === "text" && typeof node.text === "string") {
+            chunks.push(node.text);
+        }
+        if (Array.isArray(node.content)) {
+            node.content.forEach(visit);
+        }
+        if (["paragraph", "heading", "listItem", "blockquote"].includes(node.type)) {
+            chunks.push("\n");
+        }
+    };
+
+    visit(value);
+    return chunks.join(" ").replace(/\s+/g, " ").trim();
+};
+
+const dataUrlToBuffer = (dataUrl = "") => {
+    if (typeof dataUrl !== "string") return null;
+    const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+    if (!match) return null;
+    const mimeType = match[1];
+    const base64Payload = match[2];
+    return {
+        mimeType,
+        buffer: Buffer.from(base64Payload, "base64"),
+    };
+};
+
+const mimeToExtension = (mimeType = "") => {
+    const normalized = String(mimeType || "").toLowerCase();
+    if (normalized === "image/jpeg") return "jpg";
+    if (normalized === "image/png") return "png";
+    if (normalized === "image/webp") return "webp";
+    if (normalized === "image/gif") return "gif";
+    if (normalized === "image/svg+xml") return "svg";
+    return "png";
+};
+
+const toNonNegativeMinutes = (value, fallback = 0) => {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed >= 0) {
+        return Math.round(parsed);
+    }
+    return fallback;
+};
+
+const collectRichContentImagePublicIds = (richDoc) => {
+    if (!isRichContentDoc(richDoc)) return new Set();
+    const collected = new Set();
+
+    const walk = (node) => {
+        if (!node || typeof node !== "object") return;
+
+        if (node.type === "image") {
+            const fromAttrs = node.attrs?.publicId;
+            if (fromAttrs) {
+                collected.add(String(fromAttrs));
+            } else {
+                const fromSrc = extractR2KeyFromUrl(node.attrs?.src || "");
+                if (fromSrc) collected.add(fromSrc);
+            }
+        }
+
+        if (Array.isArray(node.content)) {
+            node.content.forEach(walk);
+        }
+    };
+
+    walk(richDoc);
+    return collected;
+};
+
+const uploadInlineImagesInRichDoc = async ({
+    richDoc,
+    courseName,
+    scope,
+    rollbackCtx,
+}) => {
+    if (!isRichContentDoc(richDoc)) return richDoc;
+
+    const walk = async (node) => {
+        if (!node || typeof node !== "object") return node;
+
+        const cloned = { ...node };
+
+        if (Array.isArray(node.content)) {
+            const processedChildren = [];
+            for (const child of node.content) {
+                processedChildren.push(await walk(child));
+            }
+            cloned.content = processedChildren;
+        }
+
+        if (node.type === "image") {
+            const src = String(node.attrs?.src || "");
+            const parsedDataUrl = dataUrlToBuffer(src);
+
+            if (parsedDataUrl) {
+                const ext = mimeToExtension(parsedDataUrl.mimeType);
+                const fileBase = `embedded_image_${Date.now()}_${Math.round(Math.random() * 1e6)}`;
+                const uploadResult = await uploadRichContentImage(
+                    parsedDataUrl.buffer,
+                    courseName,
+                    scope,
+                    `${fileBase}.${ext}`
+                );
+
+                trackUploadedImagePublicId(rollbackCtx, uploadResult.public_id);
+
+                cloned.attrs = {
+                    ...(node.attrs || {}),
+                    src: uploadResult.secure_url,
+                    publicId: uploadResult.public_id,
+                };
+                return cloned;
+            }
+
+            const existingPublicId = node.attrs?.publicId || extractR2KeyFromUrl(src);
+            if (existingPublicId) {
+                cloned.attrs = {
+                    ...(node.attrs || {}),
+                    publicId: existingPublicId,
+                };
+            }
+        }
+
+        return cloned;
+    };
+
+    return walk(richDoc);
+};
+
+const deleteRemovedRichContentImages = async (previousRichDoc, nextRichDoc) => {
+    const previousIds = collectRichContentImagePublicIds(previousRichDoc);
+    const nextIds = collectRichContentImagePublicIds(nextRichDoc);
+
+    for (const previousId of previousIds) {
+        if (nextIds.has(previousId)) continue;
+        try {
+            await deleteImage(previousId);
+        } catch (error) {
+            logger.warn(`Failed deleting replaced rich-content image ${previousId}: ${error.message}`);
+        }
+    }
+};
+
+const normalizeArticleContentPayload = async (
+    content = {},
+    {
+        courseName = "course",
+        scope = "article",
+        previousRichContent = null,
+        rollbackCtx = null,
+    } = {}
+) => {
+    const articleContentRich = isRichContentDoc(content?.articleContentRich)
+        ? content.articleContentRich
+        : createRichParagraphDoc(content?.articleContent || "");
+
+    const processedRichContent = await uploadInlineImagesInRichDoc({
+        richDoc: articleContentRich,
+        courseName,
+        scope,
+        rollbackCtx,
+    });
+
+    await deleteRemovedRichContentImages(previousRichContent, processedRichContent);
+
+    const articleContent = (content?.articleContent || extractPlainTextFromRichContent(processedRichContent) || "").trim();
+    return {
+        articleContent,
+        articleContentRich: processedRichContent,
+    };
+};
+
+const normalizeCourseProjectPayload = async (
+    courseData = {},
+    {
+        courseName = "course",
+        previousProjects = [],
+        rollbackCtx = null,
+    } = {}
+) => {
+    if (!courseData?.projectBased) {
+        for (const project of previousProjects || []) {
+            await deleteRemovedRichContentImages(project?.descriptionRich || null, null);
+        }
+        return {
+            projectCount: 0,
+            projects: [],
+        };
+    }
+
+    const incomingProjects = Array.isArray(courseData.projects) ? courseData.projects : [];
+    const projects = [];
+
+    for (let index = 0; index < incomingProjects.length; index += 1) {
+        const project = incomingProjects[index] || {};
+        const previousProject = Array.isArray(previousProjects) ? previousProjects[index] : null;
+
+            const descriptionRich = isRichContentDoc(project?.descriptionRich)
+                ? project.descriptionRich
+                : createRichParagraphDoc(project?.description || "");
+            const processedDescriptionRich = await uploadInlineImagesInRichDoc({
+                richDoc: descriptionRich,
+                courseName,
+                scope: `project_${index + 1}`,
+                rollbackCtx,
+            });
+
+            await deleteRemovedRichContentImages(previousProject?.descriptionRich || null, processedDescriptionRich);
+
+            const description = (project?.description || extractPlainTextFromRichContent(processedDescriptionRich) || "").trim();
+            projects.push({
+                title: (project?.title || "").trim(),
+                description,
+                descriptionRich: processedDescriptionRich,
+            });
+    }
+
+    const validProjects = projects.filter((project) => project.title && project.description);
+
+    const projectCount = Math.max(1, Math.min(10, Number(courseData.projectCount) || validProjects.length || 1));
+    const selectedProjects = validProjects.slice(0, projectCount);
+
+    const previousSafe = Array.isArray(previousProjects) ? previousProjects : [];
+    for (let index = 0; index < previousSafe.length; index += 1) {
+        const previousProject = previousSafe[index] || {};
+        const nextProject = selectedProjects[index] || null;
+        await deleteRemovedRichContentImages(previousProject?.descriptionRich || null, nextProject?.descriptionRich || null);
+    }
+
+    return {
+        projectCount,
+        projects: selectedProjects,
+    };
 };
 
 const createMediaRollbackContext = () => ({
@@ -194,23 +461,65 @@ const recalculateCourseTotals = async (courseId) => {
     const allModuleIds = allModules.map(m => m._id);
     const previewLessonIds = allLessons.filter(l => l.isFree).map(l => l._id);
 
-    let calcDuration = 0;
-    for (const les of allLessons) {
-        if (les.videoId) {
-            const video = await Video.findById(les.videoId);
-            if (video) calcDuration += video.duration || 0;
+    const videoIds = allLessons.map((lesson) => lesson.videoId).filter(Boolean);
+    const liveClassIds = allLessons.map((lesson) => lesson.liveClassId).filter(Boolean);
+    const assignmentIds = allLessons.map((lesson) => lesson.assignmentId).filter(Boolean);
+    const materialIds = allLessons.map((lesson) => lesson.materialId).filter(Boolean);
+
+    const [videos, liveClasses, assignments, materials] = await Promise.all([
+        videoIds.length > 0 ? Video.find({ _id: { $in: videoIds } }).select("_id duration").lean() : [],
+        liveClassIds.length > 0 ? LiveClass.find({ _id: { $in: liveClassIds } }).select("_id duration").lean() : [],
+        assignmentIds.length > 0 ? Assignment.find({ _id: { $in: assignmentIds } }).select("_id estimatedDurationMinutes").lean() : [],
+        materialIds.length > 0 ? Material.find({ _id: { $in: materialIds } }).select("_id estimatedDurationMinutes metadata.duration").lean() : [],
+    ]);
+
+    const videoDurationById = new Map(videos.map((video) => [video._id.toString(), Number(video.duration) || 0]));
+    const liveDurationById = new Map(liveClasses.map((liveClass) => [liveClass._id.toString(), Number(liveClass.duration) || 0]));
+    const assignmentDurationById = new Map(assignments.map((assignment) => [assignment._id.toString(), toNonNegativeMinutes(assignment.estimatedDurationMinutes, 0)]));
+    const materialDurationById = new Map(materials.map((material) => {
+        const manualMinutes = toNonNegativeMinutes(material.estimatedDurationMinutes, -1);
+        const fallbackFromMetadata = Math.ceil((Number(material?.metadata?.duration) || 0) / 60);
+        const totalMinutes = manualMinutes >= 0 ? manualMinutes : Math.max(0, fallbackFromMetadata);
+        return [material._id.toString(), totalMinutes];
+    }));
+
+    let totalVideoSeconds = 0;
+    let liveDurationMinutes = 0;
+    let assignmentDurationMinutes = 0;
+    let articleDurationMinutes = 0;
+    let materialDurationMinutes = 0;
+
+    for (const lesson of allLessons) {
+        if (lesson.videoId) {
+            totalVideoSeconds += videoDurationById.get(lesson.videoId.toString()) || 0;
         }
-        if (les.liveClassId) {
-            const lc = await LiveClass.findById(les.liveClassId);
-            if (lc) calcDuration += lc.duration || 0;
+        if (lesson.liveClassId) {
+            liveDurationMinutes += liveDurationById.get(lesson.liveClassId.toString()) || 0;
+        }
+        if (lesson.assignmentId) {
+            assignmentDurationMinutes += assignmentDurationById.get(lesson.assignmentId.toString()) || 0;
+        }
+        if (lesson.type === "article") {
+            articleDurationMinutes += toNonNegativeMinutes(lesson.content?.articleEstimatedDurationMinutes, 0);
+        }
+        if (lesson.materialId) {
+            materialDurationMinutes += materialDurationById.get(lesson.materialId.toString()) || 0;
         }
     }
+
+    const videoDurationMinutes = Math.ceil(totalVideoSeconds / 60);
+    const totalDurationMinutes =
+        videoDurationMinutes +
+        liveDurationMinutes +
+        assignmentDurationMinutes +
+        articleDurationMinutes +
+        materialDurationMinutes;
 
     return Course.findByIdAndUpdate(courseId, {
         modules: allModuleIds,
         totalModules: allModules.length,
         totalLessons: allLessons.length,
-        totalDuration: Math.ceil(calcDuration / 60),
+        totalDuration: totalDurationMinutes,
         previewLessons: previewLessonIds.length > 0 ? previewLessonIds : undefined
     }, { new: true });
 };
@@ -248,8 +557,9 @@ const validateCoursePublishReadiness = async (courseId) => {
         const validProjects = (course.projects || []).filter(
             (project) => project?.title?.trim() && project?.description?.trim()
         );
-        if (validProjects.length === 0) {
-            validationErrors.push("At least one valid project is required when projectBased is enabled");
+        const requiredProjectCount = Math.max(1, Math.min(10, Number(course.projectCount) || validProjects.length || 1));
+        if (validProjects.length < requiredProjectCount) {
+            validationErrors.push(`At least ${requiredProjectCount} valid projects are required when projectBased is enabled`);
         }
     }
 
@@ -304,10 +614,83 @@ const validateCoursePublishReadiness = async (courseId) => {
             validationErrors.push(`Material lesson "${lessonLabel}" must have material content`);
         }
         if (lesson.type === "article") {
-            const article = lesson.content?.articleContent || "";
+            const article = lesson.content?.articleContent || extractPlainTextFromRichContent(lesson.content?.articleContentRich || null) || "";
             if (article.trim().length < 10) {
                 validationErrors.push(`Article lesson "${lessonLabel}" must have at least 10 characters of content`);
             }
+        }
+    }
+
+    return validationErrors;
+};
+
+const validateFullCoursePayload = ({ modulesData = [], projectBased = false, projectCount = 0, projects = [] }) => {
+    const validationErrors = [];
+
+    if (!Array.isArray(modulesData) || modulesData.length === 0) {
+        validationErrors.push("At least one module is required");
+    }
+
+    modulesData.forEach((moduleDoc = {}, moduleIndex) => {
+        const moduleLabel = moduleDoc.title || `Module ${moduleIndex + 1}`;
+        const lessons = Array.isArray(moduleDoc.lessons) ? moduleDoc.lessons : [];
+
+        if (!moduleDoc.title || !String(moduleDoc.title).trim()) {
+            validationErrors.push(`${moduleLabel}: title is required`);
+        }
+
+        if (lessons.length === 0) {
+            validationErrors.push(`${moduleLabel}: at least one lesson is required`);
+            return;
+        }
+
+        lessons.forEach((lesson = {}, lessonIndex) => {
+            const lessonLabel = lesson.title || `Lesson ${lessonIndex + 1}`;
+            const type = lesson.type || "video";
+
+            if (!lesson.title || !String(lesson.title).trim()) {
+                validationErrors.push(`${moduleLabel} > ${lessonLabel}: title is required`);
+            }
+
+            if (type === "article") {
+                const articleText = extractPlainTextFromRichContent(lesson?.content?.articleContentRich || lesson?.content?.articleContent || "");
+                if (articleText.trim().length < 10) {
+                    validationErrors.push(`${moduleLabel} > ${lessonLabel}: article content must be at least 10 characters`);
+                }
+            }
+
+            if (type === "assignment") {
+                const assignmentTitle = String(lesson?.assignment?.title || "").trim();
+                if (!assignmentTitle) {
+                    validationErrors.push(`${moduleLabel} > ${lessonLabel}: assignment title is required`);
+                }
+            }
+
+            if (type === "live") {
+                const scheduledAt = lesson?.liveClass?.scheduledAt;
+                if (!scheduledAt) {
+                    validationErrors.push(`${moduleLabel} > ${lessonLabel}: live class schedule is required`);
+                }
+            }
+
+            if (type === "material") {
+                const hasMaterialFile = Boolean(lesson?.material?.fileName || lesson?.material?.fileUrl);
+                if (!hasMaterialFile) {
+                    validationErrors.push(`${moduleLabel} > ${lessonLabel}: material file is required`);
+                }
+            }
+        });
+    });
+
+    if (projectBased) {
+        const validProjects = (Array.isArray(projects) ? projects : []).filter((project) => {
+            const title = String(project?.title || "").trim();
+            const description = String(project?.description || extractPlainTextFromRichContent(project?.descriptionRich || "") || "").trim();
+            return Boolean(title && description);
+        });
+        const requiredProjectCount = Math.max(1, Math.min(10, Number(projectCount) || validProjects.length || 1));
+        if (validProjects.length < requiredProjectCount) {
+            validationErrors.push(`At least ${requiredProjectCount} complete project entries are required when projectBased is enabled`);
         }
     }
 
@@ -320,6 +703,7 @@ const validateCoursePublishReadiness = async (courseId) => {
 const createLinkedModel = async ({
     lessonType, lesInfo, lessonDoc, targetLesson,
     instructorId, courseId, moduleId,
+    courseStatus, coursePublished,
     courseName, moduleName, lessonName,
     mi, li, files, errors, rollbackCtx
 }) => {
@@ -431,7 +815,15 @@ const createLinkedModel = async ({
                 course: courseId,
                 lesson: targetLesson?._id,
                 instructor: instructorId,
+                estimatedDurationMinutes: toNonNegativeMinutes(
+                    lesInfo.assignment?.estimatedDurationMinutes,
+                    toNonNegativeMinutes(lesInfo.estimatedDurationMinutes, 0)
+                ),
                 createdBy: instructorId,
+                isPublished: Boolean(lesInfo.assignment?.isPublished ?? (courseStatus === "published" || coursePublished)),
+                publishedAt: (lesInfo.assignment?.isPublished ?? (courseStatus === "published" || coursePublished))
+                    ? new Date()
+                    : undefined,
             };
 
             const asgThumbFile = findFile(
@@ -516,6 +908,10 @@ const createLinkedModel = async ({
                 course: courseId,
                 module: moduleId,
                 lesson: targetLesson?._id,
+                estimatedDurationMinutes: toNonNegativeMinutes(
+                    lesInfo.material?.estimatedDurationMinutes,
+                    toNonNegativeMinutes(lesInfo.estimatedDurationMinutes, 0)
+                ),
                 status: "published",
                 isPublic: !!lesInfo.isFree,
                 accessLevel: lesInfo.isFree ? "public" : (lesInfo.material?.accessLevel || "enrolled_students"),
@@ -552,7 +948,18 @@ const createLinkedModel = async ({
     // ── ARTICLE ──
     if (lessonType === "article") {
         lessonDoc.content = lessonDoc.content || {};
-        lessonDoc.content.articleContent = lesInfo.content?.articleContent || "";
+        const normalizedArticle = await normalizeArticleContentPayload(lesInfo.content || {}, {
+            courseName,
+            scope: `${moduleName}/${lessonName}`,
+            previousRichContent: targetLesson?.content?.articleContentRich || null,
+            rollbackCtx,
+        });
+        lessonDoc.content.articleContent = normalizedArticle.articleContent;
+        lessonDoc.content.articleContentRich = normalizedArticle.articleContentRich;
+        lessonDoc.content.articleEstimatedDurationMinutes = toNonNegativeMinutes(
+            lesInfo.content?.articleEstimatedDurationMinutes,
+            toNonNegativeMinutes(lesInfo.estimatedDurationMinutes, 0)
+        );
     }
 };
 
@@ -684,6 +1091,8 @@ const createModulesAndLessons = async ({
             await createLinkedModel({
                 lessonType, lesInfo, lessonDoc, targetLesson,
                 instructorId, courseId: course._id, moduleId: moduleDoc._id,
+                courseStatus: course.status,
+                coursePublished: course.isPublished,
                 courseName, moduleName, lessonName,
                 mi, li, files, errors, rollbackCtx
             });
@@ -920,7 +1329,24 @@ export const createFullCourseService = async ({ data, files, instructorId }) => 
         if (!instructor) throw new Error("Instructor not found");
 
         const courseName = (data.title || "untitled").replace(/\s+/g, "_");
+        const modulesData = Array.isArray(data.modules) ? data.modules : [];
         const errors = [];
+
+        const payloadValidationErrors = validateFullCoursePayload({
+            modulesData,
+            projectBased: Boolean(data.projectBased),
+            projectCount: data.projectCount,
+            projects: data.projects,
+        });
+        if (payloadValidationErrors.length > 0) {
+            throw new Error(`Course payload validation failed: ${payloadValidationErrors.join(" | ")}`);
+        }
+
+        const normalizedProjectPayload = await normalizeCourseProjectPayload(data, {
+            courseName,
+            previousProjects: [],
+            rollbackCtx,
+        });
 
     // ── 1. COURSE THUMBNAIL ──
     let thumbnail = null;
@@ -950,10 +1376,18 @@ export const createFullCourseService = async ({ data, files, instructorId }) => 
         }
 
     // ── 3. CHECK FOR EXISTING COURSE (idempotent resume) ──
-    let course = await Course.findOne({ title: data.title }).populate("modules");
+    const requestedCourseId = data.courseId || data._id || null;
+    let course = null;
     let isResuming = false;
     const existingModuleMap = new Map();
     const existingLessonMap = new Map();
+
+    if (requestedCourseId) {
+        course = await Course.findOne({ _id: requestedCourseId, instructor: instructorId }).populate("modules");
+        if (!course) {
+            throw new Error("Requested draft course was not found for publish flow");
+        }
+    }
 
     if (!course && !thumbnail && !data.thumbnail) {
         throw new Error("Course thumbnail is required");
@@ -966,6 +1400,7 @@ export const createFullCourseService = async ({ data, files, instructorId }) => 
         Object.assign(course, {
             description: data.description || course.description,
             shortDescription: data.shortDescription || course.shortDescription,
+            type: data.type || course.type,
             category: data.category || course.category,
             subCategory: data.subCategory || course.subCategory,
             level: data.level || course.level,
@@ -980,7 +1415,19 @@ export const createFullCourseService = async ({ data, files, instructorId }) => 
             allowPreview: data.allowPreview ?? course.allowPreview,
             isInternshipEligible: data.isInternshipEligible ?? course.isInternshipEligible,
             projectBased: data.projectBased ?? course.projectBased,
-            projects: data.projects || course.projects,
+            projectCount: data.projectBased === undefined ? course.projectCount : normalizedProjectPayload.projectCount,
+            projects: data.projectBased === undefined ? course.projects : normalizedProjectPayload.projects,
+            liveFinalProjectReward: data.liveFinalProjectReward
+                ? {
+                    enabled: Boolean(data.liveFinalProjectReward.enabled),
+                    title: data.liveFinalProjectReward.title || "",
+                    description: data.liveFinalProjectReward.description || "",
+                    amount: data.liveFinalProjectReward.amount !== undefined && data.liveFinalProjectReward.amount !== ""
+                        ? Number(data.liveFinalProjectReward.amount)
+                        : undefined,
+                    currency: data.liveFinalProjectReward.currency || "INR",
+                }
+                : course.liveFinalProjectReward,
             maxStudents: data.maxStudents ? Number(data.maxStudents) : course.maxStudents,
             learningOutcomes: data.learningOutcomes || course.learningOutcomes,
             prerequisites: data.prerequisites || course.prerequisites,
@@ -1011,6 +1458,7 @@ export const createFullCourseService = async ({ data, files, instructorId }) => 
             description: data.description,
             shortDescription: data.shortDescription,
             instructor: instructorId,
+            type: data.type || "recorded",
             category: data.category,
             subCategory: data.subCategory,
             level: data.level,
@@ -1024,8 +1472,20 @@ export const createFullCourseService = async ({ data, files, instructorId }) => 
             certificateEnabled: data.certificateEnabled ?? true,
             allowPreview: data.allowPreview ?? true,
             isInternshipEligible: data.isInternshipEligible || false,
-            projectBased: data.projectBased || false,
-            projects: data.projects || [],
+            projectBased: Boolean(data.projectBased),
+            projectCount: normalizedProjectPayload.projectCount,
+            projects: normalizedProjectPayload.projects,
+            liveFinalProjectReward: data.liveFinalProjectReward
+                ? {
+                    enabled: Boolean(data.liveFinalProjectReward.enabled),
+                    title: data.liveFinalProjectReward.title || "",
+                    description: data.liveFinalProjectReward.description || "",
+                    amount: data.liveFinalProjectReward.amount !== undefined && data.liveFinalProjectReward.amount !== ""
+                        ? Number(data.liveFinalProjectReward.amount)
+                        : undefined,
+                    currency: data.liveFinalProjectReward.currency || "INR",
+                }
+                : undefined,
             maxStudents: data.maxStudents ? Number(data.maxStudents) : undefined,
             learningOutcomes: data.learningOutcomes || [],
             prerequisites: data.prerequisites || [],
@@ -1077,7 +1537,6 @@ export const createFullCourseService = async ({ data, files, instructorId }) => 
     }
 
     // ── 6. MODULES & LESSONS ──
-    const modulesData = data.modules || [];
     const existingModuleIds = course.modules?.map(m => m._id || m) || [];
 
         await createModulesAndLessons({
@@ -1159,6 +1618,28 @@ export const saveDraftCourseService = async ({ courseId, data, files }) => {
         }
     }
 
+    if (Object.prototype.hasOwnProperty.call(courseFields, "projectBased") || Object.prototype.hasOwnProperty.call(courseFields, "projects") || Object.prototype.hasOwnProperty.call(courseFields, "projectCount")) {
+        const normalizedProjectPayload = await normalizeCourseProjectPayload(courseFields, {
+            courseName,
+            previousProjects: course.projects || [],
+            rollbackCtx,
+        });
+        courseFields.projectCount = normalizedProjectPayload.projectCount;
+        courseFields.projects = normalizedProjectPayload.projects;
+    }
+
+    if (courseFields.liveFinalProjectReward) {
+        courseFields.liveFinalProjectReward = {
+            enabled: Boolean(courseFields.liveFinalProjectReward.enabled),
+            title: courseFields.liveFinalProjectReward.title || "",
+            description: courseFields.liveFinalProjectReward.description || "",
+            amount: courseFields.liveFinalProjectReward.amount !== undefined && courseFields.liveFinalProjectReward.amount !== ""
+                ? Number(courseFields.liveFinalProjectReward.amount)
+                : undefined,
+            currency: courseFields.liveFinalProjectReward.currency || "INR",
+        };
+    }
+
     courseFields.status = "draft";
     courseFields.isPublished = false;
 
@@ -1234,6 +1715,28 @@ export const createDraftCourseService = async ({ data = {}, files, instructorId 
             logger.error(`Draft trailer upload failed: ${error.message}`);
             throw new Error(`Draft trailer upload failed: ${error.message}`);
         }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(courseFields, "projectBased") || Object.prototype.hasOwnProperty.call(courseFields, "projects") || Object.prototype.hasOwnProperty.call(courseFields, "projectCount")) {
+        const normalizedProjectPayload = await normalizeCourseProjectPayload(courseFields, {
+            courseName,
+            previousProjects: [],
+            rollbackCtx,
+        });
+        courseFields.projectCount = normalizedProjectPayload.projectCount;
+        courseFields.projects = normalizedProjectPayload.projects;
+    }
+
+    if (courseFields.liveFinalProjectReward) {
+        courseFields.liveFinalProjectReward = {
+            enabled: Boolean(courseFields.liveFinalProjectReward.enabled),
+            title: courseFields.liveFinalProjectReward.title || "",
+            description: courseFields.liveFinalProjectReward.description || "",
+            amount: courseFields.liveFinalProjectReward.amount !== undefined && courseFields.liveFinalProjectReward.amount !== ""
+                ? Number(courseFields.liveFinalProjectReward.amount)
+                : undefined,
+            currency: courseFields.liveFinalProjectReward.currency || "INR",
+        };
     }
 
     const draftCourse = new Course({
@@ -1408,6 +1911,28 @@ export const updateFullCourseService = async ({ courseId, updateData, files }) =
                 logger.error(`Course trailer update failed: ${error.message}`);
                 throw new Error("Course trailer upload failed");
             }
+        }
+
+        if (Object.prototype.hasOwnProperty.call(courseUpdate, "projectBased") || Object.prototype.hasOwnProperty.call(courseUpdate, "projects") || Object.prototype.hasOwnProperty.call(courseUpdate, "projectCount")) {
+            const normalizedProjectPayload = await normalizeCourseProjectPayload(courseUpdate, {
+                courseName: (courseUpdate.title || course.title || "course").replace(/\s+/g, "_"),
+                previousProjects: course.projects || [],
+                rollbackCtx,
+            });
+            courseUpdate.projectCount = normalizedProjectPayload.projectCount;
+            courseUpdate.projects = normalizedProjectPayload.projects;
+        }
+
+        if (courseUpdate.liveFinalProjectReward) {
+            courseUpdate.liveFinalProjectReward = {
+                enabled: Boolean(courseUpdate.liveFinalProjectReward.enabled),
+                title: courseUpdate.liveFinalProjectReward.title || "",
+                description: courseUpdate.liveFinalProjectReward.description || "",
+                amount: courseUpdate.liveFinalProjectReward.amount !== undefined && courseUpdate.liveFinalProjectReward.amount !== ""
+                    ? Number(courseUpdate.liveFinalProjectReward.amount)
+                    : undefined,
+                currency: courseUpdate.liveFinalProjectReward.currency || "INR",
+            };
         }
 
         // Prevent direct update of computed fields
@@ -1628,6 +2153,19 @@ export const updateFullCourseService = async ({ courseId, updateData, files }) =
                     if (lessonData.order) lesson.order = lessonData.order;
                     lesson.type = nextType;
                     if (lessonData.isFree !== undefined) lesson.isFree = lessonData.isFree;
+                    if (nextType === "article") {
+                        const normalizedArticle = await normalizeArticleContentPayload(lessonData.content || {}, {
+                            courseName: (course.title || "course").replace(/\s+/g, "_"),
+                            scope: `${(moduleData.title || module.title || `Module_${mIdx + 1}`).replace(/\s+/g, "_")}/${(lessonData.title || lesson.title || `Lesson_${lIdx + 1}`).replace(/\s+/g, "_")}`,
+                            previousRichContent: lesson.content?.articleContentRich || null,
+                            rollbackCtx,
+                        });
+                        lesson.content = {
+                            ...(lesson.content || {}),
+                            articleContent: normalizedArticle.articleContent,
+                            articleContentRich: normalizedArticle.articleContentRich,
+                        };
+                    }
 
                     await lesson.save({ validateBeforeSave: false });
 

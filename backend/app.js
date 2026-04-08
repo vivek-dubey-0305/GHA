@@ -106,6 +106,7 @@ import csurf from "csurf";
 
 import { errorMiddleware } from "./middlewares/error.middleware.js";
 import { sanitizeInput } from "./middlewares/sanitization.middleware.js";
+import { requestLogger } from "./middlewares/request-logger.middleware.js";
 import logger from "./configs/logger.config.js";
 import { appConfig, securityConfig, validateConfig } from "./configs/app.config.js";
 import adminAuthRouter from "./routes/admin.auth.routes.js";
@@ -210,6 +211,8 @@ app.use((req, res, next) => {
     }
     return urlEncodedParser(req, res, next);
 });
+
+app.use(requestLogger);
 
 // ================= HELMET =================
 app.use(helmet(securityConfig.helmet));

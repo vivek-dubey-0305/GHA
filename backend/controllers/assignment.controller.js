@@ -1,10 +1,38 @@
 import { Assignment } from "../models/assignment.model.js";
 import { Course } from "../models/course.model.js";
+import { Submission } from "../models/submission.model.js";
+import mongoose from "mongoose";
 import { asyncHandler } from "../middlewares/async.middleware.js";
 import { errorResponse, successResponse } from "../utils/response.utils.js";
 import { getPagination, createPaginationResponse } from "../utils/pagination.utils.js";
 import { uploadAssignmentThumbnail, updateImage, deleteImage } from "../services/r2.service.js";
 import logger from "../configs/logger.config.js";
+
+const RECORDED_ALLOWED_ASSESSMENT_TYPES = ["mcq", "true_false", "matching"];
+const AUTO_GRADED_ASSESSMENT_TYPES = ["mcq", "true_false", "matching"];
+
+const normalizeAssessmentType = (value) => String(value || "subjective").trim().toLowerCase();
+
+const applyCourseAssignmentRules = ({ course, assessmentType }) => {
+    const normalizedType = normalizeAssessmentType(assessmentType);
+
+    if (course.type === "recorded") {
+        if (!RECORDED_ALLOWED_ASSESSMENT_TYPES.includes(normalizedType)) {
+            const allowed = RECORDED_ALLOWED_ASSESSMENT_TYPES.join(", ");
+            throw new Error(`Recorded courses support only these assignment assessment types: ${allowed}`);
+        }
+
+        return {
+            assessmentType: normalizedType,
+            gradingType: "auto",
+        };
+    }
+
+    return {
+        assessmentType: normalizedType,
+        gradingType: AUTO_GRADED_ASSESSMENT_TYPES.includes(normalizedType) ? "auto" : "manual",
+    };
+};
 
 /**
  * Assignment Controller
@@ -17,6 +45,13 @@ import logger from "../configs/logger.config.js";
 export const getAssignments = asyncHandler(async (req, res) => {
     const { courseId } = req.params;
     const { page, limit, skip } = getPagination(req.query, 10);
+
+    if (!mongoose.isValidObjectId(courseId)) {
+        return successResponse(res, 200, "Assignments retrieved successfully", {
+            assignments: [],
+            pagination: createPaginationResponse(0, page, limit),
+        });
+    }
 
     const filter = { course: courseId };
 
@@ -61,7 +96,9 @@ export const getAssignment = asyncHandler(async (req, res) => {
 // @desc    Create an assignment (with optional thumbnail via form-data)
 // @access  Private (Instructor - course owner)
 export const createAssignment = asyncHandler(async (req, res) => {
-    const { courseId } = req.params;
+    const courseId = req.params.courseId || req.body.courseId || req.body.course;
+    if (!courseId) return errorResponse(res, 400, "courseId is required");
+
     const course = await Course.findById(courseId);
     if (!course) return errorResponse(res, 404, "Course not found");
 
@@ -78,6 +115,21 @@ export const createAssignment = asyncHandler(async (req, res) => {
     if (typeof assignmentData.requiredFiles === "string") assignmentData.requiredFiles = JSON.parse(assignmentData.requiredFiles);
     if (typeof assignmentData.rubrics === "string") assignmentData.rubrics = JSON.parse(assignmentData.rubrics);
     if (typeof assignmentData.wordLimit === "string") assignmentData.wordLimit = JSON.parse(assignmentData.wordLimit);
+    if (typeof assignmentData.questions === "string") assignmentData.questions = JSON.parse(assignmentData.questions);
+    if (typeof assignmentData.testCases === "string") assignmentData.testCases = JSON.parse(assignmentData.testCases);
+
+    assignmentData.assessmentType = assignmentData.assessmentType || "subjective";
+
+    try {
+        const mapped = applyCourseAssignmentRules({
+            course,
+            assessmentType: assignmentData.assessmentType,
+        });
+        assignmentData.assessmentType = mapped.assessmentType;
+        assignmentData.gradingType = mapped.gradingType;
+    } catch (ruleError) {
+        return errorResponse(res, 400, ruleError.message);
+    }
 
     // Handle thumbnail upload
     if (req.file) {
@@ -114,6 +166,32 @@ export const updateAssignment = asyncHandler(async (req, res) => {
     if (typeof updateData.requiredFiles === "string") updateData.requiredFiles = JSON.parse(updateData.requiredFiles);
     if (typeof updateData.rubrics === "string") updateData.rubrics = JSON.parse(updateData.rubrics);
     if (typeof updateData.wordLimit === "string") updateData.wordLimit = JSON.parse(updateData.wordLimit);
+    if (typeof updateData.questions === "string") updateData.questions = JSON.parse(updateData.questions);
+    if (typeof updateData.testCases === "string") updateData.testCases = JSON.parse(updateData.testCases);
+
+    const nextAssessmentType = updateData.assessmentType || assignment.assessmentType || "subjective";
+
+    if (nextAssessmentType !== assignment.assessmentType) {
+        const submittedCount = await Submission.countDocuments({
+            assignment: assignment._id,
+            status: { $in: ["submitted", "graded", "returned"] },
+        });
+
+        if (submittedCount > 0) {
+            return errorResponse(res, 400, "Cannot change assessment type after submissions exist");
+        }
+    }
+
+    try {
+        const mapped = applyCourseAssignmentRules({
+            course,
+            assessmentType: nextAssessmentType,
+        });
+        updateData.assessmentType = mapped.assessmentType;
+        updateData.gradingType = mapped.gradingType;
+    } catch (ruleError) {
+        return errorResponse(res, 400, ruleError.message);
+    }
 
     // Handle thumbnail upload
     if (req.file) {

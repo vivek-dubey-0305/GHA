@@ -18,6 +18,7 @@ export function InstructorLayout({ children }) {
         className={`flex-1 overflow-auto transition-all duration-300 ease-in-out ${
           collapsed ? 'lg:ml-20 ml-0' : 'ml-0 lg:ml-64'
         }`}
+        style={{ '--instructor-sidebar-offset': collapsed ? '5rem' : '16rem' }}
       >
         {/* Mobile header bar */}
         <div className="lg:hidden sticky top-0 z-30 bg-[#0a0a0a] border-b border-gray-800 px-4 py-3 flex items-center gap-3">

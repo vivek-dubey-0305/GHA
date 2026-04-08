@@ -19,6 +19,8 @@ export default function MyCoursesCard({ enrollment, delay = 0 }) {
   const safeDuration = Number(course.totalDuration || 0);
   const safeRating = Number(course.rating || 0);
   const safeTotalReviews = Number(course.totalReviews || 0);
+  const courseType = String(course.type || "recorded").toLowerCase();
+  const isLiveCourse = courseType === "live";
 
   return (
     <motion.div
@@ -37,9 +39,17 @@ export default function MyCoursesCard({ enrollment, delay = 0 }) {
         />
         <div className="absolute inset-0 bg-linear-to-t from-black/70 to-transparent" />
         <div className="absolute top-3 left-3">
-          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${levelClasses}`}>
-            {course.level || "beginner"}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${levelClasses}`}>
+              {course.level || "beginner"}
+            </span>
+            <StatusBadge
+              label={isLiveCourse ? "Live Batch" : "Recorded"}
+              className={isLiveCourse
+                ? "text-green-300 bg-green-500/15 border-green-500/30"
+                : "text-blue-300 bg-blue-500/15 border-blue-500/30"}
+            />
+          </div>
         </div>
         {status === "completed" && (
           <div className="absolute top-3 right-3 bg-green-400/20 text-green-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-green-400/30">
@@ -89,14 +99,22 @@ export default function MyCoursesCard({ enrollment, delay = 0 }) {
 
         {/* Actions */}
         <div className="mt-4">
-          <Link
-            to={`/dashboard/learn/${course._id}`}
-            className="w-full flex items-center justify-center gap-2 py-2 bg-yellow-400 text-black
-              font-semibold text-sm rounded-xl hover:bg-yellow-300 transition-colors active:scale-95"
-          >
-            <Play className="w-3 h-3 fill-black" />
-            {status === "completed" ? "Review" : "Continue"}
-          </Link>
+          <div className="grid grid-cols-1 gap-2">
+            <Link
+              to={`/dashboard/learn/${course._id}`}
+              className="w-full flex items-center justify-center gap-2 py-2 bg-yellow-400 text-black
+                font-semibold text-sm rounded-xl hover:bg-yellow-300 transition-colors active:scale-95"
+            >
+              <Play className="w-3 h-3 fill-black" />
+              {status === "completed" ? "Review" : "Continue"}
+            </Link>
+            <Link
+              to={`/dashboard/doubt-tickets?courseId=${course._id}&title=${encodeURIComponent(isLiveCourse ? "Live batch doubt" : "Recorded lesson doubt")}`}
+              className="w-full text-center py-2 rounded-xl border border-gray-700 text-gray-300 text-xs font-medium hover:border-yellow-400/40 hover:text-yellow-300 transition-colors"
+            >
+              Book Doubt Session
+            </Link>
+          </div>
         </div>
       </div>
     </motion.div>

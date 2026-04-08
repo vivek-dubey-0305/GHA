@@ -15,6 +15,9 @@ export const calculateModuleDuration = (lessons) => {
       return sum + (parseInt(l.video?.duration) || 0);
     }
     if (l.type === 'live') return sum + ((parseInt(l.liveClass?.duration) || 0) * 60);
+    if (l.type === 'assignment') return sum + ((parseInt(l.assignment?.estimatedDurationMinutes) || 0) * 60);
+    if (l.type === 'article') return sum + ((parseInt(l.content?.articleEstimatedDurationMinutes) || 0) * 60);
+    if (l.type === 'material') return sum + ((parseInt(l.material?.estimatedDurationMinutes) || 0) * 60);
     return sum;
   }, 0);
 };
@@ -27,7 +30,7 @@ export const createEmptyLesson = () => ({
   description: '',
   type: 'video',
   isFree: false,
-  content: { articleContent: '' },
+  content: { articleContent: '', articleEstimatedDurationMinutes: 0 },
   video: {
     title: '',
     description: '',
@@ -39,12 +42,15 @@ export const createEmptyLesson = () => ({
     title: '',
     description: '',
     instructions: '',
+    assessmentType: 'subjective',
+    questions: [],
     type: 'text',
     maxScore: 100,
     passingScore: 40,
     dueDate: '',
     allowLateSubmission: false,
     lateSubmissionPenalty: 0,
+    estimatedDurationMinutes: 0,
     thumbnailFile: null,
     thumbnailPreview: null,
   },
@@ -61,6 +67,7 @@ export const createEmptyLesson = () => ({
     title: '',
     description: '',
     type: 'pdf',
+    estimatedDurationMinutes: 0,
     materialFile: null,
     fileName: '',
   },

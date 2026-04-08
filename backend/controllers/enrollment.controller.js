@@ -4,6 +4,7 @@ import { Course } from "../models/course.model.js";
 import { Payment } from "../models/payment.model.js";
 import { User } from "../models/user.model.js";
 import { Instructor } from "../models/instructor.model.js";
+import { Batch } from "../models/batch.model.js";
 import mongoose from "mongoose";
 import { asyncHandler } from "../middlewares/async.middleware.js";
 import { errorResponse, successResponse } from "../utils/response.utils.js";
@@ -32,8 +33,8 @@ export const enrollInCourse = asyncHandler(async (req, res) => {
         return errorResponse(res, 404, "Course not found or not available");
     }
 
-    // Check max students
-    if (course.maxStudents && course.enrolledCount >= course.maxStudents) {
+    // Live courses enforce enrollment caps; recorded courses are unlimited.
+    if (course.type === "live" && course.maxStudents && course.enrolledCount >= course.maxStudents) {
         return errorResponse(res, 400, "Course is full");
     }
 
@@ -53,10 +54,62 @@ export const enrollInCourse = asyncHandler(async (req, res) => {
     session.startTransaction();
 
     try {
+        let assignedBatchId = null;
+        let assignedBatchStartDate = null;
+        let assignedBatchEndDate = null;
+        if (course.type === "live") {
+            let batch = await Batch.findOne({
+                courseId,
+                status: { $in: ["scheduled", "active"] },
+            }).sort({ startDate: 1 }).session(session);
+
+            if (!batch) {
+                const embeddedBatch = Array.isArray(course.batches) && course.batches.length > 0 ? course.batches[0] : null;
+                const now = new Date();
+                const defaultStart = embeddedBatch?.startDate || now;
+                const defaultEnd = embeddedBatch?.endDate || new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+                const created = await Batch.create([{
+                    courseId,
+                    name: embeddedBatch?.name || `${course.title} Batch 1`,
+                    startDate: defaultStart,
+                    endDate: defaultEnd,
+                    instructorId: course.instructor,
+                    status: defaultStart > now ? "scheduled" : "active",
+                }], { session });
+                batch = created[0];
+            }
+
+            if (batch) {
+                const now = new Date();
+                if (batch.endDate && new Date(batch.endDate) <= now) {
+                    throw new Error("Live batch has ended. Enrollment is closed");
+                }
+                assignedBatchId = batch._id;
+                assignedBatchStartDate = batch.startDate || null;
+                assignedBatchEndDate = batch.endDate || null;
+                await Batch.updateOne(
+                    { _id: batch._id },
+                    { $addToSet: { students: req.user.id } },
+                    { session }
+                );
+            }
+        }
+
         const enrollment = await Enrollment.create([
             {
                 user: req.user.id,
                 course: courseId,
+                type: course.type === "live" ? "live" : "recorded",
+                batchId: assignedBatchId,
+                liveAccessStatus: course.type === "live" && assignedBatchId
+                    ? assignedBatchEndDate && assignedBatchEndDate <= new Date()
+                        ? "completed"
+                        : assignedBatchStartDate > new Date()
+                        ? "awaiting_start"
+                        : "active"
+                    : "not_applicable",
+                isLifetime: course.type !== "live",
+                expiryDate: course.type === "live" ? assignedBatchEndDate : undefined,
                 payment: paymentId,
                 totalLessons: course.totalLessons || 0
             }
@@ -122,6 +175,7 @@ export const getCourseEnrollments = asyncHandler(async (req, res) => {
     const total = await Enrollment.countDocuments(filter);
     const enrollments = await Enrollment.find(filter)
         .populate("user", "firstName lastName email profilePicture")
+        .populate("batchId", "name startDate endDate status")
         .populate("payment", "amount currency status")
         .sort({ enrolledAt: -1 })
         .skip(skip)
@@ -168,6 +222,7 @@ export const getEnrollmentById = asyncHandler(async (req, res) => {
     const enrollment = await Enrollment.findById(req.params.id)
         .populate("user", "firstName lastName email profilePicture")
         .populate("course", "title thumbnail instructor totalModules totalLessons")
+        .populate("batchId", "name startDate endDate status")
         .populate("payment", "amount currency status transactionId");
 
     if (!enrollment) return errorResponse(res, 404, "Enrollment not found");
