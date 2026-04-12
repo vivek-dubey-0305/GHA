@@ -1,12 +1,6 @@
 import { Progress } from "../models/progress.model.js";
 import { Enrollment } from "../models/enrollment.model.js";
 import { Lesson } from "../models/lesson.model.js";
-import {
-    ACHIEVEMENT_CATEGORIES,
-    ACHIEVEMENT_POINTS,
-    ACHIEVEMENT_STATUS,
-} from "../constants/achievement.constant.js";
-import { createAchievementEvent } from "./achievement.service.js";
 
 const clampPercentage = (value) => {
     const num = Number(value);
@@ -221,82 +215,6 @@ export const syncEnrollmentProgress = async ({ userId, courseId }) => {
 
     const courseTitle = existingEnrollment?.course?.title || "Course";
 
-    if (modulesTransitionedToCompleted.length) {
-        await Promise.all(
-            modulesTransitionedToCompleted.map((moduleProgress) =>
-                createAchievementEvent({
-                    userId,
-                    category: ACHIEVEMENT_CATEGORIES.COURSE,
-                    status: ACHIEVEMENT_STATUS.ACHIEVED,
-                    title: "Module completed",
-                    description: `Completed a module in ${courseTitle}`,
-                    pointsAwarded: ACHIEVEMENT_POINTS.MODULE_COMPLETED,
-                    pointsPossible: ACHIEVEMENT_POINTS.MODULE_COMPLETED,
-                    source: "progress.syncEnrollmentProgress.module",
-                    refs: {
-                        course: courseId,
-                        module: moduleProgress.moduleId,
-                    },
-                    metadata: {
-                        courseTitle,
-                        moduleId: String(moduleProgress.moduleId),
-                        completedAt: moduleProgress.completedAt || new Date(),
-                    },
-                    dedupeKey: `achievement:module-complete:${userId}:${moduleProgress.moduleId}`,
-                })
-            )
-        );
-    }
-
-    if (transitionedToCompleted && updatedEnrollment) {
-        await createAchievementEvent({
-            userId,
-            category: ACHIEVEMENT_CATEGORIES.COURSE,
-            status: ACHIEVEMENT_STATUS.ACHIEVED,
-            title: "Course completed",
-            description: `Completed course ${courseTitle}`,
-            pointsAwarded: ACHIEVEMENT_POINTS.COURSE_COMPLETED,
-            pointsPossible: ACHIEVEMENT_POINTS.COURSE_COMPLETED,
-            source: "progress.syncEnrollmentProgress",
-            refs: {
-                course: courseId,
-            },
-            metadata: {
-                courseTitle,
-                completedAt: updatedEnrollment.completedAt || new Date(),
-                completionPercentage,
-            },
-            dedupeKey: `achievement:course-complete:${userId}:${courseId}`,
-        });
-
-        if (existingEnrollment?.enrolledAt) {
-            const completedAt = updatedEnrollment.completedAt || new Date();
-            const elapsedMs = new Date(completedAt).getTime() - new Date(existingEnrollment.enrolledAt).getTime();
-            const elapsedDays = Math.max(0, Math.floor(elapsedMs / (1000 * 60 * 60 * 24)));
-
-            if (elapsedDays <= 30) {
-                await createAchievementEvent({
-                    userId,
-                    category: ACHIEVEMENT_CATEGORIES.COURSE,
-                    status: ACHIEVEMENT_STATUS.ACHIEVED,
-                    title: "Fast completion bonus",
-                    description: `Completed ${courseTitle} in ${elapsedDays} day(s)`,
-                    pointsAwarded: ACHIEVEMENT_POINTS.COURSE_FAST_COMPLETION,
-                    pointsPossible: ACHIEVEMENT_POINTS.COURSE_FAST_COMPLETION,
-                    source: "progress.syncEnrollmentProgress.fast",
-                    refs: {
-                        course: courseId,
-                    },
-                    metadata: {
-                        courseTitle,
-                        elapsedDays,
-                    },
-                    dedupeKey: `achievement:course-fast:${userId}:${courseId}`,
-                });
-            }
-        }
-    }
-
     return {
         completedLessons,
         totalLessons: safeTotalLessons,
@@ -352,26 +270,6 @@ export const upsertLessonProgress = async ({ userId, lesson, payload = {} }) => 
     });
 
     const justCompletedLesson = existing?.status !== "completed" && progress?.status === "completed";
-    if (justCompletedLesson) {
-        await createAchievementEvent({
-            userId,
-            category: ACHIEVEMENT_CATEGORIES.COURSE,
-            status: ACHIEVEMENT_STATUS.ACHIEVED,
-            title: "Lesson completed",
-            description: `Completed lesson ${lesson.title || ""}`.trim(),
-            pointsAwarded: ACHIEVEMENT_POINTS.LESSON_COMPLETED,
-            pointsPossible: ACHIEVEMENT_POINTS.LESSON_COMPLETED,
-            source: "progress.upsertLessonProgress",
-            refs: {
-                course: lesson.course,
-                lesson: lesson._id,
-            },
-            metadata: {
-                lessonTitle: lesson.title || "",
-            },
-            dedupeKey: `achievement:lesson-complete:${userId}:${lesson._id}`,
-        });
-    }
 
     await syncEnrollmentProgress({ userId, courseId: lesson.course });
     return progress;

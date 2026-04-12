@@ -6,9 +6,6 @@ import courseReducer from '../slices/course.slice.js';
 import instructorReducer from '../slices/instructor.slice.js';
 import paymentReducer from '../slices/payment.slice.js';
 import enrollmentReducer from '../slices/enrollment.slice.js';
-import leaderboardReducer from '../slices/leaderboard.slice.js';
-import streakReducer from '../slices/streak.slice.js';
-import achievementReducer from '../slices/achievement.slice.js';
 
 export const store = configureStore({
   reducer: {
@@ -19,9 +16,6 @@ export const store = configureStore({
     instructor: instructorReducer,
     payment: paymentReducer,
     enrollment: enrollmentReducer,
-    leaderboard: leaderboardReducer,
-    streak: streakReducer,
-    achievement: achievementReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

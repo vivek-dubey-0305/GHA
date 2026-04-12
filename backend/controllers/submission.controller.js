@@ -16,13 +16,6 @@ import { upsertLessonProgress } from "../services/progress.service.js";
 import { reconcileSubmittedAssignmentProgress } from "../services/assignment-progress-reconcile.service.js";
 import { uploadAssignmentFile } from "../services/r2.service.js";
 import { sendEmail } from "../services/mail.service.js";
-import { refreshLeaderboardAfterActivity } from "../services/leaderboard.service.js";
-import {
-    ACHIEVEMENT_CATEGORIES,
-    ACHIEVEMENT_POINTS,
-    ACHIEVEMENT_STATUS,
-} from "../constants/achievement.constant.js";
-import { createAchievementEvent } from "../services/achievement.service.js";
 import { enqueueMcqGradingJob } from "../services/grading-queue.service.js";
 
 /**
@@ -504,33 +497,6 @@ export const createSubmission = asyncHandler(async (req, res) => {
             });
         }
 
-        await refreshLeaderboardAfterActivity({
-            userId: req.user.id,
-            io: req.app.get("io"),
-            source: "submission.resubmit",
-        });
-
-        await createAchievementEvent({
-            userId: req.user.id,
-            category: ACHIEVEMENT_CATEGORIES.ASSIGNMENT,
-            status: ACHIEVEMENT_STATUS.ACHIEVED,
-            title: "Assignment submitted",
-            description: `Submitted ${assignment.title}`,
-            pointsAwarded: ACHIEVEMENT_POINTS.ASSIGNMENT_SUBMITTED,
-            pointsPossible: ACHIEVEMENT_POINTS.ASSIGNMENT_SUBMITTED,
-            source: "submission.resubmit",
-            refs: {
-                assignment: assignment._id,
-                course: assignment.course,
-            },
-            metadata: {
-                assignmentTitle: assignment.title,
-                isResubmission: true,
-                submittedAt: updated.submittedAt || new Date(),
-            },
-            dedupeKey: `achievement:assignment-submit:${req.user.id}:${assignment._id}`,
-        });
-
         return successResponse(res, 200, "Assignment submission updated successfully", {
             submission: updated,
             autoGradingQueued: queueMeta.queued,
@@ -589,77 +555,6 @@ export const createSubmission = asyncHandler(async (req, res) => {
                     assignmentSubmitted: true,
                 },
             },
-        });
-    }
-
-    await refreshLeaderboardAfterActivity({
-        userId: req.user.id,
-        io: req.app.get("io"),
-        source: "submission.create",
-    });
-
-    await createAchievementEvent({
-        userId: req.user.id,
-        category: ACHIEVEMENT_CATEGORIES.ASSIGNMENT,
-        status: ACHIEVEMENT_STATUS.ACHIEVED,
-        title: "Assignment submitted",
-        description: `Submitted ${assignment.title}`,
-        pointsAwarded: ACHIEVEMENT_POINTS.ASSIGNMENT_SUBMITTED,
-        pointsPossible: ACHIEVEMENT_POINTS.ASSIGNMENT_SUBMITTED,
-        source: "submission.create",
-        refs: {
-            assignment: assignment._id,
-            course: assignment.course,
-        },
-        metadata: {
-            assignmentTitle: assignment.title,
-            isResubmission: false,
-            submittedAt: submission.submittedAt || new Date(),
-        },
-        dedupeKey: `achievement:assignment-submit:${req.user.id}:${assignment._id}`,
-    });
-
-    if (!isLate) {
-        await createAchievementEvent({
-            userId: req.user.id,
-            category: ACHIEVEMENT_CATEGORIES.ASSIGNMENT,
-            status: ACHIEVEMENT_STATUS.ACHIEVED,
-            title: "Submitted before deadline",
-            description: `${assignment.title} submitted on time`,
-            pointsAwarded: ACHIEVEMENT_POINTS.ASSIGNMENT_BEFORE_DEADLINE,
-            pointsPossible: ACHIEVEMENT_POINTS.ASSIGNMENT_BEFORE_DEADLINE,
-            source: "submission.beforeDeadline",
-            refs: {
-                assignment: assignment._id,
-                course: assignment.course,
-            },
-            metadata: {
-                assignmentTitle: assignment.title,
-                dueDate: assignment.dueDate,
-                submittedAt: submission.submittedAt || new Date(),
-            },
-            dedupeKey: `achievement:assignment-ontime:${req.user.id}:${assignment._id}`,
-        });
-    } else {
-        await createAchievementEvent({
-            userId: req.user.id,
-            category: ACHIEVEMENT_CATEGORIES.ASSIGNMENT,
-            status: ACHIEVEMENT_STATUS.MISSED,
-            title: "Missed on-time bonus",
-            description: `${assignment.title} was submitted after deadline`,
-            pointsAwarded: 0,
-            pointsPossible: ACHIEVEMENT_POINTS.ASSIGNMENT_BEFORE_DEADLINE,
-            source: "submission.missedDeadlineBonus",
-            refs: {
-                assignment: assignment._id,
-                course: assignment.course,
-            },
-            metadata: {
-                assignmentTitle: assignment.title,
-                dueDate: assignment.dueDate,
-                submittedAt: submission.submittedAt || new Date(),
-            },
-            dedupeKey: `achievement:assignment-ontime-missed:${req.user.id}:${assignment._id}`,
         });
     }
 
@@ -803,62 +698,6 @@ export const gradeSubmission = asyncHandler(async (req, res) => {
             },
         });
     }
-
-    await refreshLeaderboardAfterActivity({
-        userId: submission.user,
-        io: req.app.get("io"),
-        source: "submission.grade",
-    });
-
-    const percentage = submission.maxScore > 0 ? Number(score) / Number(submission.maxScore) : 0;
-    let gradePoints = 0;
-    let gradeTitle = "Assignment graded";
-    let gradeStatus = ACHIEVEMENT_STATUS.PARTIAL;
-    let gradePossible = ACHIEVEMENT_POINTS.ASSIGNMENT_SCORE_80;
-
-    if (percentage >= 1) {
-        gradePoints = ACHIEVEMENT_POINTS.ASSIGNMENT_SCORE_100;
-        gradeTitle = "Perfect score achieved";
-        gradeStatus = ACHIEVEMENT_STATUS.ACHIEVED;
-        gradePossible = ACHIEVEMENT_POINTS.ASSIGNMENT_SCORE_100;
-    } else if (percentage >= 0.9) {
-        gradePoints = ACHIEVEMENT_POINTS.ASSIGNMENT_SCORE_90;
-        gradeTitle = "90%+ score achieved";
-        gradeStatus = ACHIEVEMENT_STATUS.ACHIEVED;
-        gradePossible = ACHIEVEMENT_POINTS.ASSIGNMENT_SCORE_90;
-    } else if (percentage >= 0.8) {
-        gradePoints = ACHIEVEMENT_POINTS.ASSIGNMENT_SCORE_80;
-        gradeTitle = "80%+ score achieved";
-        gradeStatus = ACHIEVEMENT_STATUS.ACHIEVED;
-        gradePossible = ACHIEVEMENT_POINTS.ASSIGNMENT_SCORE_80;
-    } else {
-        gradePoints = Math.floor(ACHIEVEMENT_POINTS.ASSIGNMENT_SCORE_80 / 2);
-        gradeTitle = "Partial grading reward";
-        gradeStatus = ACHIEVEMENT_STATUS.PARTIAL;
-        gradePossible = ACHIEVEMENT_POINTS.ASSIGNMENT_SCORE_80;
-    }
-
-    await createAchievementEvent({
-        userId: submission.user,
-        category: ACHIEVEMENT_CATEGORIES.ASSIGNMENT,
-        status: gradeStatus,
-        title: gradeTitle,
-        description: `${assignment.title} scored ${score}/${submission.maxScore}`,
-        pointsAwarded: gradePoints,
-        pointsPossible: gradePossible,
-        source: "submission.grade",
-        refs: {
-            assignment: assignment._id,
-            course: assignment.course,
-        },
-        metadata: {
-            assignmentTitle: assignment.title,
-            score,
-            maxScore: submission.maxScore,
-            percentage,
-        },
-        dedupeKey: `achievement:assignment-grade:${submission.user}:${assignment._id}`,
-    });
 
     await createNotificationAndEmit({
         req,

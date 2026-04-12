@@ -533,8 +533,8 @@ export const mockBadges = [
   },
   {
     _id: "bdg_002",
-    name: "7-Day Streak",
-    description: "Studied for 7 consecutive days.",
+    name: "7-Day Focus Run",
+    description: "Maintained a focused study rhythm for 7 days.",
     icon: "🔥",
     color: "#FF6B35",
     category: "consistency",
@@ -564,8 +564,8 @@ export const mockBadges = [
   },
   {
     _id: "bdg_005",
-    name: "30-Day Streak",
-    description: "Studied for 30 consecutive days.",
+    name: "30-Day Focus Run",
+    description: "Maintained a focused study rhythm for 30 days.",
     icon: "💎",
     color: "#7B2FBE",
     category: "consistency",
@@ -586,9 +586,9 @@ export const mockBadges = [
   },
 ];
 
-// ─── Leaderboard ─────────────────────────────────────────────────────────────
+// ─── Top Learners Snapshot ───────────────────────────────────────────────────
 
-export const mockLeaderboard = [
+export const mockTopLearners = [
   { rank: 1, userId: "usr_099", name: "Sneha Patil",   avatar: "https://i.pravatar.cc/40?img=5",  points: 9420, studyHours: 184, coursesCompleted: 6, badges: 9  },
   { rank: 2, userId: "usr_042", name: "Rahul Gupta",   avatar: "https://i.pravatar.cc/40?img=7",  points: 8870, studyHours: 171, coursesCompleted: 5, badges: 8  },
   { rank: 3, userId: "usr_018", name: "Aisha Khan",    avatar: "https://i.pravatar.cc/40?img=9",  points: 8340, studyHours: 159, coursesCompleted: 5, badges: 7  },
@@ -975,9 +975,6 @@ export const mockDashboardSummary = {
     pendingAssignments: 2,
     walletBalance: mockWallet.balance,
     certificatesEarned: 2,
-    currentStreak: 14, // days
-    totalPoints: 7890,
-    rank: 4,
   },
   continueLearning: mockEnrollments
     .filter((e) => e.status === "active")
@@ -992,10 +989,6 @@ export const mockDashboardSummary = {
     { type: "live_class_attended", text: "Attended TypeScript Advanced Patterns", course: mockCourses[0].title, time: daysAgo(7) },
     { type: "badge_earned", text: "Earned 'Assignment Champion' badge", course: null, time: daysAgo(25) },
   ],
-  streakData: Array.from({ length: 7 }, (_, i) => ({
-    day: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i],
-    active: [true, true, false, true, true, true, true][i],
-  })),
 };
 
 // ─── Wishlist (mock — not in current models but UI spec requires) ─────────────

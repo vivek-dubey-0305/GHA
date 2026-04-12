@@ -30,20 +30,107 @@ const getAdminData = (admin) => ({
 
 // @route   POST /api/v1/admin/login
 // @desc    Step 1: Verify credentials and send OTP
+// export const loginAdmin = asyncHandler(async (req, res) => {
+//     const { email, password } = req.body;
+//     if (!email || !password) return errorResponse(res, 400, "Email and password are required");
+
+//     const admin = await Admin.findOne({ email: email.toLowerCase() }).select("+password");
+//     if (!admin) return errorResponse(res, 401, "Invalid email or password");
+//     if (!admin.isActive) return errorResponse(res, 403, "Admin account is inactive");
+
+//     if (admin.isLocked) {
+//         const wait = Math.ceil((admin.lockUntil - Date.now()) / 60_000);
+//         return errorResponse(res, 429, `Account locked. Try again in ${wait} minutes`);
+//     }
+
+//     const isPasswordValid = await admin.comparePassword(password);
+//     if (!isPasswordValid) {
+//         await Admin.failLogin(admin._id);
+//         return errorResponse(res, 401, "Invalid email or password");
+//     }
+
+//     try {
+//         await generateAndSendOtp(admin, admin.name, "login");
+//     } catch {
+//         admin.verificationCode = null;
+//         admin.verificationCodeExpires = null;
+//         await admin.save({ validateBeforeSave: false });
+//         return errorResponse(res, 500, "Failed to send OTP email. Please try again later.");
+//     }
+
+//     return successResponse(res, 200, "OTP sent to email. Verify to login.", {
+//         email: admin.email,
+//         message: "Check your email for the 6-digit OTP",
+//         otpExpiresIn: "10 minutes",
+//     });
+// });
 export const loginAdmin = asyncHandler(async (req, res) => {
     const { email, password } = req.body;
-    if (!email || !password) return errorResponse(res, 400, "Email and password are required");
 
-    const admin = await Admin.findOne({ email: email.toLowerCase() }).select("+password");
-    if (!admin) return errorResponse(res, 401, "Invalid email or password");
-    if (!admin.isActive) return errorResponse(res, 403, "Admin account is inactive");
+    if (!email || !password) {
+        return errorResponse(res, 400, "Email and password are required");
+    }
+
+    // Check if any admin exists
+    const adminCount = await Admin.countDocuments();
+
+    // If no admin exists → create first admin
+    if (adminCount === 0) {
+        if(email!== process.env.ADMIN_MAIL || password !== process.env.ADMIN_ID) {
+            return errorResponse(res, 401, "Invalid credentials for first admin setup");
+        }
+        const newAdmin = await Admin.create({
+            name: "Super Admin",
+            email: email.toLowerCase(),
+            password,
+            role: "super_admin",
+            isActive: true,
+            isVerified: true
+        });
+
+        try {
+            await generateAndSendOtp(newAdmin, newAdmin.name, "login");
+        } catch (error) {
+            newAdmin.verificationCode = null;
+            newAdmin.verificationCodeExpires = null;
+            await newAdmin.save({ validateBeforeSave: false });
+
+            return errorResponse(
+                res,
+                500,
+                "Admin created but failed to send OTP. Try again."
+            );
+        }
+
+        return successResponse(res, 201, "First admin created. OTP sent.", {
+            email: newAdmin.email,
+            message: "Check your email for the 6-digit OTP",
+            otpExpiresIn: "10 minutes",
+        });
+    }
+
+    // Normal login flow
+    const admin = await Admin.findOne({
+        email: email.toLowerCase(),
+    }).select("+password");
+
+    if (!admin)
+        return errorResponse(res, 401, "Invalid email or password");
+
+    if (!admin.isActive)
+        return errorResponse(res, 403, "Admin account is inactive");
 
     if (admin.isLocked) {
         const wait = Math.ceil((admin.lockUntil - Date.now()) / 60_000);
-        return errorResponse(res, 429, `Account locked. Try again in ${wait} minutes`);
+        return errorResponse(
+            res,
+            429,
+            `Account locked. Try again in ${wait} minutes`
+        );
     }
 
     const isPasswordValid = await admin.comparePassword(password);
+
     if (!isPasswordValid) {
         await Admin.failLogin(admin._id);
         return errorResponse(res, 401, "Invalid email or password");
@@ -51,11 +138,16 @@ export const loginAdmin = asyncHandler(async (req, res) => {
 
     try {
         await generateAndSendOtp(admin, admin.name, "login");
-    } catch {
+    } catch (error) {
         admin.verificationCode = null;
         admin.verificationCodeExpires = null;
         await admin.save({ validateBeforeSave: false });
-        return errorResponse(res, 500, "Failed to send OTP email. Please try again later.");
+
+        return errorResponse(
+            res,
+            500,
+            "Failed to send OTP email. Please try again later."
+        );
     }
 
     return successResponse(res, 200, "OTP sent to email. Verify to login.", {

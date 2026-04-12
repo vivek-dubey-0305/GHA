@@ -2,12 +2,9 @@
  * components/DashboardPages/DashboardProgressOverview.jsx
  */
 import { Link } from "react-router-dom";
-import { TrendingUp, Flame, ChevronRight } from "lucide-react";
-import { useEffect } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { TrendingUp, ChevronRight } from "lucide-react";
 import { SectionTitle, Card, ProgressBar } from "./DashboardUI";
 import { mockEnrollments } from "../../mock/dashboard";
-import { fetchMyStreak } from "../../redux/slices/streak.slice";
 
 // ─── Course progress overview ────────────────────────────────────────────────
 
@@ -49,53 +46,6 @@ export function DashboardProgressOverview() {
             </div>
           ))}
         </div>
-      </Card>
-    </div>
-  );
-}
-
-// ─── Learning streak card ─────────────────────────────────────────────────────
-
-export function DashboardStreakCard() {
-  const dispatch = useDispatch();
-  const summary = useSelector((state) => state.streak.summary);
-  const streakData = summary?.weeklyActivity || [];
-
-  useEffect(() => {
-    dispatch(fetchMyStreak());
-  }, [dispatch]);
-
-  return (
-    <div>
-      <Card className="p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Flame className="w-5 h-5 text-orange-400" />
-            <h3 className="text-white font-semibold">Learning Streak</h3>
-          </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold text-orange-400">{summary?.currentStreak || 0}</p>
-            <p className="text-xs text-gray-500">days</p>
-          </div>
-        </div>
-
-        {/* Week view */}
-        <div className="flex items-end justify-between gap-1">
-          {streakData.map(({ day, active, dateKey }) => (
-            <div key={dateKey || day} className="flex flex-col items-center gap-1.5 flex-1">
-              <div
-                className={`w-full h-8 rounded-md transition-colors
-                  ${active ? "bg-orange-400/80" : "bg-gray-800"}`}
-                title={dateKey}
-              />
-              <span className="text-[10px] text-gray-600">{day}</span>
-            </div>
-          ))}
-        </div>
-
-        <p className="text-xs text-gray-600 text-center mt-3">
-          🔥 Keep your streak alive — study something today!
-        </p>
       </Card>
     </div>
   );
