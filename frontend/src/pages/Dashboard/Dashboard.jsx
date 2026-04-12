@@ -299,7 +299,7 @@ import { useProtectedRoute, useTokenRefreshOnActivity } from "../../hooks/usePro
 
 import DashboardStats from "../../components/DashboardPages/DashboardStats";
 import DashboardContinueLearning from "../../components/DashboardPages/DashboardContinueLearning";
-import { DashboardProgressOverview, DashboardStreakCard } from "../../components/DashboardPages/DashboardProgressOverview";
+import { DashboardProgressOverview } from "../../components/DashboardPages/DashboardProgressOverview";
 import DashboardUpcomingClasses from "../../components/DashboardPages/DashboardUpcomingClasses";
 import DashboardRecentAnnouncements from "../../components/DashboardPages/DashboardRecentAnnouncements";
 import {
@@ -372,15 +372,8 @@ const Dashboard = () => {
             {/* Continue learning */}
             <DashboardContinueLearning />
 
-            {/* Progress + Streak — side by side on large screens */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2">
-                <DashboardProgressOverview />
-              </div>
-              <div>
-                <DashboardStreakCard />
-              </div>
-            </div>
+            {/* Progress overview */}
+            <DashboardProgressOverview />
 
             {/* Upcoming classes + Pending assignments — side by side */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

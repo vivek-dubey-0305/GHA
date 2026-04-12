@@ -138,9 +138,6 @@ import analyticsRouter from "./routes/analytics.routes.js";
 import searchRouter from "./routes/search.routes.js";
 import doubtTicketRouter from "./routes/doubt-ticket.routes.js";
 import studyGroupRouter from "./routes/study-group.routes.js";
-import leaderboardRouter from "./routes/leaderboard.routes.js";
-import streakRouter from "./routes/streak.routes.js";
-import achievementRouter from "./routes/achievement.routes.js";
 
 // Import models to register them with Mongoose
 import { User } from "./models/user.model.js";
@@ -168,7 +165,6 @@ import { Notification } from "./models/notification.model.js";
 import { DoubtTicket } from "./models/doubt-ticket.model.js";
 import { StudyGroup, StudyGroupMember } from "./models/study-group.model.js";
 import { StudyGroupMessage } from "./models/study-group-message.model.js";
-import { Achievement } from "./models/achievement.model.js";
 
 const app = express();
 
@@ -291,9 +287,6 @@ app.use("/api/v1/analytics", analyticsRouter);
 app.use("/api/v1/search", searchRouter);
 app.use("/api/v1/doubt-tickets", doubtTicketRouter);
 app.use("/api/v1/study-groups", studyGroupRouter);
-app.use("/api/v1/leaderboard", leaderboardRouter);
-app.use("/api/v1/streaks", streakRouter);
-app.use("/api/v1/achievements", achievementRouter);
 
 // API routes - Public (no authentication required)
 app.use("/api/v1/public/instructors", instructorPublicRouter);

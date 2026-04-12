@@ -56,15 +56,6 @@ export const DASHBOARD_NAV_GROUPS = [
     ],
   },
   {
-    label: "Achievements",
-    items: [
-      { name: "Certificates", href: "/dashboard/certificates", icon: Award },
-      { name: "Achievements", href: "/dashboard/achievements", icon: Sparkles },
-      { name: "Streaks",      href: "/dashboard/streaks",      icon: Flame },
-      { name: "Leaderboard",  href: "/dashboard/leaderboard",  icon: Trophy },
-    ],
-  },
-  {
     label: "Wallet",
     items: [
       { name: "Wallet",       href: "/dashboard/wallet",       icon: Wallet },

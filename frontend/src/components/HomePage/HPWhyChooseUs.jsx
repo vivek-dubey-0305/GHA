@@ -204,7 +204,7 @@ const TABS = [
       { n: 26, icon: "💬", title: "Peer Discussions",          desc: "Discuss concepts, projects, and solutions with fellow learners." },
       { n: 27, icon: "🤝", title: "Collaboration Projects",    desc: "Work together with others on collaborative team projects." },
       { n: 28, icon: "⚔",  title: "Coding Challenges",        desc: "Participate in coding challenges to sharpen your skills daily." },
-      { n: 29, icon: "🏆", title: "Leaderboards",             desc: "Track your performance against other learners in real-time." },
+      { n: 29, icon: "📚", title: "Shared Study Rooms",       desc: "Learn together in focused rooms built for collaboration and consistency." },
       { n: 30, icon: "📢", title: "Knowledge Sharing",         desc: "Community-driven sharing of tips, resources, and experiences." },
     ],
     svg: (
@@ -248,7 +248,7 @@ const TABS = [
     icon: "🤖",
     items: [
       { n: 31, icon: "🖥",  title: "Interactive Interface",    desc: "A modern learning dashboard designed for maximum productivity." },
-      { n: 32, icon: "📈", title: "Progress Tracking",        desc: "Track course progress, milestones, and personal achievements." },
+      { n: 32, icon: "📈", title: "Progress Tracking",        desc: "Track course completion and lesson-by-lesson progress clearly." },
       { n: 33, icon: "🔬", title: "Smart Analytics",          desc: "Analyze your performance and identify areas for improvement." },
       { n: 34, icon: "📥", title: "Downloadable Resources",   desc: "Access PDFs, code templates, and development assets anytime." },
       { n: 35, icon: "⌨",  title: "Code Sandboxes",           desc: "Practice coding directly inside the platform without setup." },

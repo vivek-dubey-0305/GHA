@@ -1,23 +1,16 @@
 /**
  * components/DashboardPages/DashboardStats.jsx
  */
-import { BookOpen, Clock, TrendingUp, FileText, Wallet, Award, Flame, Clock as ClockIcon } from "lucide-react";
+import { BookOpen, Clock, TrendingUp, FileText, Wallet, Award } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
 import { StatCard } from "./DashboardUI";
 import { mockDashboardSummary } from "../../mock/dashboard";
 import { formatCurrency } from "../../utils/format.utils";
-import { fetchLeaderboardSummary } from "../../redux/slices/leaderboard.slice";
-import { fetchMyStreak } from "../../redux/slices/streak.slice";
 import { apiClient } from "../../utils/api.utils";
 
 const { stats } = mockDashboardSummary;
 
 export default function DashboardStats() {
-  const dispatch = useDispatch();
-  const summary = useSelector((state) => state.leaderboard.mySummary);
-  const streak = useSelector((state) => state.streak.summary);
-  
   const [submissionData, setSubmissionData] = useState({
     pendingAssignments: 0,
     submittedAssignments: 0,
@@ -27,12 +20,7 @@ export default function DashboardStats() {
   const [loadingSubmissions, setLoadingSubmissions] = useState(true);
 
   useEffect(() => {
-    dispatch(fetchLeaderboardSummary());
-    dispatch(fetchMyStreak());
-  }, [dispatch]);
-
-  // Fetch assignment submission data
-  useEffect(() => {
+    // Fetch assignment submission data
     const fetchSubmissionData = async () => {
       try {
         setLoadingSubmissions(true);
@@ -110,19 +98,6 @@ export default function DashboardStats() {
       label: "Avg Assignment Score",
       value: `${submissionData.avgAssignmentScore}%`,
       subtitle: loadingSubmissions ? "Loading..." : "From graded submissions",
-    },
-    {
-      icon: Flame,
-      label: "Learning Streak",
-      value: `${streak?.currentStreak || 0}d`,
-      subtitle: "Keep it going!",
-      accent: true,
-    },
-    {
-      icon: TrendingUp,
-      label: "Leaderboard Rank",
-      value: summary?.rank ? `#${summary.rank}` : "--",
-      subtitle: `${(summary?.totalPoints || 0).toLocaleString()} points`,
     },
   ];
 

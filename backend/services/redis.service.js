@@ -28,7 +28,7 @@ export const connectRedis = async () => {
     const password = process.env.REDIS_PASSWORD || undefined;
 
     if (!url) {
-        logger.warn("Redis host/port not configured, running leaderboard in DB fallback mode");
+        logger.warn("Redis host/port not configured, running in DB fallback mode");
         return null;
     }
 

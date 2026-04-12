@@ -8,13 +8,7 @@ import { appConfig } from "./configs/app.config.js";
 import { validateEnvironment } from "./configs/env.config.js";
 import { startLiveClassReminderScheduler, stopLiveClassReminderScheduler } from "./services/liveclass-reminder.service.js";
 import { startDoubtReminderScheduler, stopDoubtReminderScheduler } from "./services/doubt-reminder.service.js";
-import { startLeaderboardCronScheduler, stopLeaderboardCronScheduler } from "./services/leaderboard-cron.service.js";
 import { connectRedis, disconnectRedis } from "./services/redis.service.js";
-import {
-    markUserHeartbeat,
-    markUserOffline,
-    markUserOnline,
-} from "./services/online-users.service.js";
 import { LIVE_REACTION_WHITELIST } from "./constants/liveclass.constant.js";
 import { LiveClass } from "./models/liveclass.model.js";
 import {
@@ -45,7 +39,6 @@ const shutdown = async (signal) => {
     logger.info(`${signal} received, shutting down gracefully`);
     stopLiveClassReminderScheduler();
     stopDoubtReminderScheduler();
-    stopLeaderboardCronScheduler();
     await disconnectRedis();
     process.exit(0);
 };
@@ -140,7 +133,6 @@ connectDB()
         // Reminder scheduler for scheduled live classes
         startLiveClassReminderScheduler(io);
         startDoubtReminderScheduler(io);
-        startLeaderboardCronScheduler(io);
 
         // Socket.IO connection handling
         io.on("connection", (socket) => {
@@ -165,27 +157,6 @@ connectDB()
                 const { userId, role } = data;
                 socket.join(`notifications:${role}:${userId}`);
                 logger.info(`Socket ${socket.id} joined notifications:${role}:${userId}`);
-            });
-
-            socket.on("leaderboard_presence_join", async ({ userId }) => {
-                if (!userId) return;
-                socket.leaderboardUserId = String(userId);
-                socket.join("leaderboard:global");
-                await markUserOnline({ userId: socket.leaderboardUserId });
-            });
-
-            socket.on("leaderboard_presence_heartbeat", async ({ userId }) => {
-                const targetUserId = String(userId || socket.leaderboardUserId || "");
-                if (!targetUserId) return;
-                await markUserHeartbeat({ userId: targetUserId });
-            });
-
-            socket.on("leaderboard_presence_leave", async ({ userId }) => {
-                const targetUserId = String(userId || socket.leaderboardUserId || "");
-                if (!targetUserId) return;
-                await markUserOffline({ userId: targetUserId });
-                socket.leaderboardUserId = null;
-                socket.leave("leaderboard:global");
             });
 
             // Join a doubt ticket chat room for real-time replies
@@ -483,11 +454,6 @@ connectDB()
 
             // On disconnect, notify all live rooms this socket was in
             socket.on("disconnecting", () => {
-                if (socket.leaderboardUserId) {
-                    markUserOffline({ userId: socket.leaderboardUserId });
-                    socket.leaderboardUserId = null;
-                }
-
                 if (socket.liveClassId) {
                     removeSocketFromLiveRoom(socket, socket.liveClassId);
                     // Do not clear active broadcast on instructor refresh/disconnect.

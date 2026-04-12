@@ -4,15 +4,7 @@ import { Enrollment } from "../models/enrollment.model.js";
 import { Lesson } from "../models/lesson.model.js";
 import { asyncHandler } from "../middlewares/async.middleware.js";
 import { errorResponse, successResponse } from "../utils/response.utils.js";
-import logger from "../configs/logger.config.js";
 import { syncEnrollmentProgress, upsertLessonProgress } from "../services/progress.service.js";
-import { refreshLeaderboardAfterActivity } from "../services/leaderboard.service.js";
-import {
-    ACHIEVEMENT_CATEGORIES,
-    ACHIEVEMENT_POINTS,
-    ACHIEVEMENT_STATUS,
-} from "../constants/achievement.constant.js";
-import { createAchievementEvent } from "../services/achievement.service.js";
 
 /**
  * Progress Controller
@@ -81,12 +73,6 @@ export const updateLessonProgress = asyncHandler(async (req, res) => {
         payload: req.body,
     });
 
-    await refreshLeaderboardAfterActivity({
-        userId: req.user.id,
-        io: req.app.get("io"),
-        source: "progress.updateLessonProgress",
-    });
-
     successResponse(res, 200, "Progress updated successfully", progress);
 });
 
@@ -112,117 +98,6 @@ export const markLessonComplete = asyncHandler(async (req, res) => {
     });
 
     await syncEnrollmentProgress({ userId: req.user.id, courseId: lesson.course });
-
-    const enrollment = await Enrollment.findOne({
-        user: req.user.id,
-        course: lesson.course,
-    })
-        .populate("course", "title")
-        .lean();
-
-    const courseTitle = enrollment?.course?.title || "Course";
-
-    await createAchievementEvent({
-        userId: req.user.id,
-        category: ACHIEVEMENT_CATEGORIES.COURSE,
-        status: ACHIEVEMENT_STATUS.ACHIEVED,
-        title: "Lesson completed",
-        description: `Completed lesson ${lesson.title || ""}`.trim(),
-        pointsAwarded: ACHIEVEMENT_POINTS.LESSON_COMPLETED,
-        pointsPossible: ACHIEVEMENT_POINTS.LESSON_COMPLETED,
-        source: "progress.markLessonComplete",
-        refs: {
-            course: lesson.course,
-            lesson: lesson._id,
-        },
-        metadata: {
-            courseTitle,
-            lessonTitle: lesson.title || "",
-        },
-        dedupeKey: `achievement:lesson-complete:${req.user.id}:${lesson._id}`,
-    });
-
-    const completedModules = Array.isArray(enrollment?.progressModules)
-        ? enrollment.progressModules.filter((item) => item?.status === "completed" && item?.moduleId)
-        : [];
-
-    await Promise.all(
-        completedModules.map((moduleProgress) =>
-            createAchievementEvent({
-                userId: req.user.id,
-                category: ACHIEVEMENT_CATEGORIES.COURSE,
-                status: ACHIEVEMENT_STATUS.ACHIEVED,
-                title: "Module completed",
-                description: `Completed a module in ${courseTitle}`,
-                pointsAwarded: ACHIEVEMENT_POINTS.MODULE_COMPLETED,
-                pointsPossible: ACHIEVEMENT_POINTS.MODULE_COMPLETED,
-                source: "progress.moduleComplete",
-                refs: {
-                    course: lesson.course,
-                    module: moduleProgress.moduleId,
-                },
-                metadata: {
-                    courseTitle,
-                    moduleId: String(moduleProgress.moduleId),
-                    completedAt: moduleProgress.completedAt || new Date(),
-                },
-                dedupeKey: `achievement:module-complete:${req.user.id}:${moduleProgress.moduleId}`,
-            })
-        )
-    );
-
-    if (enrollment?.status === "completed") {
-        await createAchievementEvent({
-            userId: req.user.id,
-            category: ACHIEVEMENT_CATEGORIES.COURSE,
-            status: ACHIEVEMENT_STATUS.ACHIEVED,
-            title: "Course completed",
-            description: `Completed course ${courseTitle}`,
-            pointsAwarded: ACHIEVEMENT_POINTS.COURSE_COMPLETED,
-            pointsPossible: ACHIEVEMENT_POINTS.COURSE_COMPLETED,
-            source: "progress.courseComplete",
-            refs: {
-                course: lesson.course,
-            },
-            metadata: {
-                courseTitle,
-                completedAt: enrollment.completedAt || new Date(),
-            },
-            dedupeKey: `achievement:course-complete:${req.user.id}:${lesson.course}`,
-        });
-
-        if (enrollment?.enrolledAt) {
-            const elapsedMs = new Date(enrollment.completedAt || Date.now()).getTime() - new Date(enrollment.enrolledAt).getTime();
-            const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
-
-            if (elapsedDays >= 0 && elapsedDays <= 30) {
-                await createAchievementEvent({
-                    userId: req.user.id,
-                    category: ACHIEVEMENT_CATEGORIES.COURSE,
-                    status: ACHIEVEMENT_STATUS.ACHIEVED,
-                    title: "Fast completion bonus",
-                    description: `Completed ${courseTitle} in ${elapsedDays} days`,
-                    pointsAwarded: ACHIEVEMENT_POINTS.COURSE_FAST_COMPLETION,
-                    pointsPossible: ACHIEVEMENT_POINTS.COURSE_FAST_COMPLETION,
-                    source: "progress.fastCompletion",
-                    refs: {
-                        course: lesson.course,
-                    },
-                    metadata: {
-                        courseTitle,
-                        elapsedDays,
-                    },
-                    dedupeKey: `achievement:course-fast:${req.user.id}:${lesson.course}`,
-                });
-            }
-        }
-    }
-
-    await refreshLeaderboardAfterActivity({
-        userId: req.user.id,
-        io: req.app.get("io"),
-        source: "progress.markLessonComplete",
-    });
 
     successResponse(res, 200, "Lesson marked as completed", progress);
 });

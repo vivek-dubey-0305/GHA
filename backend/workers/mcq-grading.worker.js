@@ -7,13 +7,6 @@ import "../models/course.model.js";
 import { Lesson } from "../models/lesson.model.js";
 import { Notification } from "../models/notification.model.js";
 import { Submission } from "../models/submission.model.js";
-import {
-    ACHIEVEMENT_CATEGORIES,
-    ACHIEVEMENT_POINTS,
-    ACHIEVEMENT_STATUS,
-} from "../constants/achievement.constant.js";
-import { createAchievementEvent } from "../services/achievement.service.js";
-import { refreshLeaderboardAfterActivity } from "../services/leaderboard.service.js";
 import { evaluateObjectiveAnswers } from "../services/mcq-grading.service.js";
 import { upsertLessonProgress } from "../services/progress.service.js";
 
@@ -50,44 +43,6 @@ const percentageToGrade = (score, maxScore) => {
     if (percent >= 50) return "C+";
     if (percent >= 40) return "C";
     return "F";
-};
-
-const calculateAchievementPoints = ({ score, maxScore }) => {
-    const percentage = maxScore > 0 ? Number(score) / Number(maxScore) : 0;
-
-    if (percentage >= 1) {
-        return {
-            status: ACHIEVEMENT_STATUS.ACHIEVED,
-            title: "Perfect score achieved",
-            pointsAwarded: ACHIEVEMENT_POINTS.ASSIGNMENT_SCORE_100,
-            pointsPossible: ACHIEVEMENT_POINTS.ASSIGNMENT_SCORE_100,
-        };
-    }
-
-    if (percentage >= 0.9) {
-        return {
-            status: ACHIEVEMENT_STATUS.ACHIEVED,
-            title: "90%+ score achieved",
-            pointsAwarded: ACHIEVEMENT_POINTS.ASSIGNMENT_SCORE_90,
-            pointsPossible: ACHIEVEMENT_POINTS.ASSIGNMENT_SCORE_90,
-        };
-    }
-
-    if (percentage >= 0.8) {
-        return {
-            status: ACHIEVEMENT_STATUS.ACHIEVED,
-            title: "80%+ score achieved",
-            pointsAwarded: ACHIEVEMENT_POINTS.ASSIGNMENT_SCORE_80,
-            pointsPossible: ACHIEVEMENT_POINTS.ASSIGNMENT_SCORE_80,
-        };
-    }
-
-    return {
-        status: ACHIEVEMENT_STATUS.PARTIAL,
-        title: "Partial grading reward",
-        pointsAwarded: Math.floor(ACHIEVEMENT_POINTS.ASSIGNMENT_SCORE_80 / 2),
-        pointsPossible: ACHIEVEMENT_POINTS.ASSIGNMENT_SCORE_80,
-    };
 };
 
 const findAssignmentLesson = async (assignment) => {
@@ -283,51 +238,7 @@ const processMcqJob = async (job) => {
         logger.error(`⚠️ ===[AUTO_GRADER_WORKER]=== progress sync warning trace:${traceId} error:${error.message}`);
     }
 
-    try {
-        await refreshLeaderboardAfterActivity({
-            userId: submission.user,
-            source: "submission.auto-grade.worker",
-        });
-        debugLog(traceId, "LEADERBOARD_REFRESHED", {
-            userId: String(submission.user || ""),
-            source: "submission.auto-grade.worker",
-        });
-    } catch (error) {
-        sideEffectWarnings.push(`leaderboardRefresh:${error.message}`);
-        logger.error(`⚠️ ===[AUTO_GRADER_WORKER]=== leaderboard warning trace:${traceId} error:${error.message}`);
-    }
 
-    try {
-        const achievement = calculateAchievementPoints({ score, maxScore: submission.maxScore });
-        await createAchievementEvent({
-            userId: submission.user,
-            category: ACHIEVEMENT_CATEGORIES.ASSIGNMENT,
-            status: achievement.status,
-            title: achievement.title,
-            description: `${assignment.title} scored ${score}/${submission.maxScore}`,
-            pointsAwarded: achievement.pointsAwarded,
-            pointsPossible: achievement.pointsPossible,
-            source: "submission.auto-grade.worker",
-            refs: {
-                assignment: assignment._id,
-                course: assignment.course,
-            },
-            metadata: {
-                assignmentTitle: assignment.title,
-                score,
-                maxScore: submission.maxScore,
-                traceId,
-            },
-            dedupeKey: `achievement:assignment-grade:${submission.user}:${assignment._id}`,
-        });
-        debugLog(traceId, "ACHIEVEMENT_UPDATED", {
-            submissionId: String(submission._id),
-            status: achievement.status,
-        });
-    } catch (error) {
-        sideEffectWarnings.push(`achievement:${error.message}`);
-        logger.error(`⚠️ ===[AUTO_GRADER_WORKER]=== achievement warning trace:${traceId} error:${error.message}`);
-    }
 
     try {
         await Notification.createNotification({
