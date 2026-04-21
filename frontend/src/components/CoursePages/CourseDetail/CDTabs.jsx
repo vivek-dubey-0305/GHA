@@ -18,18 +18,29 @@ export default function CDTabs({
   reviews,
   ratingStats,
   loadingReviews,
+  activeTab,
+  onTabChange,
+  openReviewComposerToken,
 }) {
-  const [activeTab, setActiveTab] = useState("overview");
+  const [internalActiveTab, setInternalActiveTab] = useState("overview");
+  const resolvedActiveTab = activeTab || internalActiveTab;
+  const handleTabChange = (nextTab) => {
+    if (onTabChange) {
+      onTabChange(nextTab);
+      return;
+    }
+    setInternalActiveTab(nextTab);
+  };
 
   return (
-    <section className="cd-tabs-section">
+    <section className="cd-tabs-section" id="cd-reviews-anchor">
       {/* Tab nav */}
       <div className="cd-tabs-nav">
         {TABS.map((tab) => (
           <button
             key={tab.id}
-            className={`cd-tab-btn${activeTab === tab.id ? " active" : ""}`}
-            onClick={() => setActiveTab(tab.id)}
+            className={`cd-tab-btn${resolvedActiveTab === tab.id ? " active" : ""}`}
+            onClick={() => handleTabChange(tab.id)}
           >
             {tab.label}
           </button>
@@ -37,21 +48,22 @@ export default function CDTabs({
       </div>
 
       {/* Panels */}
-      <div className={`cd-tab-panel${activeTab === "overview" ? " active" : ""}`}>
+      <div className={`cd-tab-panel${resolvedActiveTab === "overview" ? " active" : ""}`}>
         <CDOverview course={course} />
       </div>
-      <div className={`cd-tab-panel${activeTab === "curriculum" ? " active" : ""}`}>
+      <div className={`cd-tab-panel${resolvedActiveTab === "curriculum" ? " active" : ""}`}>
         <CDCurriculum course={course} modules={modules} />
       </div>
-      <div className={`cd-tab-panel${activeTab === "instructor" ? " active" : ""}`}>
+      <div className={`cd-tab-panel${resolvedActiveTab === "instructor" ? " active" : ""}`}>
         <CDInstructor instructor={instructor} />
       </div>
-      <div className={`cd-tab-panel${activeTab === "reviews" ? " active" : ""}`}>
+      <div className={`cd-tab-panel${resolvedActiveTab === "reviews" ? " active" : ""}`}>
         <CDReviews
           course={course}
           reviews={reviews}
           ratingStats={ratingStats}
           loadingReviews={loadingReviews}
+          openComposerToken={openReviewComposerToken}
         />
       </div>
     </section>

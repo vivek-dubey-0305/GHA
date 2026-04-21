@@ -6,6 +6,7 @@ import {
     deleteAnnouncement,
     getCourseAnnouncements,
     getUserAnnouncements,
+    getUserAnnouncementUnreadCount,
     markAnnouncementRead,
     markAllUserAnnouncementsRead,
 } from "../controllers/announcement.controller.js";
@@ -22,6 +23,7 @@ router.delete("/instructor/my/:id", authenticateInstructor, deleteAnnouncement);
 
 // User routes (view course announcements)
 router.get("/user/my", authenticateUser, getUserAnnouncements);
+router.get("/user/unread-count", authenticateUser, getUserAnnouncementUnreadCount);
 router.patch("/user/read-all", authenticateUser, markAllUserAnnouncementsRead);
 router.patch("/user/:id/read", authenticateUser, markAnnouncementRead);
 router.get("/course/:courseId", authenticateUser, getCourseAnnouncements);

@@ -153,6 +153,7 @@ export default function CDHero({
   course,
   cardRef,
   onEnroll,
+  onOpenReviewFlow,
   enrollLabel = "Enroll Now — Get Instant Access",
   enrollDisabled = false,
 }) {
@@ -284,7 +285,15 @@ export default function CDHero({
         </div>
 
         <div className="cd-dh-rating-row">
-          <span className="cd-stars-large">{stars || "★★★★★"}</span>
+          <button
+            type="button"
+            onClick={onOpenReviewFlow}
+            className="cd-stars-large"
+            style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer" }}
+            title="Open reviews and write your review"
+          >
+            {stars || "★★★★★"}
+          </button>
           <span className="cd-rating-num">{course.rating}</span>
           <span className="cd-rating-count">
             ({(course.totalReviews || 0).toLocaleString()} ratings) · {(course.enrolledCount || 0).toLocaleString()} students

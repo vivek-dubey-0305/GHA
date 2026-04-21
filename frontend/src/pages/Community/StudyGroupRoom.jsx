@@ -5,6 +5,7 @@ import { io } from "socket.io-client";
 import { ArrowLeft, Clock3, Lock, Send, Users } from "lucide-react";
 import { UserLayout } from "../../components/layout/UserLayout";
 import { PageShell } from "../../components/DashboardPages/DashboardUI";
+import SearchPulseLoader from "../../components/common/SearchPulseLoader";
 import { selectUser } from "../../redux/slices/auth.slice";
 import { apiClient } from "../../utils/api.utils";
 
@@ -265,7 +266,11 @@ export default function StudyGroupRoom() {
         }
       >
         {loading ? (
-          <div className="rounded-xl border border-gray-800 bg-[#0f0f0f] p-5 text-sm text-gray-400">Loading study group...</div>
+          <SearchPulseLoader
+            label="Loading study group"
+            sublabel="Warming up room context and messages"
+            compact
+          />
         ) : error ? (
           <div className="rounded-xl border border-red-700/50 bg-red-950/40 p-5 text-sm text-red-300">{error}</div>
         ) : (

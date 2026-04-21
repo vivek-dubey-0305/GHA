@@ -1,5 +1,6 @@
 import express from "express";
 import {
+    getMyReviewForCourse,
     createReview,
     updateReview,
     deleteReview,
@@ -13,6 +14,7 @@ const router = express.Router();
 // All review routes require user authentication
 router.use(authenticateUser);
 
+router.get("/me", getMyReviewForCourse);
 router.post("/", createReview);
 router.put("/:id", updateReview);
 router.delete("/:id", deleteReview);

@@ -16,6 +16,7 @@ import ILToolbar         from "../../components/InstructorPages/InstructorListin
 import ILInstructorGrid  from "../../components/InstructorPages/InstructorListing/ILInstructorGrid";
 import ILPagination      from "../../components/InstructorPages/InstructorListing/ILPagination";
 import InstructorEmptyState from "../../components/InstructorPages/InstructorEmptyState";
+import SearchPulseLoader from "../../components/common/SearchPulseLoader";
 import {
   getAllInstructors,
   searchInstructors,
@@ -361,10 +362,11 @@ export default function Instructors() {
           />
 
           {loadingInstructors ? (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.8rem", padding: "2rem", color: "#f4f3ee" }}>
-              <div style={{ width: "18px", height: "18px", border: "2px solid rgba(245,197,24,0.25)", borderTopColor: "#f5c518", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-              <span>Searching instructors...</span>
-            </div>
+            <SearchPulseLoader
+              label="Hunting instructors"
+              sublabel="Finding mentors that match your filters"
+              className="my-4"
+            />
           ) : error ? (
             <div style={{ padding: "1.2rem 0" }}>
               <InstructorEmptyState
@@ -415,8 +417,6 @@ export default function Instructors() {
         <a href="/" className="il-footer-logo">GHA</a>
         <span className="il-footer-copy">© 2025 GHA · All rights reserved</span>
       </footer>
-
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

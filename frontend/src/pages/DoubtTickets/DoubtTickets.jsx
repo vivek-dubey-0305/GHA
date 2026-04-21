@@ -8,6 +8,7 @@ import { PageShell, EmptyState, SearchBar } from "../../components/DashboardPage
 import { apiClient } from "../../utils/api.utils";
 import DoubtTicketCard from "../../components/DoubtTicketPages/DoubtTicketCard";
 import DoubtTicketForm from "../../components/DoubtTicketPages/DoubtTicketForm";
+import SearchPulseLoader from "../../components/common/SearchPulseLoader";
 import { getMyEnrollments } from "../../redux/slices/enrollment.slice";
 import { SuccessToast, ErrorToast } from "../../components/ui";
 import { DOUBT_STATUS_LABEL, DOUBT_STATUS_COLOR } from "../../constants/doubtTicket.constants";
@@ -31,6 +32,7 @@ export default function DoubtTickets() {
   const [replyText, setReplyText] = useState("");
   const [replyImages, setReplyImages] = useState([]);
   const [toastState, setToastState] = useState({ visible: false, type: "success", title: "", message: "" });
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const repliesEndRef = useRef(null);
   const replyInputRef = useRef(null);
   const createFormRef = useRef(null);
@@ -50,11 +52,16 @@ export default function DoubtTickets() {
     setToastState({ visible: true, type, title, message });
   };
 
-  const loadTickets = useCallback(async () => {
+  const loadTickets = useCallback(async (searchText = "") => {
     setLoading(true);
     setError("");
     try {
-      const res = await apiClient.get("/doubt-tickets/user/my?limit=50");
+      const params = new URLSearchParams();
+      params.append("limit", "50");
+      const normalized = String(searchText || "").trim();
+      if (normalized) params.append("search", normalized);
+
+      const res = await apiClient.get(`/doubt-tickets/user/my?${params.toString()}`);
       setTickets(res?.data?.data?.tickets || []);
       setQuota(res?.data?.data?.quota || { limit: 3, used: 0, remaining: 3 });
     } catch (err) {
@@ -88,8 +95,15 @@ export default function DoubtTickets() {
   }, [dispatch]);
 
   useEffect(() => {
-    loadTickets();
-  }, [loadTickets]);
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query.trim());
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
+    loadTickets(debouncedQuery);
+  }, [loadTickets, debouncedQuery]);
 
   useEffect(() => {
     if (activeTab !== "status" || !selectedTicketId) return;
@@ -165,7 +179,7 @@ export default function DoubtTickets() {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      await loadTickets();
+      await loadTickets(debouncedQuery);
       showToast("success", "Ticket Created", "Your doubt ticket has been created and sent to the instructor.");
       setActiveTab("status");
     } catch (err) {
@@ -228,10 +242,8 @@ export default function DoubtTickets() {
   };
 
   const filtered = tickets.filter((ticket) => {
-    const hay = `${ticket.title || ""} ${ticket.description || ""} ${ticket.status || ""}`.toLowerCase();
     const statusMatch = statusFilter === "all" ? true : ticket?.status === statusFilter;
-    if (!statusMatch) return false;
-    return hay.includes(query.toLowerCase());
+    return statusMatch;
   });
 
   const statusCounts = useMemo(() => {
@@ -309,7 +321,11 @@ export default function DoubtTickets() {
                 <SearchBar value={query} onChange={setQuery} placeholder="Search your doubt tickets" />
 
                 {loading ? (
-                  <p className="text-gray-500 text-sm">Loading doubt tickets...</p>
+                  <SearchPulseLoader
+                    label="Tracing doubt tickets"
+                    sublabel="Pulling your latest ticket updates"
+                    compact
+                  />
                 ) : filtered.length === 0 ? (
                   <EmptyState icon={HelpCircle} title="No doubt tickets yet" subtitle="Create your first ticket from the form." />
                 ) : (
@@ -349,7 +365,11 @@ export default function DoubtTickets() {
 
                 <div className="space-y-2 max-h-[65vh] overflow-auto pr-1">
                   {loading ? (
-                    <p className="text-gray-500 text-sm">Loading doubt tickets...</p>
+                    <SearchPulseLoader
+                      label="Tracing doubt tickets"
+                      sublabel="Pulling your latest ticket updates"
+                      compact
+                    />
                   ) : filtered.length === 0 ? (
                     <EmptyState icon={HelpCircle} title="No tickets in this filter" subtitle="Try changing the status filter." />
                   ) : (
@@ -371,7 +391,11 @@ export default function DoubtTickets() {
                     <p className="text-sm">Select a ticket to view full status and replies.</p>
                   </div>
                 ) : ticketLoading ? (
-                  <p className="text-gray-500 text-sm">Loading ticket details...</p>
+                  <SearchPulseLoader
+                    label="Loading ticket details"
+                    sublabel="Preparing conversation history"
+                    compact
+                  />
                 ) : !selectedTicket ? (
                   <p className="text-red-400 text-sm">Could not load ticket details.</p>
                 ) : (

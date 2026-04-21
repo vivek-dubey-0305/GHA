@@ -11,10 +11,11 @@ import { getPagination, createPaginationResponse } from "../utils/pagination.uti
 // @access  Private (Instructor)
 export const createAnnouncement = asyncHandler(async (req, res) => {
     const { title, content, course, type, priority } = req.body;
+    let courseDoc = null;
 
     // Verify course ownership if specified
     if (course) {
-        const courseDoc = await Course.findOne({ _id: course, instructor: req.instructor.id });
+        courseDoc = await Course.findOne({ _id: course, instructor: req.instructor.id });
         if (!courseDoc) return errorResponse(res, 404, "Course not found or not owned by you");
     }
 
@@ -33,18 +34,41 @@ export const createAnnouncement = asyncHandler(async (req, res) => {
         : { course: { $in: (await Course.find({ instructor: req.instructor.id }).select("_id")).map(c => c._id) }, status: "active" };
 
     const enrollments = await Enrollment.find(courseFilter).select("user").lean();
-    const uniqueUsers = [...new Set(enrollments.map(e => e.user.toString()))];
+    const uniqueUsers = [...new Set(enrollments.map((e) => String(e.user)))];
 
     if (uniqueUsers.length > 0) {
-        const notifications = uniqueUsers.map(userId => ({
+        const notifications = uniqueUsers.map((userId) => ({
             recipient: userId,
             recipientRole: "User",
             type: "announcement",
             title: `New Announcement: ${title}`,
             message: content.substring(0, 200),
-            data: { announcementId: announcement._id, courseId: course || null }
+            data: {
+                entityType: "announcement",
+                entityId: announcement._id,
+                announcementId: announcement._id,
+                courseId: course || null,
+                courseTitle: courseDoc?.title || "",
+                createdBy: req.instructor.id,
+                actionUrl: course ? `/dashboard/announcements?courseId=${course}` : "/dashboard/announcements",
+            }
         }));
-        await Notification.insertMany(notifications);
+        const insertedNotifications = await Notification.insertMany(notifications);
+
+        const io = req.app.get("io");
+        if (io) {
+            insertedNotifications.forEach((notification) => {
+                io.to(`notifications:User:${notification.recipient}`).emit("notification:new", {
+                    ...notification.toObject(),
+                });
+            });
+
+            if (course) {
+                io.to(`course:${course}`).emit("announcement:new", {
+                    announcement,
+                });
+            }
+        }
     }
 
     successResponse(res, 201, "Announcement created successfully", announcement);
@@ -182,6 +206,19 @@ export const markAnnouncementRead = asyncHandler(async (req, res) => {
         await announcement.save();
     }
 
+    await Notification.updateMany(
+        {
+            recipient: req.user.id,
+            recipientRole: "User",
+            type: "announcement",
+            "data.announcementId": announcement._id,
+            isRead: false,
+        },
+        {
+            $set: { isRead: true, readAt: new Date() },
+        }
+    );
+
     successResponse(res, 200, "Announcement marked as read", announcement);
 });
 
@@ -214,5 +251,42 @@ export const markAllUserAnnouncementsRead = asyncHandler(async (req, res) => {
         }
     );
 
+    await Notification.updateMany(
+        {
+            recipient: req.user.id,
+            recipientRole: "User",
+            type: "announcement",
+            isRead: false,
+        },
+        {
+            $set: { isRead: true, readAt: new Date() },
+        }
+    );
+
     successResponse(res, 200, "All announcements marked as read");
+});
+
+// @route   GET /api/v1/announcements/user/unread-count
+// @desc    Get unread announcement count for logged-in user
+// @access  Private (User)
+export const getUserAnnouncementUnreadCount = asyncHandler(async (req, res) => {
+    const enrollments = await Enrollment.find({ user: req.user.id, status: { $in: ["active", "completed"] } })
+        .select("course")
+        .lean();
+
+    const courseIds = enrollments.map((e) => e.course).filter(Boolean);
+    const instructorIds = courseIds.length > 0
+        ? (await Course.find({ _id: { $in: courseIds } }).select("instructor").lean()).map((c) => c.instructor)
+        : [];
+
+    const count = await Announcement.countDocuments({
+        isPublished: true,
+        $or: [
+            { course: { $in: courseIds } },
+            { course: null, instructor: { $in: instructorIds } },
+        ],
+        "readBy.user": { $ne: req.user.id },
+    });
+
+    successResponse(res, 200, "Announcement unread count retrieved", { count });
 });

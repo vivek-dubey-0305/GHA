@@ -4,6 +4,7 @@ import { io } from "socket.io-client";
 import { BellDot, Clock3, Lock, Paperclip, Reply, Send, Users } from "lucide-react";
 import { UserLayout } from "../../components/layout/UserLayout";
 import { PageShell, EmptyState } from "../../components/DashboardPages/DashboardUI";
+import SearchPulseLoader from "../../components/common/SearchPulseLoader";
 import { selectUser } from "../../redux/slices/auth.slice";
 import { apiClient } from "../../utils/api.utils";
 
@@ -377,7 +378,11 @@ export default function StudyGroups() {
         subtitle="Collaborate with peers — solve problems, share notes, grow together."
       >
         {loading ? (
-          <EmptyState icon={Users} title="Loading groups" subtitle="Fetching your course-based study groups..." />
+          <SearchPulseLoader
+            label="Loading study groups"
+            sublabel="Fetching your course-based circles"
+            className="my-2"
+          />
         ) : groups.length === 0 ? (
           <EmptyState icon={Users} title="No study groups yet" subtitle="Enroll in a published course and your course group will appear here." />
         ) : (

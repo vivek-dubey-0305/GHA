@@ -6,34 +6,53 @@ import { useDispatch, useSelector } from "react-redux";
 import { BookOpen, Video } from "lucide-react";
 import { UserLayout } from "../../components/layout/UserLayout";
 import { PageShell, TabBar, EmptyState, SearchBar } from "../../components/DashboardPages/DashboardUI";
+import SearchPulseLoader from "../../components/common/SearchPulseLoader";
 import MyCoursesCard from "../../components/CoursePages/dashboard/MyCoursesCard";
 import { COURSE_TABS } from "../../constants/dashboard.constants";
-import { useSearch } from "../../hooks/useDashboard";
 import { getMyEnrollments } from "../../redux/slices/enrollment.slice.js";
+import { getMyReviews } from "../../redux/slices/course.slice.js";
 
 export default function MyCourses() {
   const dispatch = useDispatch();
   const [activeTabLabel, setActiveTabLabel] = useState(COURSE_TABS[0]);
+  const [query, setQuery] = useState("");
   const { myEnrollments, loading, error } = useSelector((state) => state.enrollment);
+  const { myReviews } = useSelector((state) => state.course);
+
+  const normalizedQuery = query.trim();
+  const [debouncedQuery, setDebouncedQuery] = useState("");
 
   useEffect(() => {
-    dispatch(getMyEnrollments({ page: 1, limit: 100 }));
+    const timer = setTimeout(() => {
+      setDebouncedQuery(normalizedQuery);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [normalizedQuery]);
+
+  useEffect(() => {
+    dispatch(getMyReviews({ page: 1, limit: 200 }));
   }, [dispatch]);
 
-  const tabEnrollments = useMemo(
-    () => ({
-      "In Progress": myEnrollments.filter((e) => e.status === "active"),
-      "Completed": myEnrollments.filter((e) => e.status === "completed"),
-      Wishlist: [],
-    }),
-    [myEnrollments]
-  );
+  useEffect(() => {
+    if (activeTabLabel === "Wishlist") return;
 
-  const items = tabEnrollments[activeTabLabel] ?? [];
-  const { query, setQuery, filtered } = useSearch(items, ["course.title"]);
+    const status = activeTabLabel === "Completed" ? "completed" : "active";
+    dispatch(getMyEnrollments({ page: 1, limit: 100, status, search: debouncedQuery }));
+  }, [dispatch, activeTabLabel, debouncedQuery]);
+
+  const reviewMapByCourse = useMemo(() => {
+    const map = {};
+    (myReviews || []).forEach((review) => {
+      const courseId = String(review?.course?._id || review?.course || "");
+      if (courseId) map[courseId] = review;
+    });
+    return map;
+  }, [myReviews]);
+
+  const items = activeTabLabel === "Wishlist" ? [] : myEnrollments;
 
   const groupedByType = useMemo(() => {
-    return filtered.reduce(
+    return items.reduce(
       (acc, enrollment) => {
         const courseType = String(enrollment?.course?.type || "recorded").toLowerCase();
         if (courseType === "live") {
@@ -45,7 +64,7 @@ export default function MyCourses() {
       },
       { recorded: [], live: [] }
     );
-  }, [filtered]);
+  }, [items]);
 
   const showSplitByType = activeTabLabel !== "Wishlist";
 
@@ -63,8 +82,12 @@ export default function MyCourses() {
 
         {/* Grid */}
         {loading ? (
-          <div className="text-gray-400 text-sm py-8">Loading your enrollments...</div>
-        ) : filtered.length === 0 ? (
+          <SearchPulseLoader
+            label="Syncing your courses"
+            sublabel="Refreshing enrollments for your search"
+            className="my-4"
+          />
+        ) : items.length === 0 ? (
           <EmptyState
             icon={BookOpen}
             title="No courses here yet"
@@ -79,9 +102,14 @@ export default function MyCourses() {
                   <h3 className="text-sm font-semibold text-white">Recorded Courses</h3>
                   <span className="text-[11px] text-gray-500">{groupedByType.recorded.length}</span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                   {groupedByType.recorded.map((enr, i) => (
-                    <MyCoursesCard key={enr._id || `${enr?.course?._id}_${i}`} enrollment={enr} delay={i * 0.05} />
+                    <MyCoursesCard
+                      key={enr._id || `${enr?.course?._id}_${i}`}
+                      enrollment={enr}
+                      delay={i * 0.05}
+                      userReview={reviewMapByCourse[String(enr?.course?._id || "")] || null}
+                    />
                   ))}
                 </div>
               </section>
@@ -94,18 +122,28 @@ export default function MyCourses() {
                   <h3 className="text-sm font-semibold text-white">Live Batches</h3>
                   <span className="text-[11px] text-gray-500">{groupedByType.live.length}</span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                   {groupedByType.live.map((enr, i) => (
-                    <MyCoursesCard key={enr._id || `${enr?.course?._id}_${i}`} enrollment={enr} delay={i * 0.05} />
+                    <MyCoursesCard
+                      key={enr._id || `${enr?.course?._id}_${i}`}
+                      enrollment={enr}
+                      delay={i * 0.05}
+                      userReview={reviewMapByCourse[String(enr?.course?._id || "")] || null}
+                    />
                   ))}
                 </div>
               </section>
             )}
 
             {!showSplitByType && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                {filtered.map((enr, i) => (
-                  <MyCoursesCard key={enr._id || `${enr?.course?._id}_${i}`} enrollment={enr} delay={i * 0.05} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {items.map((enr, i) => (
+                  <MyCoursesCard
+                    key={enr._id || `${enr?.course?._id}_${i}`}
+                    enrollment={enr}
+                    delay={i * 0.05}
+                    userReview={reviewMapByCourse[String(enr?.course?._id || "")] || null}
+                  />
                 ))}
               </div>
             )}

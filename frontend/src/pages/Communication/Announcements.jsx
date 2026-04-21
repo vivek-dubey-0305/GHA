@@ -3,15 +3,22 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { Megaphone } from "lucide-react";
+import { useDispatch } from "react-redux";
 import { UserLayout } from "../../components/layout/UserLayout";
 import { PageShell, EmptyState } from "../../components/DashboardPages/DashboardUI";
+import SearchPulseLoader from "../../components/common/SearchPulseLoader";
 import AnnouncementCard from "../../components/CommunicationPages/AnnouncementCard";
+import CommunicationDetailModal from "../../components/CommunicationPages/CommunicationDetailModal";
+import { setAnnouncementsUnread } from "../../redux/slices/communication.slice";
 import { apiClient } from "../../utils/api.utils";
 
 export default function Announcements() {
+  const dispatch = useDispatch();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const unread = items.filter((a) => !a.isRead).length;
 
   const loadAnnouncements = useCallback(async () => {
@@ -19,16 +26,35 @@ export default function Announcements() {
     setError("");
     try {
       const res = await apiClient.get("/announcements/user/my?limit=100");
-      setItems(res?.data?.data?.announcements || []);
+      const list = res?.data?.data?.announcements || [];
+      setItems(list);
+      dispatch(setAnnouncementsUnread(list.filter((item) => !item.isRead).length));
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to load announcements.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [dispatch]);
 
   useEffect(() => {
     loadAnnouncements();
+  }, [loadAnnouncements]);
+
+  useEffect(() => {
+    const handleIncoming = () => {
+      loadAnnouncements();
+    };
+
+    const handleInboxRefresh = () => {
+      loadAnnouncements();
+    };
+
+    window.addEventListener("gha:announcement:new", handleIncoming);
+    window.addEventListener("gha:inbox:refresh", handleInboxRefresh);
+    return () => {
+      window.removeEventListener("gha:announcement:new", handleIncoming);
+      window.removeEventListener("gha:inbox:refresh", handleInboxRefresh);
+    };
   }, [loadAnnouncements]);
 
   const handleMarkRead = async (id) => {
@@ -38,7 +64,12 @@ export default function Announcements() {
       // Keep optimistic local UI even on transient failures.
     }
 
-    setItems((prev) => prev.map((a) => a._id === id ? { ...a, isRead: true } : a));
+    setItems((prev) => {
+      const next = prev.map((a) => a._id === id ? { ...a, isRead: true } : a);
+      dispatch(setAnnouncementsUnread(next.filter((item) => !item.isRead).length));
+      return next;
+    });
+    setSelected((prev) => (prev?._id === id ? { ...prev, isRead: true } : prev));
   };
 
   const handleMarkAllRead = async () => {
@@ -49,6 +80,15 @@ export default function Announcements() {
     }
 
     setItems((prev) => prev.map((a) => ({ ...a, isRead: true })));
+    dispatch(setAnnouncementsUnread(0));
+  };
+
+  const openDetails = async (announcement) => {
+    setSelected(announcement);
+    setIsDetailOpen(true);
+    if (!announcement.isRead) {
+      await handleMarkRead(announcement._id);
+    }
   };
 
   return (
@@ -68,7 +108,13 @@ export default function Announcements() {
           ) : null
         }
       >
-        {loading && <p className="text-gray-500 text-sm py-2">Loading announcements...</p>}
+        {loading && (
+          <SearchPulseLoader
+            label="Fetching announcements"
+            sublabel="Loading instructor and platform updates"
+            compact
+          />
+        )}
         {!loading && error && <p className="text-red-400 text-sm py-2">{error}</p>}
 
         {!loading && items.length === 0 ? (
@@ -81,10 +127,18 @@ export default function Announcements() {
                 announcement={ann}
                 delay={i * 0.05}
                 onMarkRead={handleMarkRead}
+                onOpen={openDetails}
               />
             ))}
           </div>
         )}
+
+        <CommunicationDetailModal
+          open={isDetailOpen}
+          item={selected}
+          mode="announcement"
+          onClose={() => setIsDetailOpen(false)}
+        />
       </PageShell>
     </UserLayout>
   );

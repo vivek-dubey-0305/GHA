@@ -196,14 +196,18 @@ import { useState, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { logout, selectUser } from "../../redux/slices/auth.slice";
+import { selectAnnouncementsUnread, selectNotificationsUnread } from "../../redux/slices/communication.slice";
 import { ChevronDown, ChevronLeft, Menu, User, LogOut } from "lucide-react";
 import { DASHBOARD_NAV_GROUPS } from "../../constants/dashboard.constants";
+import "./user-sidebar.css";
 
 export default function UserSidebar({ collapsed, onToggle }) {
   const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const user = useSelector(selectUser);
+  const notificationsUnread = useSelector(selectNotificationsUnread);
+  const announcementsUnread = useSelector(selectAnnouncementsUnread);
 
   const [expandedGroups, setExpandedGroups] = useState(
     Object.fromEntries(DASHBOARD_NAV_GROUPS.map((g) => [g.label, true]))
@@ -221,18 +225,18 @@ export default function UserSidebar({ collapsed, onToggle }) {
     <>
       {/* Mobile overlay */}
       {!collapsed && (
-        <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={onToggle} />
+        <div className="gha-user-sidebar__overlay fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={onToggle} />
       )}
 
       <aside
         className={`
-          fixed top-0 left-0 z-50 h-screen bg-[#0a0a0a] border-r border-gray-800/80
+          gha-user-sidebar fixed top-0 left-0 z-50 h-screen bg-[#0a0a0a] border-r border-gray-800/80
           flex flex-col transition-all duration-300 ease-in-out
-          ${collapsed ? "-translate-x-full lg:translate-x-0 lg:w-[72px]" : "translate-x-0 w-64"}
+          ${collapsed ? "-translate-x-full lg:translate-x-0 lg:w-18" : "translate-x-0 w-64"}
         `}
       >
         {/* ── Header ── */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-800 min-h-[64px]">
+        <div className="flex items-center justify-between p-4 border-b border-gray-800 min-h-16">
           {!collapsed && (
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-8 h-8 rounded-lg bg-yellow-400 flex items-center justify-center shrink-0">
@@ -246,7 +250,7 @@ export default function UserSidebar({ collapsed, onToggle }) {
           )}
           <button
             onClick={onToggle}
-            className={`p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors
+            className={`gha-user-sidebar__toggle p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors
               ${collapsed ? "mx-auto" : ""}`}
           >
             {collapsed ? <Menu className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
@@ -255,7 +259,7 @@ export default function UserSidebar({ collapsed, onToggle }) {
 
         {/* ── User info ── */}
         {!collapsed && user && (
-          <div className="px-4 py-3 border-b border-gray-800/50">
+          <div className="gha-user-sidebar__profile px-4 py-3 border-b border-gray-800/50">
             <div className="flex items-center gap-2.5">
               {user.profilePicture?.secure_url ? (
                 <img src={user.profilePicture.secure_url} alt="" className="w-8 h-8 rounded-full object-cover border border-gray-700" />
@@ -275,14 +279,14 @@ export default function UserSidebar({ collapsed, onToggle }) {
         )}
 
         {/* ── Navigation ── */}
-        <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5 scrollbar-thin scrollbar-thumb-gray-800">
+        <nav className="gha-user-sidebar__nav flex-1 overflow-y-auto py-2 px-2 space-y-0.5">
           {DASHBOARD_NAV_GROUPS.map((group) => (
             <div key={group.label} className="mb-1">
               {/* Group label */}
               {!collapsed && (
                 <button
                   onClick={() => toggleGroup(group.label)}
-                  className="flex items-center justify-between w-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest
+                  className="gha-user-sidebar__group-toggle flex items-center justify-between w-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest
                     text-gray-600 hover:text-gray-400 transition-colors"
                 >
                   <span>{group.label}</span>
@@ -297,10 +301,17 @@ export default function UserSidebar({ collapsed, onToggle }) {
                 <ul className="space-y-0.5">
                   {group.items.map((item) => {
                     const Icon = item.icon;
-                    const isActive =
-                      item.href === "/dashboard"
+                    const isHomeItem = item.href === "/";
+                    const isActive = isHomeItem
+                      ? location.pathname === "/"
+                      : item.href === "/dashboard"
                         ? location.pathname === "/dashboard"
                         : location.pathname.startsWith(item.href);
+                    const unreadCount = item.name === "Notifications"
+                      ? notificationsUnread
+                      : item.name === "Announcements"
+                        ? announcementsUnread
+                        : 0;
 
                     return (
                       <li key={item.name}>
@@ -308,16 +319,27 @@ export default function UserSidebar({ collapsed, onToggle }) {
                           to={item.href}
                           title={collapsed ? item.name : undefined}
                           className={`
-                            flex items-center gap-3 rounded-lg transition-all duration-150
+                            gha-user-sidebar__item flex items-center gap-3 rounded-lg transition-all duration-150
+                            ${isHomeItem ? "gha-user-sidebar__item--home" : ""}
                             ${collapsed ? "justify-center px-2 py-2.5 mx-1" : "px-3 py-2"}
                             ${isActive
-                              ? "bg-yellow-400 text-black font-semibold"
-                              : "text-gray-400 hover:bg-gray-800/60 hover:text-white"
+                              ? isHomeItem
+                                ? "gha-user-sidebar__item--active gha-user-sidebar__item--home-active bg-cyan-300 text-[#062b33] font-semibold"
+                                : "gha-user-sidebar__item--active bg-yellow-400 text-black font-semibold"
+                              : "gha-user-sidebar__item--idle text-gray-400 hover:bg-gray-800/60 hover:text-white"
                             }
                           `}
                         >
-                          <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? "text-black" : ""}`} />
+                          <Icon className={`w-4 h-4 shrink-0 ${isActive && !isHomeItem ? "text-black" : ""}`} />
                           {!collapsed && <span className="text-sm">{item.name}</span>}
+                          {!collapsed && unreadCount > 0 && (
+                            <span
+                              className={`ml-auto min-w-4.5 h-4.5 px-1.5 rounded-full text-[10px] font-semibold flex items-center justify-center
+                                gha-user-sidebar__badge ${isActive ? "bg-black text-yellow-300" : "bg-yellow-400/20 text-yellow-300 border border-yellow-400/40"}`}
+                            >
+                              {unreadCount > 99 ? "99+" : unreadCount}
+                            </span>
+                          )}
                         </Link>
                       </li>
                     );
@@ -334,11 +356,11 @@ export default function UserSidebar({ collapsed, onToggle }) {
             onClick={handleLogout}
             title={collapsed ? "Logout" : undefined}
             className={`
-              flex items-center gap-3 w-full rounded-lg text-gray-400 hover:bg-red-500/10 hover:text-red-400
+              gha-user-sidebar__logout flex items-center gap-3 w-full rounded-lg text-gray-400 hover:bg-red-500/10 hover:text-red-400
               transition-colors py-2.5 ${collapsed ? "justify-center px-2" : "px-3"}
             `}
           >
-            <LogOut className="w-4 h-4 flex-shrink-0" />
+            <LogOut className="w-4 h-4 shrink-0" />
             {!collapsed && <span className="text-sm">Logout</span>}
           </button>
         </div>

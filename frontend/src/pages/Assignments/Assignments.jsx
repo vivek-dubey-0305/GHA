@@ -7,6 +7,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { io } from "socket.io-client";
 import { UserLayout } from "../../components/layout/UserLayout";
 import { PageShell, TabBar, EmptyState } from "../../components/DashboardPages/DashboardUI";
+import SearchPulseLoader from "../../components/common/SearchPulseLoader";
 import AssignmentCard from "../../components/AssignmentPages/AssignmentCard";
 import AssignmentFeedback from "../../components/AssignmentPages/AssignmentFeedback";
 import { ASSIGNMENT_TABS } from "../../constants/dashboard.constants";
@@ -328,7 +329,13 @@ export default function Assignments() {
           </button>
         </div>
 
-        {loading && <p className="text-gray-500 text-sm py-4">Loading assignments...</p>}
+        {loading && (
+          <SearchPulseLoader
+            label="Sorting assignments"
+            sublabel="Collecting pending and graded work"
+            compact
+          />
+        )}
         {!loading && error && <p className="text-red-400 text-sm py-2">{error}</p>}
 
         {!loading && filtered.length === 0 ? (

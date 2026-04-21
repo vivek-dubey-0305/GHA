@@ -112,7 +112,7 @@ export const uploadProfilePicture = createAsyncThunk(
   'auth/uploadProfilePicture',
   async (formData, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/user/upload-profile-picture`, formData, {
+      const response = await apiClient.put(`/user/profile`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -131,7 +131,7 @@ export const logout = createAsyncThunk(
   'auth/logout',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/user/logout`, {});
+      const response = await apiClient.post(`/user/auth/logout`, {});
 
       return response.data;
     } catch (error) {
@@ -245,7 +245,7 @@ export const getUserSessions = createAsyncThunk(
   'auth/getUserSessions',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiClient.get(`/user/sessions`);
+      const response = await apiClient.get(`/user/auth/sessions`);
       return response.data.data; // The sessions data
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Failed to get sessions';
@@ -259,7 +259,7 @@ export const logoutSession = createAsyncThunk(
   'auth/logoutSession',
   async ({ sessionId }, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/user/logout-session`, {
+      const response = await apiClient.post(`/user/auth/logout-session`, {
         sessionId
       });
       return response.data;
@@ -275,7 +275,7 @@ export const logoutAllSessions = createAsyncThunk(
   'auth/logoutAllSessions',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/user/logout-all-sessions`, {});
+      const response = await apiClient.post(`/user/auth/logout-all-sessions`, {});
       return response.data;
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Failed to logout all sessions';
@@ -289,7 +289,7 @@ export const changePassword = createAsyncThunk(
   'auth/changePassword',
   async ({ currentPassword, newPassword, confirmPassword }, { rejectWithValue }) => {
     try {
-      const response = await apiClient.post(`/user/change-password`, {
+      const response = await apiClient.post(`/user/auth/change-password`, {
         currentPassword,
         newPassword,
         confirmPassword

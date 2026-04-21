@@ -18,6 +18,7 @@ import IDRightSidebar   from "../../components/InstructorPages/InstructorDetail/
 import IDCtaBottom      from "../../components/InstructorPages/InstructorDetail/IDCtaBottom";
 import IDFooter         from "../../components/InstructorPages/InstructorDetail/IDFooter";
 import InstructorEmptyState from "../../components/InstructorPages/InstructorEmptyState";
+import SearchPulseLoader from "../../components/common/SearchPulseLoader";
 
 import {
   getInstructorById,
@@ -199,9 +200,10 @@ export default function InstructorDetail() {
   if (loadingInstructorDetail && !instructor) {
     return (
       <div className="id-page" style={{ display: "grid", placeItems: "center", minHeight: "100vh", padding: "1rem" }}>
-        <InstructorEmptyState
-          title="Loading Instructor Profile"
-          description="Preparing profile, courses, and learner reviews..."
+        <SearchPulseLoader
+          label="Loading instructor profile"
+          sublabel="Preparing expertise, courses, and reviews"
+          className="max-w-md"
         />
       </div>
     );

@@ -26,6 +26,7 @@ import { formatDuration, getLessonDurationMinutes, getModuleDurationMinutes } fr
 import LearningVideoPlayer from "../../components/CoursePages/learning/LearningVideoPlayer";
 import StudentLiveSessionRoom from "../../components/CoursePages/live/StudentLiveSessionRoom";
 import RichContentRenderer from "../../components/common/RichContentRenderer";
+import SearchPulseLoader from "../../components/common/SearchPulseLoader";
 
 const DEBUG_GRADING_ENABLED = String(import.meta.env.VITE_DEBUG_GRADING || "").toLowerCase() === "true";
 
@@ -918,7 +919,11 @@ export default function CourseLearning() {
   if (loadingCourseDetail || !course) {
     return (
       <div className="min-h-screen bg-[#0c0c0c] text-gray-300 flex items-center justify-center">
-        Loading learning environment...
+        <SearchPulseLoader
+          label="Loading learning environment"
+          sublabel="Setting up lessons, progress, and resources"
+          className="max-w-md"
+        />
       </div>
     );
   }

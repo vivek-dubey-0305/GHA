@@ -2,17 +2,25 @@
  * components/CommunityPages/DiscussionThread.jsx
  */
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ThumbsUp, CheckCircle, Send } from "lucide-react";
+import { X, ThumbsUp, CheckCircle, Send, Loader2 } from "lucide-react";
 import { useState } from "react";
-import { Avatar, YellowButton, GhostButton } from "../DashboardPages/DashboardUI";
+import { Avatar, YellowButton } from "../DashboardPages/DashboardUI";
 import { timeAgo } from "../../utils/format.utils";
 
-export default function DiscussionThread({ discussion, onClose }) {
+export default function DiscussionThread({ discussion, onClose, onReply, replyLoading = false }) {
   const [replyText, setReplyText] = useState("");
 
   if (!discussion) return null;
 
   const authorName = (a) => `${a?.firstName ?? ""} ${a?.lastName ?? ""}`.trim();
+
+  const handleSubmitReply = async () => {
+    if (!replyText.trim() || !onReply) return;
+    const ok = await onReply(replyText.trim());
+    if (ok) {
+      setReplyText("");
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -109,11 +117,11 @@ export default function DiscussionThread({ discussion, onClose }) {
                   placeholder-gray-600 focus:outline-none focus:border-yellow-400/50 resize-none transition-colors"
               />
               <YellowButton
-                onClick={() => setReplyText("")}
-                disabled={!replyText.trim()}
+                onClick={handleSubmitReply}
+                disabled={!replyText.trim() || replyLoading}
                 className="self-end h-10 px-4"
               >
-                <Send className="w-4 h-4" />
+                {replyLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               </YellowButton>
             </div>
           </div>

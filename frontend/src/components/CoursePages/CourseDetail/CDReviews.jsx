@@ -1,7 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useSelector } from "react-redux";
-import { apiClient } from "../../../utils/api.utils.js";
+import { useDispatch, useSelector } from "react-redux";
+import ReviewEditorModal from "../../common/ReviewEditorModal.jsx";
+import {
+  createCourseReview,
+  getCourseById,
+  getCourseReviews,
+  getMyCourseReview,
+  markReviewHelpful,
+  updateCourseReview,
+} from "../../../redux/slices/course.slice.js";
 
 function formatReviewDate(value) {
   if (!value) return "";
@@ -10,12 +18,24 @@ function formatReviewDate(value) {
   return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
 }
 
-export default function CDReviews({ course, reviews = [], ratingStats, loadingReviews = false }) {
+export default function CDReviews({
+  course,
+  reviews = [],
+  ratingStats,
+  loadingReviews = false,
+  openComposerToken,
+}) {
+  const dispatch = useDispatch();
   const [animated, setAnimated] = useState(false);
-  const [checkingEligibility, setCheckingEligibility] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [activeReview, setActiveReview] = useState(null);
+  const [submissionError, setSubmissionError] = useState("");
+  const [helpfulPendingById, setHelpfulPendingById] = useState({});
   const sectionRef = useRef(null);
   const navigate = useNavigate();
   const { isAuthenticated } = useSelector((state) => state.auth);
+  const { reviewActionLoading, reviewActionError, loadingMyReview } = useSelector((state) => state.course);
+  const lastComposerTokenRef = useRef(null);
 
   useEffect(() => {
     if (!sectionRef.current) return;
@@ -47,24 +67,84 @@ export default function CDReviews({ course, reviews = [], ratingStats, loadingRe
     return { label: `${star} ★`, pct };
   });
 
-  const handleFirstReview = async () => {
+  const handleOpenReviewModal = useCallback(async () => {
+    if (!course?._id) return;
+
     if (!isAuthenticated) {
       navigate("/login", { state: { from: `/courses/${course._id}` } });
       return;
     }
 
     try {
-      setCheckingEligibility(true);
-      await apiClient.get(`/user/enrollments/${course._id}`);
-      console.log("User is enrolled and can review this course. Open review flow here.");
+      setSubmissionError("");
+      const result = await dispatch(getMyCourseReview(course._id)).unwrap();
+      setActiveReview(result?.review || null);
+      setIsModalOpen(true);
     } catch (error) {
-      if (error?.response?.status === 404 || error?.response?.status === 403) {
-        console.log("Please re-enroll in this course before submitting a review.");
+      setSubmissionError(error || "Could not prepare review form. Please try again.");
+    }
+  }, [course?._id, dispatch, isAuthenticated, navigate]);
+
+  const handleSubmitReview = async ({ rating, comment }) => {
+    if (!course?._id) return;
+
+    try {
+      setSubmissionError("");
+
+      if (activeReview?._id) {
+        await dispatch(updateCourseReview({
+          reviewId: activeReview._id,
+          rating,
+          comment,
+        })).unwrap();
       } else {
-        console.log("Could not verify enrollment. Please try again.");
+        await dispatch(createCourseReview({
+          courseId: course._id,
+          rating,
+          comment,
+        })).unwrap();
       }
+
+      await Promise.all([
+        dispatch(getCourseReviews({ courseId: course._id, page: 1, limit: 10 })),
+        dispatch(getCourseById(course._id)),
+      ]);
+
+      setIsModalOpen(false);
+    } catch (error) {
+      setSubmissionError(error || "Unable to save your review right now.");
+    }
+  };
+
+  useEffect(() => {
+    if (!openComposerToken || !course?._id) return;
+    if (lastComposerTokenRef.current === openComposerToken) return;
+    lastComposerTokenRef.current = openComposerToken;
+    handleOpenReviewModal();
+  }, [openComposerToken, course?._id, handleOpenReviewModal]);
+
+  const renderStars = (rating) => {
+    const safe = Math.max(0, Math.min(5, Number(rating) || 0));
+    const filled = Math.floor(safe);
+    return `${"★".repeat(filled)}${"☆".repeat(5 - filled)}`;
+  };
+
+  const handleMarkHelpful = async (reviewId) => {
+    const review = (reviews || []).find((item) => String(item?._id) === String(reviewId));
+    if (!reviewId || helpfulPendingById[reviewId] || review?.isMarkedHelpfulByMe) return;
+
+    try {
+      setSubmissionError("");
+      setHelpfulPendingById((prev) => ({ ...prev, [reviewId]: true }));
+      await dispatch(markReviewHelpful(reviewId)).unwrap();
+    } catch (error) {
+      setSubmissionError(error || "Could not mark review as helpful.");
     } finally {
-      setCheckingEligibility(false);
+      setHelpfulPendingById((prev) => {
+        const next = { ...prev };
+        delete next[reviewId];
+        return next;
+      });
     }
   };
 
@@ -78,6 +158,14 @@ export default function CDReviews({ course, reviews = [], ratingStats, loadingRe
           <div className="cd-review-count">
             {totalRatings.toLocaleString()} ratings
           </div>
+          <button
+            className="cd-first-review-btn"
+            onClick={handleOpenReviewModal}
+            disabled={loadingMyReview}
+            style={{ marginTop: "10px" }}
+          >
+            {loadingMyReview ? "Preparing review form..." : "Write / Edit Your Review"}
+          </button>
         </div>
         <div className="cd-rating-bars">
           {ratingBars.map((bar) => (
@@ -111,9 +199,24 @@ export default function CDReviews({ course, reviews = [], ratingStats, loadingRe
                   </div>
                   <div className="cd-review-date">{formatReviewDate(r.createdAt)}</div>
                 </div>
-                <div className="cd-review-stars">{"★".repeat(Number(r.rating || 0))}</div>
+                <div className="cd-review-stars">{renderStars(r.rating)}</div>
               </div>
               <div className="cd-review-text">{r.comment || r.title || ""}</div>
+              <div className="cd-review-actions">
+                <button
+                  type="button"
+                  className={`cd-helpful-btn${r.isMarkedHelpfulByMe ? " marked" : ""}`}
+                  onClick={() => handleMarkHelpful(r._id)}
+                  disabled={Boolean(helpfulPendingById[r._id] || r.isMarkedHelpfulByMe)}
+                >
+                  {helpfulPendingById[r._id]
+                    ? "Marking..."
+                    : r.isMarkedHelpfulByMe
+                      ? "Marked Helpful"
+                      : "Helpful"}
+                </button>
+                <span className="cd-helpful-count">{Number(r.helpful || 0)} found helpful</span>
+              </div>
             </div>
           ))
         ) : (
@@ -126,14 +229,25 @@ export default function CDReviews({ course, reviews = [], ratingStats, loadingRe
             </div>
             <button
               className="cd-first-review-btn"
-              onClick={handleFirstReview}
-              disabled={checkingEligibility}
+              onClick={handleOpenReviewModal}
+              disabled={loadingMyReview}
             >
-              {checkingEligibility ? "Checking eligibility..." : "Be The First To Review"}
+              {loadingMyReview ? "Preparing review form..." : "Be The First To Review"}
             </button>
           </div>
         )}
       </div>
+
+      <ReviewEditorModal
+        key={`${course?._id || "course"}-${activeReview?._id || "new"}`}
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        courseTitle={course?.title}
+        initialReview={activeReview}
+        onSubmit={handleSubmitReview}
+        isSubmitting={reviewActionLoading}
+        submitError={submissionError || reviewActionError}
+      />
     </>
   );
 }

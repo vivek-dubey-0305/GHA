@@ -307,6 +307,7 @@ import {
   DashboardWalletWidget,
   DashboardPendingAssignments,
 } from "../../components/DashboardPages/DashboardWidgets";
+import SearchPulseLoader from "../../components/common/SearchPulseLoader";
 
 // ─── Loading skeleton ────────────────────────────────────────────────────────
 
@@ -314,10 +315,11 @@ function DashboardSkeleton() {
   return (
     <UserLayout>
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-yellow-400 mx-auto" />
-          <p className="text-gray-500 text-sm mt-3">Loading your dashboard…</p>
-        </div>
+        <SearchPulseLoader
+          label="Loading your dashboard"
+          sublabel="Assembling classes, progress, and insights"
+          className="max-w-md"
+        />
       </div>
     </UserLayout>
   );

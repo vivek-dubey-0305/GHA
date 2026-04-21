@@ -114,6 +114,7 @@ export const NOTIFICATION_TYPES = {
   assignment_reported:   { icon: "🚩", label: "Reported" },
   assignment_moderation_update: { icon: "🛡️", label: "Moderation" },
   discussion_reply:      { icon: "💬", label: "Discussion" },
+  discussion_created:    { icon: "🗣️", label: "New Discussion" },
   announcement:          { icon: "📢", label: "Announcement" },
   payout_update:         { icon: "💰", label: "Payout" },
   course_published:      { icon: "🎓", label: "New Course" },
@@ -142,6 +143,6 @@ export const COURSE_TABS = ["In Progress", "Completed", "Wishlist"];
 
 export const ASSIGNMENT_TABS = ["All", "Pending", "Submitted", "Graded"];
 
-export const LIVE_CLASS_TABS = ["Upcoming", "Recordings"];
+export const LIVE_CLASS_TABS = ["Upcoming", "Expired", "Recorded", "Active"];
 
 export const TRANSACTION_TABS = ["All", "Credits", "Debits"];

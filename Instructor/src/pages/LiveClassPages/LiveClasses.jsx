@@ -106,6 +106,7 @@ export default function LiveClasses() {
   const [instantTitle, setInstantTitle] = useState('');
   const [instantDesc, setInstantDesc] = useState('');
   const [studentSearch, setStudentSearch] = useState('');
+  const [instantValidationError, setInstantValidationError] = useState('');
 
   // Create session form
   const [form, setForm] = useState({ title: '', description: '', sessionType: 'lecture', scheduledAt: '', duration: 60, maxParticipants: 100, course: '' });
@@ -133,6 +134,7 @@ export default function LiveClasses() {
     setInstantTitle('');
     setInstantDesc('');
     setStudentSearch('');
+    setInstantValidationError('');
     dispatch(clearEnrolledStudents());
   }, [dispatch]);
 
@@ -211,6 +213,13 @@ export default function LiveClasses() {
   };
 
   const handleCourseSelect = (courseId) => {
+    const selected = (courses || []).find((course) => String(course._id) === String(courseId));
+    if (selected && (selected.type || 'recorded') !== 'live') {
+      setInstantValidationError('Only live-batch courses are allowed for doubt sessions.');
+      return;
+    }
+
+    setInstantValidationError('');
     setSelectedCourse(courseId);
     setSelectedStudents([]);
     if (courseId) dispatch(getEnrolledStudents(courseId));
@@ -241,6 +250,13 @@ export default function LiveClasses() {
       duration: 60,
     };
     if (instantPurpose === 'doubt') {
+      const selected = (courses || []).find((course) => String(course._id) === String(selectedCourse));
+      if (!selected || (selected.type || 'recorded') !== 'live') {
+        setInstantValidationError('Please choose a live-batch course for doubt sessions.');
+        return;
+      }
+
+      setInstantValidationError('');
       body.courseId = selectedCourse;
       if (selectedStudents.length > 0) body.invitedStudentIds = selectedStudents;
     } else if (instantPurpose === 'instructor') {
@@ -469,6 +485,9 @@ export default function LiveClasses() {
                   </select>
                   {liveCourses.length === 0 && (
                     <p className="text-[11px] text-yellow-400 mt-1">No live batch courses available. Create a Live Batch course first.</p>
+                  )}
+                  {instantValidationError && (
+                    <p className="text-[11px] text-red-400 mt-1">{instantValidationError}</p>
                   )}
                 </div>
 

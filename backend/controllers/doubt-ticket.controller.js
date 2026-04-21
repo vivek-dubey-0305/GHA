@@ -124,10 +124,18 @@ export const getMyDoubtTickets = asyncHandler(async (req, res) => {
     if (!userId) return errorResponse(res, 401, "Authentication required");
 
     const { page, limit, skip } = getPagination(req.query, 10);
-    const { status } = req.query;
+    const { status, search } = req.query;
 
     const filter = { user: userId };
     if (status) filter.status = status;
+    if (search && String(search).trim()) {
+        const regex = { $regex: String(search).trim(), $options: "i" };
+        filter.$or = [
+            { title: regex },
+            { description: regex },
+            { status: regex },
+        ];
+    }
 
     const total = await DoubtTicket.countDocuments(filter);
     const tickets = await DoubtTicket.find(filter)

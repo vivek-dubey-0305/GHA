@@ -18,7 +18,7 @@ const notificationSchema = new mongoose.Schema(
             enum: [
                 "new_enrollment", "new_review", "assignment_submission",
                 "assignment_graded", "assignment_reported", "assignment_moderation_update",
-                "discussion_reply", "announcement", "payout_update",
+                "discussion_reply", "discussion_created", "announcement", "payout_update",
                 "course_published", "certificate_issued", "live_class_reminder",
                 "live_class_started", "live_class_invite",
                 "doubt_ticket_created", "doubt_ticket_accepted", "doubt_ticket_resolved", "doubt_saturday_session_reminder",

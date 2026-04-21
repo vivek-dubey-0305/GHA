@@ -1,14 +1,14 @@
 /**
  * components/CoursePages/dashboard/MyCoursesCard.jsx
  */
-import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { Play, Star, Clock } from "lucide-react";
 import { ProgressBar, StatusBadge, Avatar } from "../../DashboardPages/DashboardUI";
 import { formatDuration, timeAgo } from "../../../utils/format.utils";
 import { LEVEL_COLORS } from "../../../constants/dashboard.constants";
+import CourseRatingHover from "../../common/CourseRatingHover.jsx";
 
-export default function MyCoursesCard({ enrollment, delay = 0 }) {
+export default function MyCoursesCard({ enrollment, userReview = null }) {
   const { course = {}, progressPercentage = 0, completedLessons = 0, totalLessons = 0, lastAccessedAt, status } = enrollment;
   const instructorObj = typeof course.instructor === "object" ? course.instructor : null;
   const instructorName = instructorObj
@@ -18,16 +18,14 @@ export default function MyCoursesCard({ enrollment, delay = 0 }) {
   const levelClasses = LEVEL_COLORS[levelKey] || "text-gray-300 bg-gray-700/30";
   const safeDuration = Number(course.totalDuration || 0);
   const safeRating = Number(course.rating || 0);
-  const safeTotalReviews = Number(course.totalReviews || 0);
+  const rawTotalReviews = Number(course.totalReviews || course.reviews || 0);
+  const safeTotalReviews = Math.max(rawTotalReviews, userReview ? 1 : 0);
   const courseType = String(course.type || "recorded").toLowerCase();
   const isLiveCourse = courseType === "live";
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay }}
-      className="bg-[#111] border border-gray-800 rounded-xl overflow-hidden hover:border-gray-600
+    <div
+      className="relative z-0 bg-[#111] border border-gray-800 rounded-xl overflow-visible hover:border-gray-600 hover:z-30
         transition-colors group flex flex-col"
     >
       {/* Thumbnail */}
@@ -85,6 +83,15 @@ export default function MyCoursesCard({ enrollment, delay = 0 }) {
           <span className="text-gray-600 text-xs">{formatDuration(safeDuration)}</span>
         </div>
 
+        <div className="mb-3">
+          <CourseRatingHover
+            courseId={course._id}
+            rating={safeRating}
+            totalReviews={safeTotalReviews}
+            size="md"
+          />
+        </div>
+
         {/* Progress */}
         <div className="mt-auto">
           <div className="flex justify-between text-xs text-gray-500 mb-1.5">
@@ -106,7 +113,7 @@ export default function MyCoursesCard({ enrollment, delay = 0 }) {
                 font-semibold text-sm rounded-xl hover:bg-yellow-300 transition-colors active:scale-95"
             >
               <Play className="w-3 h-3 fill-black" />
-              {status === "completed" ? "Review" : "Continue"}
+              Continue
             </Link>
             <Link
               to={`/dashboard/doubt-tickets?courseId=${course._id}&title=${encodeURIComponent(isLiveCourse ? "Live batch doubt" : "Recorded lesson doubt")}`}
@@ -117,6 +124,6 @@ export default function MyCoursesCard({ enrollment, delay = 0 }) {
           </div>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

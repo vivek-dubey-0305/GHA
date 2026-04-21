@@ -15,6 +15,8 @@ const STATUS_STYLES = {
 export default function LiveClassCard({ liveClass, delay = 0, onJoin, onWatch, onSetReminder }) {
   const { title, instructor, course, sessionType, scheduledAt, duration, status,
           actualParticipants, maxParticipants, recordingAvailable } = liveClass;
+  const instructorName = [instructor?.firstName, instructor?.lastName].filter(Boolean).join(" ").trim() || "Instructor";
+  const instructorAvatar = instructor?.profilePicture?.secure_url || instructor?.avatar?.secure_url || "";
 
   return (
     <motion.div
@@ -35,12 +37,12 @@ export default function LiveClassCard({ liveClass, delay = 0, onJoin, onWatch, o
       {/* Instructor */}
       <div className="flex items-center gap-2 mb-4">
         <Avatar
-          src={instructor?.profilePicture?.secure_url}
-          name={`${instructor?.firstName} ${instructor?.lastName}`}
+          src={instructorAvatar}
+          name={instructorName}
           size="sm"
         />
         <span className="text-gray-400 text-xs">
-          {instructor?.firstName} {instructor?.lastName}
+          {instructorName}
         </span>
       </div>
 
