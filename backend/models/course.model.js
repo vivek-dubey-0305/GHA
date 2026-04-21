@@ -398,20 +398,29 @@ courseSchema.statics.findByCategory = function(category) {
 // Instance method to calculate average rating
 courseSchema.methods.updateRating = async function() {
     const Review = mongoose.model("Review");
+    const courseId = this._id;
     const result = await Review.aggregate([
-        { $match: { course: this._id } },
+        { $match: { course: courseId } },
         { $group: { _id: null, avgRating: { $avg: "$rating" }, count: { $sum: 1 } } }
     ]);
 
+    let rating = 0;
+    let totalReviews = 0;
+
     if (result.length > 0) {
-        this.rating = Math.round(result[0].avgRating * 10) / 10;
-        this.totalReviews = result[0].count;
-    } else {
-        this.rating = 0;
-        this.totalReviews = 0;
+        rating = Math.round(result[0].avgRating * 10) / 10;
+        totalReviews = result[0].count;
     }
 
-    return this.save();
+    // Atomic update avoids VersionError caused by saving a stale full Course document.
+    await this.constructor.updateOne(
+        { _id: courseId },
+        { $set: { rating, totalReviews } }
+    );
+
+    this.rating = rating;
+    this.totalReviews = totalReviews;
+    return this;
 };
 
 // Transform output to include virtuals

@@ -74,6 +74,34 @@ export const getUnreadCount = asyncHandler(async (req, res) => {
     successResponse(res, 200, "Unread count retrieved", { count });
 });
 
+// @route   GET /api/v1/notifications/unread-summary
+// @desc    Get unread summary by communication type
+// @access  Private
+export const getUnreadSummary = asyncHandler(async (req, res) => {
+    const recipientId = req.instructor?.id || req.user?.id;
+    const recipientRole = req.instructor ? "Instructor" : "User";
+
+    const [announcementsUnread, notificationsUnread] = await Promise.all([
+        Notification.countDocuments({
+            recipient: recipientId,
+            recipientRole,
+            type: "announcement",
+            isRead: false,
+        }),
+        Notification.countDocuments({
+            recipient: recipientId,
+            recipientRole,
+            type: { $ne: "announcement" },
+            isRead: false,
+        }),
+    ]);
+
+    successResponse(res, 200, "Unread summary retrieved", {
+        announcementsUnread,
+        notificationsUnread,
+    });
+});
+
 // @route   DELETE /api/v1/notifications/:id
 // @desc    Delete a notification
 // @access  Private

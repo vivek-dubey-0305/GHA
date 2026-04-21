@@ -7,6 +7,7 @@ import { TrendingUp, Clock, BookOpen, CheckCircle } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { UserLayout } from "../../components/layout/UserLayout";
 import { PageShell, SectionTitle, Card, ProgressBar, StatCard, fadeUp } from "../../components/DashboardPages/DashboardUI";
+import SearchPulseLoader from "../../components/common/SearchPulseLoader";
 import { formatDuration } from "../../utils/format.utils";
 import { getMyEnrollments } from "../../redux/slices/enrollment.slice";
 
@@ -74,7 +75,13 @@ export default function CourseProgress() {
   return (
     <UserLayout>
       <PageShell title="Course Progress" subtitle="Detailed breakdown of your learning analytics.">
-        {loading && <p className="text-gray-500 text-sm py-2">Loading progress...</p>}
+        {loading && (
+          <SearchPulseLoader
+            label="Calculating progress"
+            sublabel="Crunching your course analytics"
+            compact
+          />
+        )}
         {error && <p className="text-red-400 text-sm py-2">{error}</p>}
 
         {/* Overview stats */}

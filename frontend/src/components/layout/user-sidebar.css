@@ -1,0 +1,211 @@
+.gha-user-sidebar {
+  background:
+    radial-gradient(120% 80% at 0% 0%, rgba(250, 204, 21, 0.08) 0%, rgba(250, 204, 21, 0) 40%),
+    linear-gradient(180deg, #090909 0%, #060606 100%);
+  box-shadow: 10px 0 30px rgba(0, 0, 0, 0.35);
+}
+
+.gha-user-sidebar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(140deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0));
+}
+
+.gha-user-sidebar__overlay {
+  backdrop-filter: blur(2px);
+  animation: gha-sidebar-fade-in 220ms ease-out;
+}
+
+.gha-user-sidebar__toggle {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.gha-user-sidebar__toggle::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 0.5rem;
+  transform: translateY(110%);
+  background: linear-gradient(180deg, rgba(250, 204, 21, 0.3), rgba(250, 204, 21, 0.06));
+  transition: transform 220ms ease;
+}
+
+.gha-user-sidebar__toggle:hover::after {
+  transform: translateY(0);
+}
+
+.gha-user-sidebar__profile {
+  position: relative;
+}
+
+.gha-user-sidebar__profile::after {
+  content: "";
+  position: absolute;
+  left: 1rem;
+  right: 1rem;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(250, 204, 21, 0), rgba(250, 204, 21, 0.35), rgba(250, 204, 21, 0));
+}
+
+.gha-user-sidebar__nav {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(250, 204, 21, 0.45) rgba(255, 255, 255, 0.05);
+}
+
+.gha-user-sidebar__nav::-webkit-scrollbar {
+  width: 10px;
+}
+
+.gha-user-sidebar__nav::-webkit-scrollbar-track {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.06));
+  border-radius: 999px;
+  margin: 8px 0;
+}
+
+.gha-user-sidebar__nav::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  border: 2px solid rgba(8, 8, 8, 0.85);
+  background: linear-gradient(180deg, rgba(250, 204, 21, 0.95), rgba(250, 204, 21, 0.55));
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.25);
+}
+
+.gha-user-sidebar__nav::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(252, 211, 77, 1), rgba(250, 204, 21, 0.78));
+}
+
+.gha-user-sidebar__group-toggle {
+  letter-spacing: 0.15em;
+  transition: color 180ms ease, transform 180ms ease;
+}
+
+.gha-user-sidebar__group-toggle:hover {
+  transform: translateX(2px);
+}
+
+.gha-user-sidebar__item {
+  position: relative;
+  overflow: hidden;
+  transform-origin: left center;
+}
+
+.gha-user-sidebar__item::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.gha-user-sidebar__item--idle:hover {
+  transform: translateX(2px);
+}
+
+.gha-user-sidebar__item--idle:hover::after {
+  opacity: 1;
+  background: linear-gradient(90deg, rgba(250, 204, 21, 0.16), rgba(250, 204, 21, 0));
+}
+
+.gha-user-sidebar__item--home.gha-user-sidebar__item--idle:hover {
+  color: #9befff;
+  background: rgba(34, 211, 238, 0.12) !important;
+}
+
+.gha-user-sidebar__item--home.gha-user-sidebar__item--idle:hover::after {
+  opacity: 1;
+  background: linear-gradient(90deg, rgba(34, 211, 238, 0.2), rgba(34, 211, 238, 0));
+}
+
+.gha-user-sidebar__item--active {
+  box-shadow: 0 8px 18px rgba(250, 204, 21, 0.24);
+  animation: gha-sidebar-active-pop 280ms ease-out;
+}
+
+.gha-user-sidebar__item--home-active {
+  box-shadow: 0 8px 18px rgba(34, 211, 238, 0.26);
+}
+
+.gha-user-sidebar__item--active::before {
+  content: "";
+  position: absolute;
+  left: -3px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 999px;
+  background: #000;
+  opacity: 0.65;
+}
+
+.gha-user-sidebar__badge {
+  transition: transform 160ms ease;
+}
+
+.gha-user-sidebar__item:hover .gha-user-sidebar__badge {
+  transform: scale(1.04);
+}
+
+.gha-user-sidebar__logout {
+  position: relative;
+  overflow: hidden;
+}
+
+.gha-user-sidebar__logout::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.18), rgba(239, 68, 68, 0));
+  transition: opacity 180ms ease;
+}
+
+.gha-user-sidebar__logout:hover::after {
+  opacity: 1;
+}
+
+.gha-user-sidebar__item:focus-visible,
+.gha-user-sidebar__toggle:focus-visible,
+.gha-user-sidebar__logout:focus-visible,
+.gha-user-sidebar__group-toggle:focus-visible {
+  outline: 2px solid rgba(250, 204, 21, 0.9);
+  outline-offset: 2px;
+}
+
+@keyframes gha-sidebar-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes gha-sidebar-active-pop {
+  0% {
+    transform: scale(0.98);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gha-user-sidebar__toggle::after,
+  .gha-user-sidebar__item,
+  .gha-user-sidebar__item::after,
+  .gha-user-sidebar__badge,
+  .gha-user-sidebar__logout::after,
+  .gha-user-sidebar__group-toggle {
+    transition: none !important;
+    animation: none !important;
+  }
+}

@@ -796,6 +796,32 @@
 .cd-review-stars { color: #f5c518; font-size: 0.75rem; }
 .cd-review-date { font-size: 0.72rem; color: #888; margin-top: 2px; }
 .cd-review-text { font-size: 0.88rem; color: #888; line-height: 1.7; }
+.cd-review-actions {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cd-helpful-btn {
+  border: 1px solid rgba(245, 197, 24, 0.3);
+  background: rgba(245, 197, 24, 0.08);
+  color: #f5c518;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.65rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: opacity 0.2s, background 0.2s;
+}
+.cd-helpful-btn:hover { background: rgba(245, 197, 24, 0.16); }
+.cd-helpful-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.cd-helpful-btn.marked {
+  border-color: rgba(99, 255, 157, 0.4);
+  color: #63ff9d;
+  background: rgba(99, 255, 157, 0.12);
+}
+.cd-helpful-count { color: #868686; font-size: 0.72rem; }
 .cd-first-review-btn {
   background: #f5c518;
   color: #0a0a0a;

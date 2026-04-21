@@ -45,6 +45,10 @@ const reviewSchema = new mongoose.Schema({
         default: 0,
         min: 0
     },
+    helpfulBy: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User"
+    }],
     reported: {
         type: Boolean,
         default: false
@@ -75,6 +79,7 @@ reviewSchema.index({ course: 1, rating: -1 });
 reviewSchema.index({ course: 1, createdAt: -1 });
 reviewSchema.index({ isApproved: 1, reported: 1 });
 reviewSchema.index({ user: 1 });
+reviewSchema.index({ helpfulBy: 1 });
 
 // Compound indexes
 reviewSchema.index({ course: 1, isApproved: 1, rating: -1 });
@@ -82,6 +87,13 @@ reviewSchema.index({ course: 1, isVerified: 1, createdAt: -1 });
 
 // Pre-save middleware to validate review eligibility
 reviewSchema.pre("save", async function() {
+    this.$locals = this.$locals || {};
+    this.$locals.shouldSyncCourseRating =
+        this.isNew ||
+        this.isModified("rating") ||
+        this.isModified("isApproved") ||
+        this.isModified("course");
+
     if (this.isNew) {
         // Check if user is enrolled and has made progress
         const Enrollment = mongoose.model("Enrollment");
@@ -109,6 +121,8 @@ reviewSchema.pre("save", async function() {
 
 // Post-save middleware to update course rating
 reviewSchema.post("save", async function() {
+    if (!this.$locals?.shouldSyncCourseRating) return;
+
     const Course = mongoose.model("Course");
     await Course.findById(this.course).then(course => {
         if (course) course.updateRating();
@@ -171,9 +185,23 @@ reviewSchema.statics.getCourseRating = function(courseId) {
 };
 
 // Instance method to mark as helpful
-reviewSchema.methods.markHelpful = function() {
-    this.helpful += 1;
-    return this.save();
+reviewSchema.methods.markHelpful = async function(userId) {
+    if (!userId) {
+        return { review: this, alreadyMarked: false };
+    }
+
+    const normalizedUserId = String(userId);
+    const alreadyMarked = (this.helpfulBy || []).some((id) => String(id) === normalizedUserId);
+
+    if (alreadyMarked) {
+        return { review: this, alreadyMarked: true };
+    }
+
+    this.helpfulBy = [...(this.helpfulBy || []), userId];
+    this.helpful = this.helpfulBy.length;
+    await this.save();
+
+    return { review: this, alreadyMarked: false };
 };
 
 // Instance method to report review

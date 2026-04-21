@@ -15,6 +15,7 @@ import CLSidebar from "../../components/CoursePages/CourseListing/CLSidebar";
 import CLToolbar from "../../components/CoursePages/CourseListing/CLToolbar";
 import CLCourseGrid from "../../components/CoursePages/CourseListing/CLCourseGrid";
 import CLPagination from "../../components/CoursePages/CourseListing/CLPagination";
+import SearchPulseLoader from "../../components/common/SearchPulseLoader";
 
 import {
   getAllCourses,
@@ -236,10 +237,11 @@ export default function Course() {
           />
 
           {loadingCourses ? (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.8rem", padding: "2rem", color: "#f4f3ee" }}>
-              <div style={{ width: "18px", height: "18px", border: "2px solid rgba(245,197,24,0.25)", borderTopColor: "#f5c518", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-              <span>Searching courses...</span>
-            </div>
+            <SearchPulseLoader
+              label="Searching courses"
+              sublabel="Curating the best course matches"
+              className="my-4"
+            />
           ) : error ? (
             <div style={{ textAlign: "center", padding: "2rem", color: "#ff6b6b" }}>
               Error: {error}
@@ -281,8 +283,6 @@ export default function Course() {
       <button className="cl-mob-filter-btn" onClick={() => document.getElementById("cl-sidebar")?.classList.toggle("open")}>
         ⚙
       </button>
-
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

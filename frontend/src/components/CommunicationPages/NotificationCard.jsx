@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { timeAgo } from "../../utils/format.utils";
 import { NOTIFICATION_TYPES } from "../../constants/dashboard.constants";
 
-export default function NotificationCard({ notification, delay = 0, onMarkRead }) {
+export default function NotificationCard({ notification, delay = 0, onOpen }) {
   const { title, message, type, isRead, createdAt } = notification;
   const cfg = NOTIFICATION_TYPES[type] ?? NOTIFICATION_TYPES.general;
 
@@ -14,7 +14,7 @@ export default function NotificationCard({ notification, delay = 0, onMarkRead }
       initial={{ opacity: 0, x: -12 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.3, delay }}
-      onClick={() => !isRead && onMarkRead?.(notification._id)}
+      onClick={() => onOpen?.(notification)}
       className={`flex items-start gap-4 p-4 rounded-xl border transition-colors cursor-pointer
         ${!isRead
           ? "bg-yellow-400/3 border-yellow-400/10 hover:border-yellow-400/20"

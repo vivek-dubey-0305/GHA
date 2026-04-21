@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import CourseRatingHover from "../../common/CourseRatingHover.jsx";
 
 const BADGE_MAP = {
   best: { cls: "badge-best", label: "Bestseller" },
@@ -8,19 +9,6 @@ const BADGE_MAP = {
   intern: { cls: "badge-intern", label: "Internship" },
   free: { cls: "badge-free", label: "Free" },
 };
-
-function Stars({ rating }) {
-  const full = Math.floor(rating);
-  const half = rating % 1 >= 0.5;
-  const empty = 5 - Math.ceil(rating);
-  return (
-    <span className="cl-stars">
-      {"★".repeat(full)}
-      {half ? "½" : ""}
-      {"☆".repeat(empty)}
-    </span>
-  );
-}
 
 export default function CLCourseCard({ course, viewMode, index }) {
   const [wished, setWished] = useState(false);
@@ -53,6 +41,7 @@ export default function CLCourseCard({ course, viewMode, index }) {
       ? course.projects
       : 0;
   const ratingValue = Number(course.rating) || 0;
+  const totalReviews = Number(course.reviews || course.totalReviews || 0);
 
   const priceSection =
     course.price === 0 ? (
@@ -152,13 +141,13 @@ export default function CLCourseCard({ course, viewMode, index }) {
         </div>
 
         {/* Stars */}
-        <div className="cl-stars-row">
-          <Stars rating={ratingValue} />
-          <span className="cl-rating-num">{ratingValue}</span>
-          <span className="cl-review-ct">
-            ({(course.reviews || course.totalReviews || 0).toLocaleString()} reviews)
-          </span>
-        </div>
+        <CourseRatingHover
+          courseId={course._id}
+          rating={ratingValue}
+          totalReviews={totalReviews}
+          size="sm"
+          className="cl-stars-row"
+        />
 
         {/* Footer */}
         <div className="cl-card-footer">

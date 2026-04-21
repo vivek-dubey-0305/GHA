@@ -129,10 +129,24 @@ export const getCourseReviews = asyncHandler(async (req, res) => {
         .skip(skip)
         .limit(limit);
 
+    const viewerId = req.user?.id ? String(req.user.id) : null;
+    const normalizedReviews = reviews.map((reviewDoc) => {
+        const review = reviewDoc.toObject();
+        const helpfulBy = Array.isArray(review.helpfulBy) ? review.helpfulBy : [];
+
+        return {
+            ...review,
+            isMarkedHelpfulByMe: viewerId
+                ? helpfulBy.some((userId) => String(userId) === viewerId)
+                : false,
+            helpfulBy: undefined,
+        };
+    });
+
     const ratingStats = await Review.getCourseRating(req.params.id);
 
     successResponse(res, 200, "Reviews retrieved successfully", {
-        reviews,
+        reviews: normalizedReviews,
         ratingStats: ratingStats[0] || null,
         pagination: createPaginationResponse(total, page, limit)
     });

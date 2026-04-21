@@ -81,6 +81,29 @@ export const verifyUserActive = async (req, res, next) => {
     }
 };
 
+// Optional auth: attaches req.user if token is valid, but never blocks public routes.
+export const attachUserIfPresent = async (req, res, next) => {
+    try {
+        const token = req.cookies?.accessToken || req.headers.authorization?.split(" ")[1];
+        if (!token) return next();
+
+        const decoded = jwt.verify(
+            token,
+            process.env.JWT_ACCESS_TOKEN_SECRET || "your_jwt_secret"
+        );
+
+        const user = await User.findById(decoded.id);
+        if (user && user.isActive) {
+            req.user = decoded;
+            req.userData = user;
+        }
+    } catch (error) {
+        // Intentionally ignore token errors for optional-auth flow.
+    }
+
+    next();
+};
+
 /**
  * Combined middleware for full user authentication and verification
  * Checks: Token validity, user existence, active status, email verification
@@ -95,5 +118,6 @@ export default {
     verifyUserToken,
     verifyUserEmailVerified,
     verifyUserActive,
+    attachUserIfPresent,
     authenticateUser
 };

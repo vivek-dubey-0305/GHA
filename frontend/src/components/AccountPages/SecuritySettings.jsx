@@ -1,17 +1,22 @@
 /**
  * components/AccountPages/SecuritySettings.jsx
  */
-import { useState } from "react";
-import { motion } from "framer-motion";
-import { Lock, Shield, Smartphone, Monitor, AlertTriangle, Eye, EyeOff, CheckCircle } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Lock, Shield, Smartphone, Monitor, AlertTriangle, Eye, EyeOff, Loader2 } from "lucide-react";
+import { useDispatch, useSelector } from "react-redux";
+import { ErrorToast, SuccessToast } from "../ui";
 import { YellowButton } from "../DashboardPages/DashboardUI";
 import { formatDateTime } from "../../utils/format.utils";
-
-const MOCK_SESSIONS = [
-  { id: "s1", device: "Chrome · Windows 11",     ip: "103.21.xx.xx", lastActive: new Date(Date.now() - 3600000).toISOString(),  current: true  },
-  { id: "s2", device: "Safari · iPhone 15",       ip: "49.36.xx.xx",  lastActive: new Date(Date.now() - 86400000).toISOString(), current: false },
-  { id: "s3", device: "Firefox · Ubuntu 22.04",   ip: "203.xx.xx.xx", lastActive: new Date(Date.now() - 172800000).toISOString(),current: false },
-];
+import {
+  clearSecurityStatus,
+  fetchUserSessions,
+  revokeAllOtherSessions,
+  revokeUserSession,
+  selectSecurityState,
+  submitChangePassword,
+} from "../../redux/slices/security.slice";
+import { manualLogout } from "../../redux/slices/auth.slice";
+import { validatePasswordPayload } from "../../utils/accountValidation.utils";
 
 function PasswordField({ label, value, onChange, placeholder }) {
   const [show, setShow] = useState(false);
@@ -39,29 +44,76 @@ function PasswordField({ label, value, onChange, placeholder }) {
   );
 }
 
-export default function SecuritySettings({ user }) {
-  const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
-  const [pwSaved, setPwSaved] = useState(false);
-  const [pwError, setPwError] = useState("");
-  const [twoFA, setTwoFA] = useState(false);
-  const [sessions, setSessions] = useState(MOCK_SESSIONS);
+export default function SecuritySettings() {
+  const dispatch = useDispatch();
+  const {
+    sessions,
+    sessionsLoading,
+    revokeSessionLoading,
+    revokeAllLoading,
+    changePasswordLoading,
+  } = useSelector(selectSecurityState);
 
-  const handleChangePassword = () => {
-    if (!pwForm.current) return setPwError("Enter your current password.");
-    if (pwForm.next.length < 8) return setPwError("New password must be at least 8 characters.");
-    if (pwForm.next !== pwForm.confirm) return setPwError("Passwords do not match.");
+  const [pwForm, setPwForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [pwError, setPwError] = useState("");
+  const [toast, setToast] = useState({ type: "", message: "", visible: false });
+
+  useEffect(() => {
+    dispatch(fetchUserSessions());
+    return () => {
+      dispatch(clearSecurityStatus());
+    };
+  }, [dispatch]);
+
+  const sessionsWithCurrent = useMemo(() => {
+    if (!sessions?.length) return [];
+    const sorted = [...sessions].sort((a, b) => new Date(b.lastActive).getTime() - new Date(a.lastActive).getTime());
+    return sorted.map((session, index) => ({ ...session, current: index === 0 }));
+  }, [sessions]);
+
+  const handleChangePassword = async () => {
+    const validationError = validatePasswordPayload(pwForm);
+    if (validationError) {
+      setPwError(validationError);
+      return;
+    }
+
     setPwError("");
-    setPwSaved(true);
-    setPwForm({ current: "", next: "", confirm: "" });
-    setTimeout(() => setPwSaved(false), 3000);
+    const result = await dispatch(submitChangePassword(pwForm));
+    if (submitChangePassword.fulfilled.match(result)) {
+      dispatch(manualLogout());
+      window.location.href = "/login";
+      return;
+    }
+
+    setToast({ type: "error", message: result.payload || "Failed to change password.", visible: true });
   };
 
-  const revokeSession = (id) => {
-    setSessions((prev) => prev.filter((s) => s.id !== id));
+  const handleRevokeSession = async (sessionId) => {
+    const result = await dispatch(revokeUserSession(sessionId));
+    if (revokeUserSession.fulfilled.match(result)) {
+      setToast({ type: "success", message: "Session revoked successfully.", visible: true });
+      dispatch(fetchUserSessions());
+      return;
+    }
+
+    setToast({ type: "error", message: result.payload || "Failed to revoke session.", visible: true });
+  };
+
+  const handleLogoutAllOthers = async () => {
+    const result = await dispatch(revokeAllOtherSessions());
+    if (revokeAllOtherSessions.fulfilled.match(result)) {
+      setToast({ type: "success", message: "All other sessions logged out.", visible: true });
+      dispatch(fetchUserSessions());
+      return;
+    }
+
+    setToast({ type: "error", message: result.payload || "Failed to logout other sessions.", visible: true });
   };
 
   return (
-    <div className="space-y-10 max-w-2xl">
+    <>
+      <div className="space-y-10 max-w-2xl">
 
       {/* Change Password */}
       <div>
@@ -71,20 +123,20 @@ export default function SecuritySettings({ user }) {
         <div className="space-y-4">
           <PasswordField
             label="Current Password"
-            value={pwForm.current}
-            onChange={(e) => setPwForm((f) => ({ ...f, current: e.target.value }))}
+            value={pwForm.currentPassword}
+            onChange={(e) => setPwForm((f) => ({ ...f, currentPassword: e.target.value }))}
             placeholder="Your current password"
           />
           <PasswordField
             label="New Password"
-            value={pwForm.next}
-            onChange={(e) => setPwForm((f) => ({ ...f, next: e.target.value }))}
+            value={pwForm.newPassword}
+            onChange={(e) => setPwForm((f) => ({ ...f, newPassword: e.target.value }))}
             placeholder="At least 8 characters"
           />
           <PasswordField
             label="Confirm New Password"
-            value={pwForm.confirm}
-            onChange={(e) => setPwForm((f) => ({ ...f, confirm: e.target.value }))}
+            value={pwForm.confirmPassword}
+            onChange={(e) => setPwForm((f) => ({ ...f, confirmPassword: e.target.value }))}
             placeholder="Re-enter new password"
           />
 
@@ -96,18 +148,10 @@ export default function SecuritySettings({ user }) {
           )}
 
           <div className="flex items-center gap-4">
-            <YellowButton onClick={handleChangePassword} className="flex items-center gap-2">
-              <Lock className="w-4 h-4" /> Update Password
+            <YellowButton onClick={handleChangePassword} disabled={changePasswordLoading} className="flex items-center gap-2">
+              {changePasswordLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />} Update Password
             </YellowButton>
-            {pwSaved && (
-              <motion.span
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex items-center gap-1.5 text-green-400 text-sm"
-              >
-                <CheckCircle className="w-4 h-4" /> Updated!
-              </motion.span>
-            )}
+            <span className="text-xs text-gray-600">After password update, you will be asked to login again.</span>
           </div>
         </div>
       </div>
@@ -121,17 +165,12 @@ export default function SecuritySettings({ user }) {
           <div>
             <p className="text-white text-sm font-medium">Authenticator App (TOTP)</p>
             <p className="text-gray-500 text-xs mt-0.5">
-              {twoFA ? "2FA is active. Your account is more secure." : "Add an extra layer of protection to your account."}
+              This feature is not available yet for user accounts.
             </p>
           </div>
-          <button
-            onClick={() => setTwoFA((v) => !v)}
-            className={`relative w-12 h-6 rounded-full transition-colors ${twoFA ? "bg-yellow-400" : "bg-gray-700"}`}
-          >
-            <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform
-              ${twoFA ? "translate-x-6" : "translate-x-0.5"}`}
-            />
-          </button>
+          <span className="text-[11px] px-2 py-1 rounded-full border border-yellow-400/30 bg-yellow-400/10 text-yellow-400">
+            Coming Soon
+          </span>
         </div>
       </div>
 
@@ -140,8 +179,30 @@ export default function SecuritySettings({ user }) {
         <h3 className="text-white font-semibold text-sm flex items-center gap-2 mb-4 pb-3 border-b border-gray-800">
           <Monitor className="w-4 h-4 text-yellow-400" /> Active Sessions
         </h3>
+        <div className="flex justify-end mb-2">
+          <button
+            type="button"
+            onClick={handleLogoutAllOthers}
+            disabled={revokeAllLoading || sessionsWithCurrent.length <= 1}
+            className="text-xs text-red-400 hover:text-red-300 border border-red-400/20 hover:bg-red-400/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {revokeAllLoading ? "Logging out..." : "Logout All Other Sessions"}
+          </button>
+        </div>
         <div className="space-y-2">
-          {sessions.map((session) => (
+          {sessionsLoading && (
+            <div className="p-4 border border-gray-800 rounded-xl bg-[#0a0a0a] text-sm text-gray-500 flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" /> Loading sessions...
+            </div>
+          )}
+
+          {!sessionsLoading && sessionsWithCurrent.length === 0 && (
+            <div className="p-4 border border-gray-800 rounded-xl bg-[#0a0a0a] text-sm text-gray-500">
+              No active sessions found.
+            </div>
+          )}
+
+          {sessionsWithCurrent.map((session) => (
             <div
               key={session.id}
               className={`flex items-center justify-between p-4 rounded-xl border
@@ -167,11 +228,12 @@ export default function SecuritySettings({ user }) {
               </div>
               {!session.current && (
                 <button
-                  onClick={() => revokeSession(session.id)}
+                  onClick={() => handleRevokeSession(session.id)}
+                  disabled={revokeSessionLoading}
                   className="text-xs text-red-400 hover:text-red-300 border border-red-400/20 hover:bg-red-400/10
-                    px-3 py-1.5 rounded-lg transition-colors"
+                    px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Revoke
+                  {revokeSessionLoading ? "Revoking..." : "Revoke"}
                 </button>
               )}
             </div>
@@ -179,6 +241,20 @@ export default function SecuritySettings({ user }) {
         </div>
       </div>
 
-    </div>
+      </div>
+
+      <SuccessToast
+        isVisible={toast.visible && toast.type === "success"}
+        onDismiss={() => setToast({ type: "", message: "", visible: false })}
+        title="Success"
+        message={toast.message}
+      />
+      <ErrorToast
+        isVisible={toast.visible && toast.type === "error"}
+        onDismiss={() => setToast({ type: "", message: "", visible: false })}
+        title="Error"
+        message={toast.message}
+      />
+    </>
   );
 }

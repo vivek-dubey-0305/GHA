@@ -370,6 +370,8 @@ async function notifyLiveStart(req, liveClass) {
         sessionType: liveClass.sessionType,
         hostName,
         status: "live",
+        joinUrl: `/dashboard/live-classes?joinLiveClassId=${liveClass._id}`,
+        actionUrl: `/dashboard/live-classes?joinLiveClassId=${liveClass._id}`,
     };
 
     // ── Broadcast to the live room (anyone already in it) ──
@@ -381,8 +383,10 @@ async function notifyLiveStart(req, liveClass) {
 
         // For doubt sessions with specific invited students, only notify them
         const enrollments = liveClass.invitedStudents?.length
-            ? await Enrollment.find({ course: courseId, user: { $in: liveClass.invitedStudents }, status: { $in: ["active", "completed"] } }).select("user").lean()
-            : await Enrollment.find({ course: courseId, status: { $in: ["active", "completed"] } }).select("user").lean();
+            ? await Enrollment.find({ course: courseId, type: "live", user: { $in: liveClass.invitedStudents }, status: { $in: ["active", "completed"] } }).select("user").lean()
+            : await Enrollment.find({ course: courseId, type: "live", status: { $in: ["active", "completed"] } }).select("user").lean();
+
+        logger.info(`[live-start-notify] liveClass=${liveClass._id} course=${courseId} sessionType=${liveClass.sessionType} recipients=${enrollments.length} invitedOnly=${Boolean(liveClass.invitedStudents?.length)}`);
 
         const notifs = enrollments.map(e => ({
             recipient: e.user,
@@ -491,6 +495,7 @@ export const getMyLiveClassesForUser = asyncHandler(async (req, res) => {
 
     const enrollments = await Enrollment.find({
         user: req.user.id,
+        type: "live",
         status: { $in: ["active", "completed"] },
     }).select("course");
 
@@ -509,18 +514,26 @@ export const getMyLiveClassesForUser = asyncHandler(async (req, res) => {
 
     const classes = await LiveClass.find(filter)
         .populate("instructor", "firstName lastName profilePicture")
-        .populate("course", "title thumbnail")
+        .populate("course", "title thumbnail type")
         .populate("lesson", "title type")
         .sort({ scheduledAt: 1 })
         .lean();
 
+    logger.info(`[live-user-list] user=${req.user.id} status=${status || "all"} liveEnrollments=${enrolledCourseIds.length} fetched=${classes.length}`);
+
     const visibleClasses = classes.filter((liveClass) => {
+        if (liveClass?.sessionType === "doubt" && liveClass?.course && liveClass?.course?.type !== "live") {
+            return false;
+        }
+
         const courseId = String(liveClass?.course?._id || liveClass?.course || "");
         const isEnrolledCourse = enrolledCourseIds.some((id) => String(id) === courseId);
         const invitedAccess = isUserInvitedToDoubtSession(liveClass, req.user.id);
 
         return (isEnrolledCourse || invitedAccess) && invitedAccess;
     });
+
+    logger.info(`[live-user-list] user=${req.user.id} visible=${visibleClasses.length} page=${page} limit=${limit}`);
 
     const total = visibleClasses.length;
     const paged = visibleClasses.slice(skip, skip + limit);
@@ -677,6 +690,9 @@ export const createLiveClassByInstructor = asyncHandler(async (req, res) => {
         if (!course || course.instructor.toString() !== req.instructor.id) {
             return errorResponse(res, 403, "You can only create live classes for your own courses");
         }
+        if (sessionType === "doubt" && course.type !== "live") {
+            return errorResponse(res, 400, "Doubt sessions are allowed only for live-batch courses");
+        }
         data.course = data.courseId;
     }
 
@@ -759,6 +775,20 @@ export const createInstantSession = asyncHandler(async (req, res) => {
         return errorResponse(res, 400, "Course is required for doubt-solving sessions");
     }
 
+    let doubtCourse = null;
+    if (sessionType === "doubt") {
+        doubtCourse = await Course.findById(data.courseId).select("instructor type title").lean();
+        if (!doubtCourse) {
+            return errorResponse(res, 404, "Course not found");
+        }
+        if (String(doubtCourse.instructor) !== String(req.instructor.id)) {
+            return errorResponse(res, 403, "You can only create doubt sessions for your own courses");
+        }
+        if (doubtCourse.type !== "live") {
+            return errorResponse(res, 400, "Doubt sessions are allowed only for live-batch courses");
+        }
+    }
+
     // For instructor sessions — validate invited instructors
     if (sessionType === "instructor" && (!data.invitedInstructorIds || !data.invitedInstructorIds.length)) {
         return errorResponse(res, 400, "Select at least one instructor for an instructor call");
@@ -782,7 +812,7 @@ export const createInstantSession = asyncHandler(async (req, res) => {
     // Create as "scheduled" — NOT live. Instructor must connect OBS first.
     const liveClass = await LiveClass.create({
         instructor: req.instructor.id,
-        course: data.courseId || null,
+        course: sessionType === "doubt" ? doubtCourse?._id : (data.courseId || null),
         sessionType,
         title: data.title || (sessionType === "doubt" ? "Doubt Session" : sessionType === "instructor" ? "Instructor Call" : "Instant Session"),
         description: data.description,
@@ -2086,14 +2116,18 @@ export const getEnrolledStudents = asyncHandler(async (req, res) => {
     const { courseId } = req.params;
 
     // Verify instructor owns the course
-    const course = await Course.findById(courseId).select("instructor title").lean();
+    const course = await Course.findById(courseId).select("instructor title type").lean();
     if (!course) return errorResponse(res, 404, "Course not found");
     if (course.instructor.toString() !== req.instructor.id) {
         return errorResponse(res, 403, "You can only view students for your own courses");
     }
+    if (course.type !== "live") {
+        return errorResponse(res, 400, "Doubt session invites are only available for live-batch courses");
+    }
 
     const enrollments = await Enrollment.find({
         course: courseId,
+        type: "live",
         status: { $in: ["active", "completed"] },
     })
         .populate("user", "name firstName lastName email profilePicture")

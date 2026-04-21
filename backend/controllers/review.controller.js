@@ -3,7 +3,6 @@ import { Course } from "../models/course.model.js";
 import { Enrollment } from "../models/enrollment.model.js";
 import { asyncHandler } from "../middlewares/async.middleware.js";
 import { errorResponse, successResponse } from "../utils/response.utils.js";
-import { getPagination, createPaginationResponse } from "../utils/pagination.utils.js";
 import logger from "../configs/logger.config.js";
 
 /**
@@ -11,14 +10,54 @@ import logger from "../configs/logger.config.js";
  * Handles course review CRUD for users
  */
 
+const deriveTitleFromComment = (title, comment) => {
+    const normalizedTitle = typeof title === "string" ? title.trim() : "";
+    if (normalizedTitle.length >= 5) return normalizedTitle;
+
+    const normalizedComment = typeof comment === "string"
+        ? comment.replace(/\s+/g, " ").trim()
+        : "";
+
+    if (!normalizedComment) return "Course Review";
+
+    const derived = normalizedComment.slice(0, 100).trim();
+    if (derived.length >= 5) return derived;
+    return "Course Review";
+};
+
+const parseIntegerRating = (rawRating) => {
+    if (rawRating === undefined || rawRating === null || rawRating === "") return null;
+
+    const parsed = Number(rawRating);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 5) {
+        return null;
+    }
+
+    return parsed;
+};
+
+const syncCourseRating = async (courseId) => {
+    try {
+        const course = await Course.findById(courseId);
+        if (course) await course.updateRating();
+    } catch (error) {
+        logger.warn(`Review saved but rating sync failed for course ${courseId}: ${error.message}`);
+    }
+};
+
 // @route   POST /api/v1/reviews
 // @desc    Create a review for a course
 // @access  Private (User - must be enrolled)
 export const createReview = asyncHandler(async (req, res) => {
     const { courseId, rating, title, comment } = req.body;
 
-    if (!courseId || !rating || !title || !comment) {
-        return errorResponse(res, 400, "courseId, rating, title, and comment are required");
+    if (!courseId || !comment) {
+        return errorResponse(res, 400, "courseId, rating, and comment are required");
+    }
+
+    const parsedRating = parseIntegerRating(rating);
+    if (!parsedRating) {
+        return errorResponse(res, 400, "Rating must be an integer between 1 and 5");
     }
 
     // Verify enrollment
@@ -36,18 +75,34 @@ export const createReview = asyncHandler(async (req, res) => {
     const review = await Review.create({
         user: req.user.id,
         course: courseId,
-        rating,
-        title,
+        rating: parsedRating,
+        title: deriveTitleFromComment(title, comment),
         comment
     });
 
     // Update course rating
-    const course = await Course.findById(courseId);
-    if (course) await course.updateRating();
+    await syncCourseRating(courseId);
 
-    logger.info(`User ${req.user.id} reviewed course ${courseId} with rating ${rating}`);
+    logger.info(`User ${req.user.id} reviewed course ${courseId} with rating ${parsedRating}`);
 
     successResponse(res, 201, "Review created successfully", review);
+});
+
+// @route   GET /api/v1/reviews/me?courseId=<courseId>
+// @desc    Get current user's review for a specific course
+// @access  Private (User)
+export const getMyReviewForCourse = asyncHandler(async (req, res) => {
+    const { courseId } = req.query;
+    if (!courseId) {
+        return errorResponse(res, 400, "courseId is required");
+    }
+
+    const review = await Review.findOne({
+        user: req.user.id,
+        course: courseId,
+    }).populate("course", "title thumbnail rating totalReviews");
+
+    successResponse(res, 200, "My review fetched successfully", { review: review || null });
 });
 
 // @route   PUT /api/v1/reviews/:id
@@ -62,15 +117,34 @@ export const updateReview = asyncHandler(async (req, res) => {
     }
 
     const { rating, title, comment } = req.body;
-    if (rating) review.rating = rating;
-    if (title) review.title = title;
-    if (comment) review.comment = comment;
+
+    if (rating !== undefined) {
+        const parsedRating = parseIntegerRating(rating);
+        if (!parsedRating) {
+            return errorResponse(res, 400, "Rating must be an integer between 1 and 5");
+        }
+
+        if (parsedRating < review.rating) {
+            return errorResponse(res, 400, "You can only keep or increase your rating");
+        }
+
+        review.rating = parsedRating;
+    }
+
+    if (title !== undefined) {
+        review.title = deriveTitleFromComment(title, comment ?? review.comment);
+    }
+
+    if (comment !== undefined) review.comment = comment;
+
+    if (comment !== undefined && title === undefined) {
+        review.title = deriveTitleFromComment(review.title, comment);
+    }
 
     await review.save();
 
     // Update course rating
-    const course = await Course.findById(review.course);
-    if (course) await course.updateRating();
+    await syncCourseRating(review.course);
 
     successResponse(res, 200, "Review updated successfully", review);
 });
@@ -90,8 +164,7 @@ export const deleteReview = asyncHandler(async (req, res) => {
     await Review.findByIdAndDelete(req.params.id);
 
     // Update course rating
-    const course = await Course.findById(courseId);
-    if (course) await course.updateRating();
+    await syncCourseRating(courseId);
 
     successResponse(res, 200, "Review deleted successfully");
 });
@@ -103,9 +176,13 @@ export const markHelpful = asyncHandler(async (req, res) => {
     const review = await Review.findById(req.params.id);
     if (!review) return errorResponse(res, 404, "Review not found");
 
-    await review.markHelpful();
+    const { review: updatedReview, alreadyMarked } = await review.markHelpful(req.user.id);
 
-    successResponse(res, 200, "Review marked as helpful", { helpful: review.helpful });
+    successResponse(res, 200, alreadyMarked ? "Review already marked as helpful" : "Review marked as helpful", {
+        helpful: Number(updatedReview.helpful || 0),
+        alreadyMarked,
+        isMarkedHelpfulByMe: true,
+    });
 });
 
 // @route   POST /api/v1/reviews/:id/report

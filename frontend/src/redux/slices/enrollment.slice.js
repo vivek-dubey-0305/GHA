@@ -56,12 +56,13 @@ export const requestEnrollmentRefund = createAsyncThunk(
 
 export const getMyEnrollments = createAsyncThunk(
   'enrollment/getMyEnrollments',
-  async ({ page = 1, limit = 100, status } = {}, { rejectWithValue }) => {
+  async ({ page = 1, limit = 100, status, search } = {}, { rejectWithValue }) => {
     try {
       const params = new URLSearchParams();
       params.append('page', page);
       params.append('limit', limit);
       if (status) params.append('status', status);
+      if (search && String(search).trim()) params.append('search', String(search).trim());
 
       const response = await apiClient.get(`/user/enrollments?${params.toString()}`);
       return response.data;

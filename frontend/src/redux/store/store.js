@@ -6,6 +6,10 @@ import courseReducer from '../slices/course.slice.js';
 import instructorReducer from '../slices/instructor.slice.js';
 import paymentReducer from '../slices/payment.slice.js';
 import enrollmentReducer from '../slices/enrollment.slice.js';
+import profileReducer from '../slices/profile.slice.js';
+import securityReducer from '../slices/security.slice.js';
+import discussionReducer from '../slices/discussion.slice.js';
+import communicationReducer from '../slices/communication.slice.js';
 
 export const store = configureStore({
   reducer: {
@@ -16,6 +20,10 @@ export const store = configureStore({
     instructor: instructorReducer,
     payment: paymentReducer,
     enrollment: enrollmentReducer,
+    profile: profileReducer,
+    security: securityReducer,
+    discussion: discussionReducer,
+    communication: communicationReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

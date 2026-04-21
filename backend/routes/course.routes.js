@@ -13,6 +13,7 @@ import {
     getCourseStats
 } from "../controllers/course.controller.js";
 import { authenticateInstructor } from "../middlewares/instructor.auth.middleware.js";
+import { attachUserIfPresent } from "../middlewares/user.auth.middleware.js";
 import { courseMediaUpload, handleMulterError } from "../middlewares/multer.middleware.js";
 
 const router = express.Router();
@@ -20,7 +21,7 @@ const router = express.Router();
 // ===== Public Routes =====
 router.get("/", getPublicCourses);
 router.get("/:id", getCourseDetails);
-router.get("/:id/reviews", getCourseReviews);
+router.get("/:id/reviews", attachUserIfPresent, getCourseReviews);
 
 // ===== Instructor Routes (Protected) =====
 router.get("/:id/full", authenticateInstructor, getFullCourse);

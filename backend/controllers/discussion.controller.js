@@ -1,5 +1,6 @@
 import { Discussion } from "../models/discussion.model.js";
 import { Course } from "../models/course.model.js";
+import { Enrollment } from "../models/enrollment.model.js";
 import { Notification } from "../models/notification.model.js";
 import { asyncHandler } from "../middlewares/async.middleware.js";
 import { successResponse, errorResponse } from "../utils/response.utils.js";
@@ -30,16 +31,65 @@ export const createDiscussion = asyncHandler(async (req, res) => {
         tags: tags || []
     });
 
-    // Notify instructor if created by student
-    if (!isInstructor) {
-        await Notification.createNotification({
-            recipient: courseDoc.instructor,
-            recipientRole: "Instructor",
-            type: "discussion_reply",
+    // Notify enrolled users + course instructor for this course (exclude actor).
+    const enrollments = await Enrollment.find({
+        course,
+        status: { $in: ["active", "completed"] },
+    }).select("user").lean();
+
+    const uniqueUserIds = new Set(enrollments.map((entry) => String(entry.user)));
+    const instructorId = String(courseDoc.instructor);
+    uniqueUserIds.add(instructorId);
+
+    const actorId = String(authorId);
+    const actorRole = authorRole;
+
+    const recipients = Array.from(uniqueUserIds)
+        .filter((recipientId) => recipientId !== actorId)
+        .map((recipientId) => ({
+            recipient: recipientId,
+            recipientRole: recipientId === instructorId ? "Instructor" : "User",
+        }));
+
+    if (recipients.length) {
+        const notificationDocs = recipients.map(({ recipient, recipientRole }) => ({
+            recipient,
+            recipientRole,
+            type: "discussion_created",
             title: `New Discussion: ${title}`,
             message: content.substring(0, 200),
-            data: { discussionId: discussion._id, courseId: course }
-        });
+            data: {
+                entityType: "discussion",
+                entityId: discussion._id,
+                discussionId: discussion._id,
+                courseId: courseDoc._id,
+                courseTitle: courseDoc.title,
+                actorId,
+                actorRole,
+                actionUrl: `/dashboard/discussions?courseId=${courseDoc._id}`,
+            },
+        }));
+
+        const insertedNotifications = await Notification.insertMany(notificationDocs);
+
+        const io = req.app.get("io");
+        if (io) {
+            insertedNotifications.forEach((notification) => {
+                io.to(`notifications:${notification.recipientRole}:${notification.recipient}`).emit("notification:new", {
+                    ...notification.toObject(),
+                });
+            });
+
+            io.to(`course:${courseDoc._id}`).emit("discussion:created", {
+                discussion: {
+                    ...discussion.toObject(),
+                    course: {
+                        _id: courseDoc._id,
+                        title: courseDoc.title,
+                    },
+                },
+            });
+        }
     }
 
     successResponse(res, 201, "Discussion created successfully", discussion);
@@ -107,14 +157,29 @@ export const addReply = asyncHandler(async (req, res) => {
 
     // Notify discussion author if replier is different
     if (discussion.author.toString() !== authorId) {
-        await Notification.createNotification({
+        const notification = await Notification.createNotification({
             recipient: discussion.author,
             recipientRole: discussion.authorRole,
             type: "discussion_reply",
             title: "New reply to your discussion",
             message: content.substring(0, 200),
-            data: { discussionId: discussion._id }
+            data: {
+                entityType: "discussion_reply",
+                entityId: newReply._id,
+                discussionId: discussion._id,
+                courseId: discussion.course,
+                actorId: authorId,
+                actorRole: authorRole,
+                actionUrl: `/dashboard/discussions?discussionId=${discussion._id}`,
+            }
         });
+
+        const io = req.app.get("io");
+        if (io) {
+            io.to(`notifications:${notification.recipientRole}:${notification.recipient}`).emit("notification:new", {
+                ...notification.toObject(),
+            });
+        }
     }
 
     // Emit socket event for real-time

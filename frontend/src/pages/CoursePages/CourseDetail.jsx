@@ -1,6 +1,6 @@
 // CourseDetail.jsx
 import { useRef, useEffect, useMemo, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 
 import "../../components/CoursePages/course-pages.css";
@@ -18,6 +18,7 @@ import CDTabs            from "../../components/CoursePages/CourseDetail/CDTabs"
 import CDRelatedCourses  from "../../components/CoursePages/CourseDetail/CDRelatedCourses";
 import CDStickyEnroll    from "../../components/CoursePages/CourseDetail/CDStickyEnroll";
 import CDFooter          from "../../components/CoursePages/CourseDetail/CDFooter";
+import SearchPulseLoader from "../../components/common/SearchPulseLoader";
 
 import {
   getCourseById,
@@ -33,9 +34,21 @@ import {
 
 export default function CourseDetail() {
   const { id } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [isEnrollActionRunning, setIsEnrollActionRunning] = useState(false);
+  const [activeTab, setActiveTab] = useState("overview");
+  const [openReviewComposerToken, setOpenReviewComposerToken] = useState(0);
+  const [pendingReviewScroll, setPendingReviewScroll] = useState(false);
+  const [pendingComposeAfterScroll, setPendingComposeAfterScroll] = useState(false);
+
+  const scrollToReviewsSection = () => {
+    window.requestAnimationFrame(() => {
+      const reviewsAnchor = document.getElementById("cd-reviews-anchor");
+      reviewsAnchor?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
 
   // Hooks
   const { dotRef, ringRef } = useCPCursor();
@@ -107,6 +120,51 @@ export default function CourseDetail() {
       // dispatch(clearCurrentCourse());
     };
   }, [id, dispatch]);
+
+  useEffect(() => {
+    const requestedTab = String(searchParams.get("tab") || "").toLowerCase();
+    const shouldCompose = searchParams.get("composeReview") === "1";
+
+    if (requestedTab === "reviews") {
+      setPendingReviewScroll(true);
+      setPendingComposeAfterScroll(shouldCompose);
+    }
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!pendingReviewScroll) return;
+    if (loadingCourseDetail || !course?._id) return;
+
+    // Wait for detail layout to settle before smooth scrolling.
+    const timer = window.setTimeout(() => {
+      scrollToReviewsSection();
+
+      // Activate reviews after scroll begins to keep transition smoother.
+      window.setTimeout(() => {
+        setActiveTab("reviews");
+
+        if (pendingComposeAfterScroll) {
+          setOpenReviewComposerToken(Date.now());
+
+          const next = new URLSearchParams(searchParams);
+          next.delete("composeReview");
+          setSearchParams(next, { replace: true });
+        }
+
+        setPendingComposeAfterScroll(false);
+        setPendingReviewScroll(false);
+      }, 260);
+    }, 220);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    pendingReviewScroll,
+    pendingComposeAfterScroll,
+    loadingCourseDetail,
+    course?._id,
+    searchParams,
+    setSearchParams,
+  ]);
 
   // Fetch related courses when course category is available
   useEffect(() => {
@@ -246,10 +304,19 @@ export default function CourseDetail() {
     }
   };
 
+  const handleOpenReviewFlow = () => {
+    setActiveTab("reviews");
+    setOpenReviewComposerToken(Date.now());
+  };
+
   if (loadingCourseDetail) {
     return (
-      <div style={{ background: "#0a0a0a", color: "#f4f3ee", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Bebas Neue', sans-serif", fontSize: "1.5rem" }}>
-        Loading course details...
+      <div style={{ background: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+        <SearchPulseLoader
+          label="Loading course details"
+          sublabel="Preparing syllabus, reviews, and enrollment data"
+          className="max-w-md"
+        />
       </div>
     );
   }
@@ -281,6 +348,7 @@ export default function CourseDetail() {
         course={course}
         cardRef={enrollCardRef}
         onEnroll={handleEnroll}
+        onOpenReviewFlow={handleOpenReviewFlow}
         enrollLabel={enrollLabel}
         enrollDisabled={enrollDisabled}
       />
@@ -296,6 +364,9 @@ export default function CourseDetail() {
         reviews={reviews}
         ratingStats={ratingStats}
         loadingReviews={loadingReviews}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        openReviewComposerToken={openReviewComposerToken}
       />
 
       {/* Related courses */}

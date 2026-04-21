@@ -82,19 +82,47 @@ export const updatePreferences = asyncHandler(async (req, res) => {
 // @access  Private (User)
 export const getMyEnrollments = asyncHandler(async (req, res) => {
     const { page, limit, skip } = getPagination(req.query, 10);
-    const { status } = req.query;
+    const { status, search } = req.query;
 
     const filter = { user: req.user.id };
     if (status) filter.status = status;
 
-    const total = await Enrollment.countDocuments(filter);
-    const enrollments = await Enrollment.find(filter)
-        .populate("course", "title thumbnail instructor rating totalDuration totalModules totalLessons price category level type")
-        .populate("batchId", "name startDate endDate status")
-        .populate("payment", "amount currency status")
-        .sort({ enrolledAt: -1 })
-        .skip(skip)
-        .limit(limit);
+    const normalizedSearch = String(search || "").trim().toLowerCase();
+
+    let enrollments = [];
+    let total = 0;
+
+    if (normalizedSearch) {
+        const allMatched = await Enrollment.find(filter)
+            .populate("course", "title thumbnail instructor rating totalDuration totalModules totalLessons price category level type")
+            .populate("batchId", "name startDate endDate status")
+            .populate("payment", "amount currency status")
+            .sort({ enrolledAt: -1 });
+
+        const filtered = allMatched.filter((enrollment) => {
+            const course = enrollment?.course || {};
+            const title = String(course?.title || "").toLowerCase();
+            const category = String(course?.category || "").toLowerCase();
+            const level = String(course?.level || "").toLowerCase();
+            return (
+                title.includes(normalizedSearch) ||
+                category.includes(normalizedSearch) ||
+                level.includes(normalizedSearch)
+            );
+        });
+
+        total = filtered.length;
+        enrollments = filtered.slice(skip, skip + limit);
+    } else {
+        total = await Enrollment.countDocuments(filter);
+        enrollments = await Enrollment.find(filter)
+            .populate("course", "title thumbnail instructor rating totalDuration totalModules totalLessons price category level type")
+            .populate("batchId", "name startDate endDate status")
+            .populate("payment", "amount currency status")
+            .sort({ enrolledAt: -1 })
+            .skip(skip)
+            .limit(limit);
+    }
 
     successResponse(res, 200, "Enrollments retrieved successfully", {
         enrollments,

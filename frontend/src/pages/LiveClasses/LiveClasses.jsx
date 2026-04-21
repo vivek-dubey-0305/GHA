@@ -1,22 +1,22 @@
 /**
  * pages/LiveClasses/LiveClasses.jsx
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Video, X } from "lucide-react";
-import { useDispatch, useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useSelector } from "react-redux";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { UserLayout } from "../../components/layout/UserLayout";
 import { PageShell, TabBar, EmptyState } from "../../components/DashboardPages/DashboardUI";
+import SearchPulseLoader from "../../components/common/SearchPulseLoader";
 import LiveClassCard from "../../components/LiveClassPages/LiveClassCard";
 import StudentLiveSessionRoom from "../../components/CoursePages/live/StudentLiveSessionRoom";
 import { LIVE_CLASS_TABS } from "../../constants/dashboard.constants";
-import { getMyEnrollments } from "../../redux/slices/enrollment.slice";
 import { apiClient } from "../../utils/api.utils";
 
 export default function LiveClasses() {
-  const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { myEnrollments } = useSelector((state) => state.enrollment);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const autoJoinHandledRef = useRef("");
   const { user } = useSelector((state) => state.auth);
 
   const [activeTab, setActiveTab] = useState("Upcoming");
@@ -33,68 +33,27 @@ export default function LiveClasses() {
   const [roomLiveState, setRoomLiveState] = useState(null);
   const [roomError, setRoomError] = useState("");
 
-  useEffect(() => {
-    dispatch(getMyEnrollments({ page: 1, limit: 100 }));
-  }, [dispatch]);
-
   const loadLiveClasses = useCallback(async () => {
-    const enrollments = (myEnrollments || []).filter((e) => ["active", "completed"].includes(e?.status));
-    const courseIds = enrollments.map((e) => String(e?.course?._id || e?.course)).filter(Boolean);
-
     setLoading(true);
     setError("");
 
     try {
-      const [responses, userLiveRes] = await Promise.all([
-        Promise.all(courseIds.map((courseId) => apiClient.get(`/courses/${courseId}`))),
-        apiClient.get("/live-classes/my-user").catch(() => ({ data: { data: { liveClasses: [] } } })),
-      ]);
-
-      const courseMap = new Map(
-        enrollments.map((e) => [String(e?.course?._id || e?.course), e?.course])
-      );
-
-      const liveLessons = responses.flatMap((res) => {
-        const course = res?.data?.data;
-        const modules = Array.isArray(course?.modules) ? course.modules : [];
-
-        return modules.flatMap((mod) => {
-          const lessons = Array.isArray(mod?.lessons) ? mod.lessons : [];
-          return lessons
-            .filter((lesson) => lesson?.type === "live" && lesson?.liveClassId)
-            .map((lesson) => {
-              const live = lesson.liveClassId;
-              const normalizedStatus = live?.status === "ended" ? "completed" : (live?.status || "scheduled");
-              return {
-                _id: String(live?._id || lesson._id),
-                lessonId: String(lesson?._id),
-                courseId: String(course?._id),
-                title: live?.title || lesson?.title,
-                instructor: live?.instructor || courseMap.get(String(course?._id))?.instructor,
-                course: courseMap.get(String(course?._id)) || { _id: course?._id, title: course?.title },
-                sessionType: live?.sessionType || "live",
-                scheduledAt: live?.scheduledAt,
-                duration: live?.duration || 60,
-                status: normalizedStatus,
-                actualParticipants: live?.actualParticipants || 0,
-                maxParticipants: live?.maxParticipants || 0,
-                recordingAvailable: Boolean(live?.signedPlayback?.hls || live?.playbackUrl),
-              };
-            });
-        });
-      });
+      const userLiveRes = await apiClient.get("/live-classes/my-user");
 
       const directLiveClasses = (userLiveRes?.data?.data?.liveClasses || []).map((liveClass) => {
         const normalizedStatus = liveClass?.status === "ended" ? "completed" : (liveClass?.status || "scheduled");
         const courseId = String(liveClass?.course?._id || liveClass?.course || "");
+        const instructorObj = typeof liveClass?.instructor === "object" && liveClass?.instructor
+          ? liveClass.instructor
+          : null;
 
         return {
           _id: String(liveClass?._id),
           lessonId: liveClass?.lesson?._id ? String(liveClass.lesson._id) : "",
           courseId,
           title: liveClass?.title,
-          instructor: liveClass?.instructor,
-          course: liveClass?.course || courseMap.get(courseId) || null,
+          instructor: instructorObj,
+          course: liveClass?.course || null,
           sessionType: liveClass?.sessionType || "live",
           scheduledAt: liveClass?.scheduledAt,
           duration: liveClass?.duration || 60,
@@ -105,36 +64,51 @@ export default function LiveClasses() {
         };
       });
 
-      const mergedMap = new Map();
-
-      [...directLiveClasses, ...liveLessons].forEach((item) => {
-        const existing = mergedMap.get(item._id);
-        if (!existing) {
-          mergedMap.set(item._id, item);
-          return;
-        }
-
-        if (!existing.lessonId && item.lessonId) {
-          mergedMap.set(item._id, { ...existing, ...item });
-        }
-      });
-
-      setItems(Array.from(mergedMap.values()).sort((a, b) => new Date(a?.scheduledAt || 0) - new Date(b?.scheduledAt || 0)));
+      setItems(directLiveClasses.sort((a, b) => new Date(a?.scheduledAt || 0) - new Date(b?.scheduledAt || 0)));
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to load live classes.");
     } finally {
       setLoading(false);
     }
-  }, [myEnrollments]);
+  }, []);
 
   useEffect(() => {
     loadLiveClasses();
   }, [loadLiveClasses]);
 
+  useEffect(() => {
+    const handleRealtimeRefresh = () => {
+      loadLiveClasses();
+    };
+
+    window.addEventListener("gha:inbox:refresh", handleRealtimeRefresh);
+    return () => window.removeEventListener("gha:inbox:refresh", handleRealtimeRefresh);
+  }, [loadLiveClasses]);
+
   const filtered = useMemo(() => {
-    if (activeTab === "Upcoming") {
-      return items.filter((lc) => lc.status === "scheduled" || lc.status === "live");
+    const nowMs = Date.now();
+
+    if (activeTab === "Active") {
+      return items.filter((lc) => lc.status === "live");
     }
+
+    if (activeTab === "Upcoming") {
+      return items.filter((lc) => {
+        if (lc.status !== "scheduled") return false;
+        const ts = new Date(lc?.scheduledAt || 0).getTime();
+        return Number.isFinite(ts) && ts >= nowMs;
+      });
+    }
+
+    if (activeTab === "Expired") {
+      return items.filter((lc) => {
+        if (lc.status === "completed") return false;
+        if (lc.status === "live") return false;
+        const ts = new Date(lc?.scheduledAt || 0).getTime();
+        return Number.isFinite(ts) && ts < nowMs;
+      });
+    }
+
     return items.filter((lc) => lc.status === "completed");
   }, [activeTab, items]);
 
@@ -206,6 +180,22 @@ export default function LiveClasses() {
     await openDirectRoom(liveClass);
   }, [navigate, openDirectRoom]);
 
+  useEffect(() => {
+    const joinLiveClassId = searchParams.get("joinLiveClassId");
+    if (!joinLiveClassId || loading || !items.length) return;
+    if (autoJoinHandledRef.current === joinLiveClassId) return;
+
+    const target = items.find((item) => String(item._id) === String(joinLiveClassId));
+    if (!target) return;
+
+    autoJoinHandledRef.current = joinLiveClassId;
+    handleJoin(target).finally(() => {
+      const next = new URLSearchParams(searchParams);
+      next.delete("joinLiveClassId");
+      setSearchParams(next, { replace: true });
+    });
+  }, [handleJoin, items, loading, searchParams, setSearchParams]);
+
   const handleOpenReminder = useCallback((liveClass) => {
     setReminderTarget(liveClass);
     setReminderChannel("email");
@@ -251,13 +241,27 @@ export default function LiveClasses() {
       >
         <TabBar tabs={LIVE_CLASS_TABS} active={activeTab} onChange={setActiveTab} />
 
-        {loading && <p className="text-gray-500 text-sm py-4">Loading live classes...</p>}
+        {loading && (
+          <SearchPulseLoader
+            label="Loading live classes"
+            sublabel="Matching sessions and recordings to your courses"
+            compact
+          />
+        )}
         {!loading && error && <p className="text-red-400 text-sm py-2">{error}</p>}
 
         {!loading && filtered.length === 0 ? (
           <EmptyState
             icon={Video}
-            title={activeTab === "Upcoming" ? "No upcoming classes" : "No recordings yet"}
+            title={
+              activeTab === "Upcoming"
+                ? "No upcoming classes"
+                : activeTab === "Expired"
+                  ? "No expired classes"
+                  : activeTab === "Active"
+                    ? "No active classes"
+                    : "No recordings yet"
+            }
             subtitle="Check back later or explore other courses."
           />
         ) : (

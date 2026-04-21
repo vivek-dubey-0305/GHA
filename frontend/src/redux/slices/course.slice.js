@@ -77,6 +77,94 @@ export const getCourseReviews = createAsyncThunk(
 );
 
 /**
+ * Get current user's review for a specific course
+ */
+export const getMyCourseReview = createAsyncThunk(
+  'course/getMyCourseReview',
+  async (courseId, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.get(`/reviews/me?courseId=${courseId}`);
+      return {
+        courseId,
+        review: response.data?.data?.review || null,
+      };
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || 'Failed to fetch your review';
+      return rejectWithValue(message);
+    }
+  }
+);
+
+/**
+ * Create a new course review
+ */
+export const createCourseReview = createAsyncThunk(
+  'course/createCourseReview',
+  async ({ courseId, rating, comment }, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.post('/reviews', { courseId, rating, comment });
+      return response.data?.data;
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || 'Failed to create review';
+      return rejectWithValue(message);
+    }
+  }
+);
+
+/**
+ * Update an existing review
+ */
+export const updateCourseReview = createAsyncThunk(
+  'course/updateCourseReview',
+  async ({ reviewId, rating, comment }, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.put(`/reviews/${reviewId}`, { rating, comment });
+      return response.data?.data;
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || 'Failed to update review';
+      return rejectWithValue(message);
+    }
+  }
+);
+
+/**
+ * Mark a review as helpful
+ */
+export const markReviewHelpful = createAsyncThunk(
+  'course/markReviewHelpful',
+  async (reviewId, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.patch(`/reviews/${reviewId}/helpful`);
+      return {
+        reviewId,
+        helpful: Number(response.data?.data?.helpful || 0),
+        alreadyMarked: Boolean(response.data?.data?.alreadyMarked),
+        isMarkedHelpfulByMe: Boolean(response.data?.data?.isMarkedHelpfulByMe),
+      };
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || 'Failed to mark review as helpful';
+      return rejectWithValue(message);
+    }
+  }
+);
+
+/**
+ * Get current user's review list
+ */
+export const getMyReviews = createAsyncThunk(
+  'course/getMyReviews',
+  async ({ page = 1, limit = 20 } = {}, { rejectWithValue }) => {
+    try {
+      const response = await apiClient.get(`/user/reviews?page=${page}&limit=${limit}`);
+      return response.data?.data || { reviews: [], pagination: null };
+    } catch (error) {
+      const message = error.response?.data?.message || error.message || 'Failed to fetch your reviews';
+      return rejectWithValue(message);
+    }
+  }
+);
+
+/**
  * Get related/recommended courses (same category or level)
  */
 export const getRelatedCourses = createAsyncThunk(
@@ -196,6 +284,13 @@ const initialState = {
     totalResults: 0,
   },
   ratingStats: null,
+  myReviewByCourseId: {},
+  myReviews: [],
+  myReviewsPagination: {
+    currentPage: 1,
+    totalPages: 1,
+    totalResults: 0,
+  },
   
   // Related courses
   relatedCourses: [],
@@ -218,12 +313,18 @@ const initialState = {
   loadingCourses: false,
   loadingCourseDetail: false,
   loadingReviews: false,
+  loadingMyReview: false,
+  loadingMyReviews: false,
+  reviewActionLoading: false,
   loadingRelated: false,
   loadingInstructor: false,
   
   error: null,
   courseDetailError: null,
   reviewsError: null,
+  myReviewError: null,
+  myReviewsError: null,
+  reviewActionError: null,
 };
 
 // ========================= SLICE =========================
@@ -262,6 +363,7 @@ const courseSlice = createSlice({
       state.modules = [];
       state.currentInstructor = null;
       state.reviews = [];
+      state.myReviewByCourseId = {};
       state.relatedCourses = [];
       state.courseDetailError = null;
     },
@@ -271,6 +373,9 @@ const courseSlice = createSlice({
       state.error = null;
       state.courseDetailError = null;
       state.reviewsError = null;
+      state.myReviewError = null;
+      state.myReviewsError = null;
+      state.reviewActionError = null;
     },
   },
   
@@ -347,6 +452,102 @@ const courseSlice = createSlice({
       .addCase(getCourseReviews.rejected, (state, action) => {
         state.loadingReviews = false;
         state.reviewsError = action.payload;
+      });
+
+    // ========== GET MY COURSE REVIEW ==========
+    builder
+      .addCase(getMyCourseReview.pending, (state) => {
+        state.loadingMyReview = true;
+        state.myReviewError = null;
+      })
+      .addCase(getMyCourseReview.fulfilled, (state, action) => {
+        state.loadingMyReview = false;
+        const { courseId, review } = action.payload;
+        state.myReviewByCourseId[String(courseId)] = review;
+      })
+      .addCase(getMyCourseReview.rejected, (state, action) => {
+        state.loadingMyReview = false;
+        state.myReviewError = action.payload;
+      });
+
+    // ========== CREATE COURSE REVIEW ==========
+    builder
+      .addCase(createCourseReview.pending, (state) => {
+        state.reviewActionLoading = true;
+        state.reviewActionError = null;
+      })
+      .addCase(createCourseReview.fulfilled, (state, action) => {
+        state.reviewActionLoading = false;
+        const review = action.payload;
+        if (review?.course) {
+          const courseId = typeof review.course === 'string' ? review.course : review.course?._id;
+          if (courseId) {
+            state.myReviewByCourseId[String(courseId)] = review;
+          }
+        }
+      })
+      .addCase(createCourseReview.rejected, (state, action) => {
+        state.reviewActionLoading = false;
+        state.reviewActionError = action.payload;
+      });
+
+    // ========== UPDATE COURSE REVIEW ==========
+    builder
+      .addCase(updateCourseReview.pending, (state) => {
+        state.reviewActionLoading = true;
+        state.reviewActionError = null;
+      })
+      .addCase(updateCourseReview.fulfilled, (state, action) => {
+        state.reviewActionLoading = false;
+        const updated = action.payload;
+        if (updated?._id) {
+          state.myReviews = state.myReviews.map((review) => (
+            review._id === updated._id ? { ...review, ...updated } : review
+          ));
+        }
+        if (updated?.course) {
+          const courseId = typeof updated.course === 'string' ? updated.course : updated.course?._id;
+          if (courseId) {
+            state.myReviewByCourseId[String(courseId)] = updated;
+          }
+        }
+      })
+      .addCase(updateCourseReview.rejected, (state, action) => {
+        state.reviewActionLoading = false;
+        state.reviewActionError = action.payload;
+      });
+
+    // ========== MARK REVIEW HELPFUL ==========
+    builder
+      .addCase(markReviewHelpful.pending, (state) => {
+        state.reviewActionError = null;
+      })
+      .addCase(markReviewHelpful.fulfilled, (state, action) => {
+        const { reviewId, helpful, isMarkedHelpfulByMe } = action.payload;
+        state.reviews = state.reviews.map((review) => (
+          String(review?._id) === String(reviewId)
+            ? { ...review, helpful, isMarkedHelpfulByMe }
+            : review
+        ));
+      })
+      .addCase(markReviewHelpful.rejected, (state, action) => {
+        state.reviewActionError = action.payload;
+      });
+
+    // ========== GET MY REVIEWS ==========
+    builder
+      .addCase(getMyReviews.pending, (state) => {
+        state.loadingMyReviews = true;
+        state.myReviewsError = null;
+      })
+      .addCase(getMyReviews.fulfilled, (state, action) => {
+        state.loadingMyReviews = false;
+        state.myReviews = action.payload.reviews || [];
+        state.myReviewsPagination = action.payload.pagination || initialState.myReviewsPagination;
+      })
+      .addCase(getMyReviews.rejected, (state, action) => {
+        state.loadingMyReviews = false;
+        state.myReviewsError = action.payload;
       });
 
     // ========== GET RELATED COURSES ==========
